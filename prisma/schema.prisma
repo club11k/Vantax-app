@@ -1,0 +1,102 @@
+// Esquema de base de datos de VANTAX
+// Correr "npx prisma migrate dev" en desarrollo, o "prisma migrate deploy" en el build de producción.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum SubscriptionStatus {
+  NONE // nunca se suscribió
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  TRIALING
+}
+
+enum AnalysisFormat {
+  MENSAJE // análisis conversacional, tipo mensaje de un analista
+  TECNICO // salida estructurada de datos/estadísticas
+}
+
+model User {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  passwordHash      String
+  name              String?
+  role              Role     @default(USER)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Stripe
+  stripeCustomerId     String?             @unique
+  stripeSubscriptionId String?             @unique
+  subscriptionStatus   SubscriptionStatus  @default(NONE)
+
+  // Plan y cuota vigente
+  planId               String?
+  plan                 Plan?    @relation(fields: [planId], references: [id])
+  analysesUsedInPeriod Int      @default(0)
+  periodStart          DateTime?
+  periodEnd            DateTime?
+
+  analyses          Analysis[]
+  suspended         Boolean  @default(false)
+
+  @@index([role])
+}
+
+model Plan {
+  id              String   @id @default(cuid())
+  name            String   @unique // ej. "Básico", "Pro"
+  description     String?
+  priceCents       Int      // precio en céntimos de EUR, ej. 2900 = 29,00€
+  currency        String   @default("eur")
+  monthlyQuota    Int      // cantidad de análisis por mes, ej. 30, 45
+  stripePriceId   String?  @unique // se completa al crear el Price en Stripe
+  active          Boolean  @default(true)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  users           User[]
+}
+
+model Analysis {
+  id          String          @id @default(cuid())
+  userId      String
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  format      AnalysisFormat
+  content     String          @db.Text
+  dataSnapshot Json?          // los datos de mercado usados para generar el análisis (auditoría)
+  createdAt   DateTime        @default(now())
+
+  @@index([userId, createdAt])
+}
+
+// Configuración global editable desde el panel de administrador.
+// Clave/valor genérico en JSON para no tener que migrar el esquema cada vez
+// que se agrega una opción de configuración nueva.
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+// Log simple de auditoría de acciones del admin (qué se cambió y quién lo cambió).
+model AdminAuditLog {
+  id        String   @id @default(cuid())
+  adminId   String
+  action    String
+  detail    Json?
+  createdAt DateTime @default(now())
+}
