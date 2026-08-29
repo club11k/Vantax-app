@@ -78,3 +78,59 @@ td { padding: 9px 10px; border-bottom: 1px solid var(--line); color: var(--text-
 .tag.neu { color: var(--text-muted); background: var(--bg-panel-raised); border: 1px solid var(--line); }
 
 .error-msg { color: var(--down); font-family: var(--font-mono); font-size: 12.5px; margin-top: 8px; }
+
+/* --- Panel de mercado (/mercado) --- */
+
+.grid-main { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; }
+@media (max-width: 900px) { .grid-main { grid-template-columns: 1fr; } }
+
+.panel-title { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-dim); }
+.panel-sub { font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); }
+.panel-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; gap: 10px; flex-wrap: wrap; }
+
+/* Sesiones */
+.sessions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+@media (max-width: 900px) { .sessions { grid-template-columns: repeat(2, 1fr); } }
+.session-card { background: var(--bg-panel); border: 1px solid var(--line); border-radius: 6px; padding: 13px 15px; }
+.session-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.session-name { font-family: var(--font-body); font-size: 12.5px; font-weight: 600; }
+.session-badge { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; }
+.session-badge.open { color: var(--up); background: rgba(99,168,140,0.14); border: 1px solid rgba(99,168,140,0.35); }
+.session-badge.closed { color: var(--text-dim); background: var(--bg-panel-raised); border: 1px solid var(--line); }
+.session-time { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.session-bar { height: 4px; background: var(--bg-panel-raised); border-radius: 2px; margin-top: 9px; overflow: hidden; }
+.session-bar-fill { height: 100%; background: var(--violet); border-radius: 2px; }
+
+/* Termómetros */
+.gauges { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; }
+@media (max-width: 900px) { .gauges { grid-template-columns: repeat(2, 1fr); } }
+.gauge-card { background: var(--bg-panel); border: 1px solid var(--line); border-radius: 6px; padding: 16px 14px; text-align: center; }
+.gauge-card .g-name { font-family: var(--font-body); font-size: 11.5px; font-weight: 600; color: var(--text-primary); margin-bottom: 10px; min-height: 28px; }
+.therm { width: 14px; height: 90px; margin: 0 auto 10px; background: var(--bg-panel-raised); border-radius: 8px; border: 1px solid var(--line); position: relative; overflow: hidden; }
+.therm-fill { position: absolute; bottom: 0; left: 0; right: 0; border-radius: 8px; }
+.g-value { font-family: var(--font-mono); font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.g-desc { font-family: var(--font-mono); font-size: 9.5px; color: var(--text-dim); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+
+/* Bias Score */
+.bias-panel { display: grid; grid-template-columns: 220px 1fr; gap: 24px; align-items: start; }
+@media (max-width: 800px) { .bias-panel { grid-template-columns: 1fr; } }
+.bias-score-box { text-align: center; background: var(--bg-panel-raised); border: 1px solid var(--line); border-radius: 8px; padding: 22px 16px; }
+.bias-score-num { font-family: var(--font-display); font-size: 48px; font-weight: 600; line-height: 1; }
+.bias-score-label { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); margin-top: 10px; }
+.bias-score-formula { font-family: var(--font-mono); font-size: 9.5px; color: var(--text-dim); margin-top: 14px; line-height: 1.7; }
+.bias-modules { display: flex; flex-direction: column; gap: 12px; }
+.bias-mod-row { display: grid; grid-template-columns: 150px 1fr 50px; align-items: center; gap: 10px; }
+@media (max-width: 620px) { .bias-mod-row { grid-template-columns: 110px 1fr 44px; font-size: 11px; } }
+.bias-mod-name { font-family: var(--font-body); font-size: 12.5px; font-weight: 600; }
+.bias-mod-weight { font-family: var(--font-mono); font-size: 9.5px; color: var(--text-dim); display: block; margin-top: 2px; font-weight: 400; }
+.bias-mod-track { height: 8px; background: var(--bg-panel-raised); border-radius: 4px; position: relative; overflow: hidden; }
+.bias-mod-zero { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--line-bright); }
+.bias-mod-fill { position: absolute; top: 0; bottom: 0; border-radius: 4px; }
+.bias-mod-score { font-family: var(--font-mono); font-size: 11.5px; text-align: right; font-variant-numeric: tabular-nums; }
+.bias-mod-unavailable { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-dim); grid-column: 1 / -1; }
+
+details.indicators summary { cursor: pointer; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--violet-bright); list-style: none; }
+details.indicators summary::-webkit-details-marker { display: none; }
+details.indicators summary::before { content: '▸ '; }
+details.indicators[open] summary::before { content: '▾ '; }
+.table-scroll { overflow-x: auto; }
