@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -31,7 +32,10 @@ export default async function DashboardPage() {
           </div>
           <h1 style={{ fontSize: 26, margin: "4px 0 0" }}>Hola, {user?.name || user?.email}</h1>
         </div>
-        {hasActivePlan && <ManageSubscriptionButton />}
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <Link href="/mercado" className="btn">Centro de mercado</Link>
+          {hasActivePlan && <ManageSubscriptionButton />}
+        </div>
       </div>
 
       {!hasActivePlan && (
