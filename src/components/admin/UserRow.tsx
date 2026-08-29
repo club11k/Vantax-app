@@ -1,7 +1,7 @@
 "use client";
 
-import { useTransition } from "react";
-import { resetUserQuota, setUserPlan, toggleUserSuspended, setUserRole } from "@/app/admin/actions";
+import { useState, useTransition } from "react";
+import { resetUserQuota, setUserPlan, toggleUserSuspended, setUserRole, grantFreeAccess } from "@/app/admin/actions";
 
 type Plan = { id: string; name: string };
 type UserRowData = {
@@ -15,10 +15,12 @@ type UserRowData = {
   planId: string | null;
   planName: string | null;
   planQuota: number | null;
+  planIsFree: boolean;
 };
 
 export function UserRow({ user, plans }: { user: UserRowData; plans: Plan[] }) {
   const [isPending, startTransition] = useTransition();
+  const [freeQuota, setFreeQuota] = useState(30);
 
   return (
     <tr>
@@ -28,6 +30,7 @@ export function UserRow({ user, plans }: { user: UserRowData; plans: Plan[] }) {
       </td>
       <td>
         <span className={`tag ${user.subscriptionStatus === "ACTIVE" ? "pos" : "neu"}`}>{user.subscriptionStatus}</span>
+        {user.planIsFree && <span className="tag pos" style={{ marginLeft: 6 }}>Gratis (admin)</span>}
         {user.suspended && <span className="tag neg" style={{ marginLeft: 6 }}>Suspendido</span>}
       </td>
       <td>
@@ -58,7 +61,27 @@ export function UserRow({ user, plans }: { user: UserRowData; plans: Plan[] }) {
           <option value="ADMIN">Admin</option>
         </select>
       </td>
-      <td style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+      <td style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+        {user.planIsFree ? (
+          <button className="btn" disabled={isPending} onClick={() => startTransition(() => setUserPlan(user.id, null))}>
+            Quitar acceso gratuito
+          </button>
+        ) : (
+          <>
+            <input
+              type="number"
+              min={1}
+              value={freeQuota}
+              onChange={(e) => setFreeQuota(Number(e.target.value) || 1)}
+              title="Análisis por mes para el acceso gratuito"
+              style={{ width: 56 }}
+              disabled={isPending}
+            />
+            <button className="btn" disabled={isPending} onClick={() => startTransition(() => grantFreeAccess(user.id, freeQuota))}>
+              Dar acceso gratuito
+            </button>
+          </>
+        )}
         <button className="btn" disabled={isPending} onClick={() => startTransition(() => resetUserQuota(user.id))}>
           Resetear cuota
         </button>
