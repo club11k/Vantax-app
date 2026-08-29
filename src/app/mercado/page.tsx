@@ -247,6 +247,8 @@ export default async function MercadoPage() {
           height={420}
           src="https://s3.tradingview.com/external-embedding/embed-widget-events.js"
           config={{
+            width: "100%",
+            height: 420,
             colorTheme: "dark",
             isTransparent: true,
             locale: "es",
@@ -261,6 +263,8 @@ export default async function MercadoPage() {
         height={400}
         src="https://s3.tradingview.com/external-embedding/embed-widget-timeline.js"
         config={{
+          width: "100%",
+          height: 400,
           feedMode: "market",
           market: "forex",
           colorTheme: "dark",
