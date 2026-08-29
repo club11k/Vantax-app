@@ -39,6 +39,48 @@ export async function setUserPlan(userId: string, planId: string | null) {
   revalidatePath("/admin/users");
 }
 
+// Otorga acceso gratuito a un usuario sin pasar por Stripe: lo asigna a un
+// plan interno "Acceso gratuito" (se crea la primera vez que se usa esta
+// acción) con la cuota mensual indicada, y activa su suscripción.
+export async function grantFreeAccess(userId: string, monthlyQuota: number = 30) {
+  const admin = await requireAdmin();
+
+  let freePlan = await prisma.plan.findFirst({ where: { isFree: true } });
+  if (!freePlan) {
+    freePlan = await prisma.plan.create({
+      data: {
+        name: "Acceso gratuito",
+        description: "Acceso otorgado manualmente por un administrador, sin cargo.",
+        priceCents: 0,
+        monthlyQuota,
+        isFree: true,
+        active: false, // no aparece entre los planes que se ofrecen a los usuarios
+        sortOrder: 999,
+      },
+    });
+  } else if (freePlan.monthlyQuota !== monthlyQuota) {
+    freePlan = await prisma.plan.update({
+      where: { id: freePlan.id },
+      data: { monthlyQuota },
+    });
+  }
+
+  const now = new Date();
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      planId: freePlan.id,
+      subscriptionStatus: "ACTIVE",
+      analysesUsedInPeriod: 0,
+      periodStart: now,
+      periodEnd: null,
+    },
+  });
+
+  await logAction(admin.id, "grant_free_access", { userId, planId: freePlan.id, monthlyQuota });
+  revalidatePath("/admin/users");
+}
+
 export async function toggleUserSuspended(userId: string, suspended: boolean) {
   const admin = await requireAdmin();
   await prisma.user.update({ where: { id: userId }, data: { suspended } });
