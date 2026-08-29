@@ -2,6 +2,26 @@ import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { GlobeVisual } from "@/components/GlobeVisual";
+
+const FEATURES = [
+  {
+    title: "Bias Score en vivo",
+    desc: "Un motor cuantitativo que pondera tasas reales, inflación, riesgo intermercado y técnico en un solo número, con cada indicador auditable.",
+  },
+  {
+    title: "Análisis diario con IA",
+    desc: "Cada día generás tu lectura de XAU/USD y DXY, en el formato que prefieras: mensaje directo o detalle técnico completo.",
+  },
+  {
+    title: "Centro de mercado",
+    desc: "Sesiones de Sydney, Tokio, Londres y Nueva York en vivo, calendario económico, gráfico de oro y feed de titulares, todo en un solo lugar.",
+  },
+  {
+    title: "Datos reales, no relato",
+    desc: "FRED y Twelve Data alimentan cada número. Cuando un dato no está disponible, el panel lo dice — nunca lo inventa.",
+  },
+];
 
 export default async function HomePage() {
   const [session, plans] = await Promise.all([
@@ -10,13 +30,16 @@ export default async function HomePage() {
   ]);
 
   return (
-    <div className="container" style={{ paddingTop: 60 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 60 }}>
+    <div className="container" style={{ paddingTop: 40 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 40 }}>
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, letterSpacing: "0.14em", color: "var(--gold-bright)", textTransform: "uppercase" }}>
           VANTAX
         </div>
         {session?.user ? (
-          <Link href="/dashboard" className="btn btn-primary">Ir a mi panel</Link>
+          <div style={{ display: "flex", gap: 10 }}>
+            <Link href="/mercado" className="btn">Centro de mercado</Link>
+            <Link href="/dashboard" className="btn btn-primary">Ir a mi panel</Link>
+          </div>
         ) : (
           <div style={{ display: "flex", gap: 10 }}>
             <Link href="/login" className="btn">Ingresar</Link>
@@ -25,17 +48,49 @@ export default async function HomePage() {
         )}
       </div>
 
-      <h1 style={{ fontSize: 42, maxWidth: 700, lineHeight: 1.15 }}>
-        Análisis diarios de <span style={{ color: "var(--gold-bright)" }}>XAU/USD</span> y{" "}
-        <span style={{ color: "var(--violet-bright)" }}>DXY</span>, generados con IA sobre datos macro reales.
-      </h1>
-      <p style={{ maxWidth: 560, color: "var(--text-muted)", fontSize: 15, lineHeight: 1.6 }}>
-        Tasas reales, inflación, posicionamiento institucional y riesgo, condensados todos los días en el
-        formato que prefieras: un mensaje directo, o el detalle técnico completo. No es asesoramiento
-        financiero: es el marco de lectura, vos tomás la decisión.
-      </p>
+      <div style={{ display: "grid", gridTemplateColumns: "1.1fr 0.9fr", gap: 32, alignItems: "center", marginBottom: 60 }}>
+        <div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 10.5, letterSpacing: "0.18em", color: "var(--violet)", textTransform: "uppercase", marginBottom: 10 }}>
+            Centro global de operaciones
+          </div>
+          <h1 style={{ fontSize: 42, maxWidth: 620, lineHeight: 1.12, margin: 0 }}>
+            Inteligencia de mercado para <span style={{ color: "var(--gold-bright)" }}>XAU/USD</span> y{" "}
+            <span style={{ color: "var(--violet-bright)" }}>DXY</span>, todos los días.
+          </h1>
+          <p style={{ maxWidth: 560, color: "var(--text-muted)", fontSize: 15, lineHeight: 1.6, marginTop: 20 }}>
+            VANTAX combina un Bias Score cuantitativo, sesiones de mercado en vivo, calendario económico y un
+            motor de análisis con IA en un mismo panel. Tasas reales, inflación, riesgo y técnico, condensados
+            en el formato que prefieras. No es asesoramiento financiero: es el marco de lectura, vos tomás la
+            decisión.
+          </p>
+          <div style={{ display: "flex", gap: 12, marginTop: 28, flexWrap: "wrap" }}>
+            <Link href={session?.user ? "/mercado" : "/signup"} className="btn btn-primary">
+              {session?.user ? "Ver centro de mercado" : "Crear cuenta gratis"}
+            </Link>
+            <a href="#planes" className="btn">Ver planes</a>
+          </div>
+        </div>
+        <div style={{ minHeight: 280 }}>
+          <GlobeVisual />
+        </div>
+      </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16, marginTop: 48 }}>
+      <div style={{ marginBottom: 10, fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.1em", color: "var(--text-dim)", textTransform: "uppercase" }}>
+        Qué podés hacer en VANTAX
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16, marginBottom: 60 }}>
+        {FEATURES.map((f) => (
+          <div key={f.title} className="panel">
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 17, marginBottom: 8 }}>{f.title}</div>
+            <p style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.6, margin: 0 }}>{f.desc}</p>
+          </div>
+        ))}
+      </div>
+
+      <div id="planes" style={{ marginBottom: 10, fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.1em", color: "var(--text-dim)", textTransform: "uppercase" }}>
+        Planes
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16 }}>
         {plans.map((plan) => (
           <div key={plan.id} className="panel">
             <div style={{ fontFamily: "var(--font-display)", fontSize: 22 }}>{plan.name}</div>
