@@ -9,18 +9,23 @@ export function SubscribeButton({ planId, label }: { planId: string; label?: str
   async function handleClick() {
     setLoading(true);
     setError(null);
-    const res = await fetch("/api/stripe/checkout", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ planId }),
-    });
-    const data = await res.json();
-    setLoading(false);
-    if (!res.ok) {
-      setError(data.error ?? "No se pudo iniciar el pago.");
-      return;
+    try {
+      const res = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ planId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.url) {
+        setError(data.error ?? "No se pudo iniciar el pago. Probá de nuevo en un momento.");
+        setLoading(false);
+        return;
+      }
+      window.location.href = data.url;
+    } catch (err) {
+      setError("No se pudo conectar con el servidor. Probá de nuevo.");
+      setLoading(false);
     }
-    window.location.href = data.url;
   }
 
   return (
@@ -40,14 +45,19 @@ export function ManageSubscriptionButton() {
   async function handleClick() {
     setLoading(true);
     setError(null);
-    const res = await fetch("/api/stripe/portal", { method: "POST" });
-    const data = await res.json();
-    setLoading(false);
-    if (!res.ok) {
-      setError(data.error ?? "No se pudo abrir el portal de facturación.");
-      return;
+    try {
+      const res = await fetch("/api/stripe/portal", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.url) {
+        setError(data.error ?? "No se pudo abrir el portal de facturación.");
+        setLoading(false);
+        return;
+      }
+      window.location.href = data.url;
+    } catch (err) {
+      setError("No se pudo conectar con el servidor. Probá de nuevo.");
+      setLoading(false);
     }
-    window.location.href = data.url;
   }
 
   return (
@@ -59,3 +69,4 @@ export function ManageSubscriptionButton() {
     </div>
   );
 }
+
