@@ -33,6 +33,9 @@ export default async function DashboardPage() {
           <h1 style={{ fontSize: 26, margin: "4px 0 0" }}>Hola, {user?.name || user?.email}</h1>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          {user?.role === "ADMIN" && (
+            <Link href="/admin" className="btn">Panel de admin</Link>
+          )}
           <Link href="/mercado" className="btn">Centro de mercado</Link>
           {hasActivePlan && <ManageSubscriptionButton />}
         </div>
@@ -110,3 +113,4 @@ export default async function DashboardPage() {
     </div>
   );
 }
+
