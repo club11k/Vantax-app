@@ -37,6 +37,7 @@ export default async function AdminUsersPage() {
                   planId: u.planId,
                   planName: u.plan?.name ?? null,
                   planQuota: u.plan?.monthlyQuota ?? null,
+                  planIsFree: u.plan?.isFree ?? false,
                 }}
                 plans={plans.map((p) => ({ id: p.id, name: p.name }))}
               />
