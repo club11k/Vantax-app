@@ -18,7 +18,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           </div>
           <h1 style={{ fontSize: 24, margin: "4px 0 0" }}>Panel de administrador</h1>
         </div>
-        <Link href="/dashboard" className="btn">Volver a la app</Link>
+        <div style={{ display: "flex", gap: 10 }}>
+          <Link href="/mercado" className="btn">Centro de mercado</Link>
+          <Link href="/dashboard" className="btn">Panel de análisis</Link>
+        </div>
       </div>
       <nav style={{ display: "flex", gap: 10, marginBottom: 24, borderBottom: "1px solid var(--line)", paddingBottom: 14 }}>
         <Link href="/admin" className="btn">Resumen</Link>
@@ -30,3 +33,5 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     </div>
   );
 }
+
+
