@@ -37,6 +37,9 @@ export default async function HomePage() {
         </div>
         {session?.user ? (
           <div style={{ display: "flex", gap: 10 }}>
+            {(session.user as any).role === "ADMIN" && (
+              <Link href="/admin" className="btn">Panel de admin</Link>
+            )}
             <Link href="/mercado" className="btn">Centro de mercado</Link>
             <Link href="/dashboard" className="btn btn-primary">Ir a mi panel</Link>
           </div>
@@ -120,3 +123,4 @@ export default async function HomePage() {
     </div>
   );
 }
+
