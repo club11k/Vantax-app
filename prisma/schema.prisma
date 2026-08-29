@@ -64,6 +64,7 @@ model Plan {
   monthlyQuota    Int      // cantidad de análisis por mes, ej. 30, 45
   stripePriceId   String?  @unique // se completa al crear el Price en Stripe
   active          Boolean  @default(true)
+  isFree          Boolean  @default(false) // plan interno para accesos gratuitos otorgados por un admin, no se cobra ni aparece en la web pública
   sortOrder       Int      @default(0)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
