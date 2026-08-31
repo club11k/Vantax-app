@@ -7,10 +7,10 @@ export default async function AdminPlansPage() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <div className="panel" style={{ fontSize: 13, color: "var(--text-muted)" }}>
-        Para que un plan se pueda cobrar, primero creá un <strong>Product</strong> y un{" "}
-        <strong>Price</strong> recurrente mensual en el Dashboard de Stripe (Product catalog), y pegá
-        acá el <code>Stripe Price ID</code> (empieza con <code>price_</code>). Los precios de Stripe son
-        inmutables: si cambiás el precio de un plan, creá un Price nuevo en Stripe y actualizá el ID acá.
+        Para que un plan se pueda cobrar, primero crea un <strong>Product</strong> y un{" "}
+        <strong>Price</strong> recurrente mensual en el Dashboard de Stripe (Product catalog), y pega
+        aquí el <code>Stripe Price ID</code> (empieza con <code>price_</code>). Los precios de Stripe son
+        inmutables: si cambias el precio de un plan, crea un Price nuevo en Stripe y actualiza el ID aquí.
       </div>
 
       <div>
@@ -40,3 +40,4 @@ export default async function AdminPlansPage() {
     </div>
   );
 }
+
