@@ -1,11 +1,14 @@
 // Cálculo del Bias Score en base a los datos que la app SÍ puede traer en
 // vivo (FRED + Twelve Data + CFTC pública). El documento de arquitectura
 // original define 4 módulos (Macro 40%, Flujos 25%, Riesgo 15%, Técnico
-// 20%). Todos están cubiertos con fuentes gratuitas, aunque de forma
-// parcial en dos casos: Flujos solo usa el posicionamiento de futuros (COT),
-// todavía sin los flujos de ETF (GLD) ni las compras oficiales (PBoC); y
-// Riesgo solo usa el VIX, sin el MOVE Index (propiedad de ICE, sin fuente
-// gratuita — se muestra aparte, solo como referencia visual, en /mercado).
+// 20%). Macro ya cubre tasas reales y nominales, curva 10Y/2Y y 10Y/3M,
+// CPI, Core PCE, PPI y breakeven de inflación 10 años. Riesgo cubre VIX y
+// el diferencial de crédito High Yield (OAS). Quedan dos módulos parciales:
+// Flujos solo usa el posicionamiento de futuros (COT), todavía sin los
+// flujos de ETF (GLD) ni las compras oficiales de bancos centrales (PBoC,
+// dato del World Gold Council); y Riesgo no incluye el MOVE Index
+// (propiedad de ICE, sin fuente gratuita — se muestra aparte, solo como
+// referencia visual, en /mercado).
 // Si un indicador puntual no está disponible en un momento dado, no se
 // inventa: el módulo se marca "no disponible" y el score total se
 // recalcula solo sobre los módulos con datos reales, con sus pesos
@@ -102,6 +105,54 @@ export function computeBiasScore(snapshot: MarketSnapshot): BiasResult {
     });
   }
 
+  if (macro.t3m10ySpread) {
+    // Spread 10Y-3M: el más citado por la Fed como señal de recesión. Invertido (negativo) = alerta.
+    const v = macro.t3m10ySpread.value;
+    const s = clamp(-v * 45, -100, 100);
+    macroIndicators.push({
+      label: "Curva 10Y/3M",
+      value: `${v.toFixed(2)} pp (${macro.t3m10ySpread.date})`,
+      score: s,
+      note: "Spread invertido (negativo) → señal de recesión seguida de cerca por la Fed → soporte para el oro.",
+    });
+  }
+
+  if (macro.corePceYoY) {
+    // PCE subyacente: el indicador de inflación que más vigila la Fed para su objetivo del 2%.
+    const v = macro.corePceYoY.value;
+    const s = clamp((v - 2) * 35, -100, 100);
+    macroIndicators.push({
+      label: "Core PCE interanual",
+      value: `${v.toFixed(2)}% (${macro.corePceYoY.date})`,
+      score: s,
+      note: "Métrica de inflación oficial de la Fed; por encima del objetivo del 2% → soporte de cobertura para el oro.",
+    });
+  }
+
+  if (macro.ppiYoY) {
+    // PPI: indicador adelantado de presiones de costes, suele preceder al CPI.
+    const v = macro.ppiYoY.value;
+    const s = clamp((v - 2) * 20, -100, 100);
+    macroIndicators.push({
+      label: "PPI interanual",
+      value: `${v.toFixed(2)}% (${macro.ppiYoY.date})`,
+      score: s,
+      note: "Indicador adelantado de presiones de precios en la cadena de producción.",
+    });
+  }
+
+  if (macro.breakeven10y) {
+    // Expectativas de inflación a 10 años implícitas en el mercado de bonos.
+    const v = macro.breakeven10y.value;
+    const s = clamp((v - 2.2) * 40, -100, 100);
+    macroIndicators.push({
+      label: "Breakeven de inflación 10 años",
+      value: `${v.toFixed(2)}% (${macro.breakeven10y.date})`,
+      score: s,
+      note: "Expectativa de inflación implícita en bonos; por encima de ~2.2% → soporte de cobertura para el oro.",
+    });
+  }
+
   // --- Módulo Técnico & Microestructura (peso 20%) ---
   const tecnicoIndicators: BiasIndicator[] = [];
 
@@ -165,6 +216,18 @@ export function computeBiasScore(snapshot: MarketSnapshot): BiasResult {
     });
   }
 
+  if (risk.hyOas) {
+    // Diferencial de crédito high-yield: se amplía cuando el mercado teme estrés financiero/crediticio.
+    const v = risk.hyOas.value;
+    const s = clamp((v - 3.5) * 25, -100, 100);
+    riesgoIndicators.push({
+      label: "High Yield OAS (diferencial de crédito)",
+      value: `${v.toFixed(2)}% (${risk.hyOas.date})`,
+      score: s,
+      note: "Diferencial amplio → estrés de crédito/aversión al riesgo → soporte de refugio para el oro.",
+    });
+  }
+
   const modules: BiasModule[] = [
     {
       key: "macro",
@@ -220,5 +283,6 @@ export function computeBiasScore(snapshot: MarketSnapshot): BiasResult {
     modules,
   };
 }
+
 
 
