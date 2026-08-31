@@ -29,7 +29,7 @@ export async function getRemainingQuota(userId: string): Promise<{
       used: user.analysesUsedInPeriod,
       planName: user.plan?.name ?? null,
       canGenerate: false,
-      reason: "Tu cuenta está suspendida. Contactá a soporte.",
+      reason: "Tu cuenta está suspendida. Contacta a soporte.",
     };
   }
 
@@ -40,7 +40,7 @@ export async function getRemainingQuota(userId: string): Promise<{
       used: user.analysesUsedInPeriod,
       planName: user.plan?.name ?? null,
       canGenerate: false,
-      reason: "No tenés una suscripción activa. Elegí un plan para generar análisis.",
+      reason: "No tienes una suscripción activa. Elige un plan para generar análisis.",
     };
   }
 
@@ -64,3 +64,5 @@ export async function consumeQuota(userId: string) {
     data: { analysesUsedInPeriod: { increment: 1 } },
   });
 }
+
+
