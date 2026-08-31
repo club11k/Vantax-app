@@ -47,7 +47,7 @@ export default async function DashboardPage() {
           <p style={{ color: "var(--text-muted)", fontSize: 13.5 }}>
             {user?.subscriptionStatus === "CANCELED"
               ? "Tu suscripción anterior está cancelada. Elegí un plan para volver a generar análisis."
-              : "Necesitás una suscripción activa para generar análisis diarios."}
+              : "Necesitas una suscripción activa para generar análisis diarios."}
           </p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14, marginTop: 16 }}>
             {plans.map((plan) => (
@@ -113,3 +113,4 @@ export default async function DashboardPage() {
     </div>
   );
 }
+
