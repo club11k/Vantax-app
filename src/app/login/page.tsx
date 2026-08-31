@@ -29,7 +29,7 @@ export default function LoginPage() {
     <div className="container" style={{ maxWidth: 420, paddingTop: 80 }}>
       <h1 style={{ fontSize: 26 }}>Iniciar sesión</h1>
       <p style={{ color: "var(--text-muted)", fontSize: 14 }}>
-        No tenés cuenta? <Link href="/signup">Creá una</Link>
+        ¿No tienes cuenta? <Link href="/signup">Crea una</Link>
       </p>
       <form onSubmit={handleSubmit} className="panel" style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 14 }}>
         <div>
@@ -48,3 +48,4 @@ export default function LoginPage() {
     </div>
   );
 }
+
