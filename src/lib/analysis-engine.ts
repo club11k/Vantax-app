@@ -2,25 +2,76 @@ import { anthropic, ANALYSIS_MODEL } from "@/lib/anthropic";
 import { buildMarketSnapshot, MarketSnapshot } from "@/lib/vantax-data";
 import { prisma } from "@/lib/prisma";
 
+function fmtFred(v: { date: string; value: number } | null, suffix = "%", digits = 2): string {
+  return v ? `${v.value.toFixed(digits)}${suffix} (${v.date})` : "no disponible";
+}
+
 function formatSnapshotForPrompt(snapshot: MarketSnapshot): string {
   const lines: string[] = [];
   const m = snapshot.macro;
+  const liq = snapshot.liquidity;
+  const lab = snapshot.labor;
+  const act = snapshot.activity;
   const p = snapshot.prices;
   const t = snapshot.technical;
+  const r = snapshot.risk;
+  const f = snapshot.flows;
 
   lines.push(`Snapshot generado: ${snapshot.generatedAt}`);
   lines.push("");
-  lines.push("MACRO:");
-  lines.push(`- US 10Y nominal: ${m.us10yNominal ? `${m.us10yNominal.value}% (${m.us10yNominal.date})` : "no disponible"}`);
-  lines.push(`- US 10Y TIPS (real): ${m.us10yTipsReal ? `${m.us10yTipsReal.value}% (${m.us10yTipsReal.date})` : "no disponible"}`);
-  lines.push(`- US 2Y: ${m.us2y ? `${m.us2y.value}% (${m.us2y.date})` : "no disponible"}`);
-  lines.push(`- CPI YoY: ${m.cpiYoY ? `${m.cpiYoY.value.toFixed(2)}% (${m.cpiYoY.date})` : "no disponible"}`);
-  lines.push(`- Core CPI YoY: ${m.coreCpiYoY ? `${m.coreCpiYoY.value.toFixed(2)}% (${m.coreCpiYoY.date})` : "no disponible"}`);
-  lines.push(`- Tasa de desempleo: ${m.unemploymentRate ? `${m.unemploymentRate.value}% (${m.unemploymentRate.date})` : "no disponible"}`);
+  lines.push("MACRO — TASAS Y POLÍTICA MONETARIA:");
+  lines.push(`- US 10Y nominal: ${fmtFred(m.us10yNominal)}`);
+  lines.push(`- US 10Y TIPS (real): ${fmtFred(m.us10yTipsReal)}`);
+  lines.push(`- US 5Y TIPS (real): ${fmtFred(m.us5yTipsReal)}`);
+  lines.push(`- US 2Y: ${fmtFred(m.us2y)}`);
+  lines.push(`- US 30Y: ${fmtFred(m.us30y)}`);
+  lines.push(`- Curva 10Y/3M: ${fmtFred(m.t3m10ySpread, " pp")}`);
+  lines.push(`- Tipo de interés Fed Funds (efectivo): ${fmtFred(m.fedFundsRate)}`);
+  lines.push("");
+  lines.push("MACRO — INFLACIÓN:");
+  lines.push(`- CPI YoY: ${fmtFred(m.cpiYoY)}`);
+  lines.push(`- Core CPI YoY: ${fmtFred(m.coreCpiYoY)}`);
+  lines.push(`- PCE YoY: ${fmtFred(m.pceYoY)}`);
+  lines.push(`- Core PCE YoY (referencia oficial de la Fed): ${fmtFred(m.corePceYoY)}`);
+  lines.push(`- PPI YoY: ${fmtFred(m.ppiYoY)}`);
+  lines.push(`- Breakeven de inflación 10Y: ${fmtFred(m.breakeven10y)}`);
+  lines.push(`- Breakeven de inflación 5Y: ${fmtFred(m.breakeven5y)}`);
+  lines.push(`- Breakeven forward 5Y5Y: ${fmtFred(m.breakeven5y5yFwd)}`);
+  lines.push(`- Expectativa de inflación (encuesta Michigan): ${fmtFred(m.michiganInflationExp)}`);
+  lines.push("");
+  lines.push("MACRO — LIQUIDEZ Y BALANCE DE LA FED:");
+  lines.push(`- Balance de la Fed (WALCL, millones USD): ${fmtFred(liq.fedBalanceSheet, "", 0)}`);
+  lines.push(`- Overnight Reverse Repo (ON RRP, miles millones USD): ${fmtFred(liq.onRRP, "", 1)}`);
+  lines.push(`- Treasury General Account (TGA, miles millones USD): ${fmtFred(liq.tga, "", 1)}`);
+  lines.push(`- M2 (oferta monetaria) YoY: ${fmtFred(m.m2YoY)}`);
+  lines.push("");
+  lines.push("MACRO — EMPLEO Y ACTIVIDAD:");
+  lines.push(`- Tasa de desempleo: ${fmtFred(m.unemploymentRate)}`);
+  lines.push(`- Nóminas no agrícolas (cambio mensual, miles): ${fmtFred(lab.nfpChange, "", 0)}`);
+  lines.push(`- Tasa de participación laboral: ${fmtFred(lab.participationRate)}`);
+  lines.push(`- Ganancias medias por hora YoY: ${fmtFred(lab.avgHourlyEarningsYoY)}`);
+  lines.push(`- Vacantes JOLTS (miles): ${fmtFred(lab.joltsOpenings, "", 0)}`);
+  lines.push(`- Solicitudes iniciales de desempleo: ${fmtFred(lab.initialClaims, "", 0)}`);
+  lines.push(`- Ventas minoristas MoM: ${fmtFred(act.retailSalesMoM)}`);
+  lines.push(`- PIB real YoY: ${fmtFred(act.gdpRealYoY)}`);
   lines.push("");
   lines.push("PRECIOS:");
   lines.push(`- Oro (XAU/USD): ${p.gold ? `$${p.gold.price} (${p.gold.percentChange >= 0 ? "+" : ""}${p.gold.percentChange}% hoy)` : "no disponible — configurar TWELVE_DATA_API_KEY"}`);
   lines.push(`- DXY: ${p.dxy ? `${p.dxy.price} (${p.dxy.percentChange >= 0 ? "+" : ""}${p.dxy.percentChange}% hoy)` : "no disponible — configurar TWELVE_DATA_API_KEY"}`);
+  lines.push("");
+  lines.push("RIESGO E INTERMERCADO:");
+  lines.push(`- VIX: ${fmtFred(r.vix, "", 2)}`);
+  lines.push(`- High Yield OAS (diferencial de crédito): ${fmtFred(r.hyOas)}`);
+  lines.push(`- MOVE Index: no disponible (dato propietario de ICE, sin fuente gratuita).`);
+  lines.push("");
+  lines.push("FLUJOS Y POSICIONAMIENTO:");
+  if (f.cotGoldManagedMoney) {
+    const c = f.cotGoldManagedMoney;
+    lines.push(`- COT Managed Money oro (neto): ${c.netCurrent.toLocaleString("es-ES")} contratos, semana anterior ${c.netPrev?.toLocaleString("es-ES") ?? "n/d"} (${c.date}), open interest ${c.openInterest.toLocaleString("es-ES")}`);
+  } else {
+    lines.push("- COT Managed Money oro: no disponible.");
+  }
+  lines.push("- Flujos de ETF (GLD) y compras oficiales de bancos centrales (PBoC/World Gold Council): no disponible, sin fuente gratuita conectada todavía.");
   lines.push("");
   lines.push("TÉCNICO (oro, diario):");
   if (t.available) {
@@ -73,4 +124,5 @@ export async function generateAnalysis(format: "MENSAJE" | "TECNICO") {
 
   return { content, snapshot };
 }
+
 
