@@ -11,7 +11,7 @@ const FEATURES = [
   },
   {
     title: "Análisis diario con IA",
-    desc: "Cada día generás tu lectura de XAU/USD y DXY, en el formato que prefieras: mensaje directo o detalle técnico completo.",
+    desc: "Cada día generas tu lectura de XAU/USD y DXY, en el formato que prefieras: mensaje directo o detalle técnico completo.",
   },
   {
     title: "Centro de mercado",
@@ -63,7 +63,7 @@ export default async function HomePage() {
           <p style={{ maxWidth: 560, color: "var(--text-muted)", fontSize: 15, lineHeight: 1.6, marginTop: 20 }}>
             VANTAX combina un Bias Score cuantitativo, sesiones de mercado en vivo, calendario económico y un
             motor de análisis con IA en un mismo panel. Tasas reales, inflación, riesgo y técnico, condensados
-            en el formato que prefieras. No es asesoramiento financiero: es el marco de lectura, vos tomás la
+            en el formato que prefieras. No es asesoramiento financiero: es el marco de lectura, tú tomas la
             decisión.
           </p>
           <div style={{ display: "flex", gap: 12, marginTop: 28, flexWrap: "wrap" }}>
@@ -79,7 +79,7 @@ export default async function HomePage() {
       </div>
 
       <div style={{ marginBottom: 10, fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.1em", color: "var(--text-dim)", textTransform: "uppercase" }}>
-        Qué podés hacer en VANTAX
+        Qué puedes hacer en VANTAX
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16, marginBottom: 60 }}>
         {FEATURES.map((f) => (
