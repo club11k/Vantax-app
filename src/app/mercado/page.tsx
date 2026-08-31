@@ -81,40 +81,65 @@ export default async function MercadoPage() {
     },
   ].filter(Boolean) as { name: string; value: number; label: string; color: string }[];
 
-  const sources: { label: string; value: string; date: string; source: string }[] = [];
-  if (snapshot.prices.gold) sources.push({ label: "Oro spot (XAU/USD)", value: `$${snapshot.prices.gold.price}`, date: "hoy", source: "Twelve Data" });
-  if (snapshot.prices.dxy) sources.push({ label: "DXY", value: `${snapshot.prices.dxy.price}`, date: "hoy", source: "Twelve Data" });
-  if (snapshot.macro.us10yNominal) sources.push({ label: "US 10Y nominal (DGS10)", value: `${snapshot.macro.us10yNominal.value}%`, date: snapshot.macro.us10yNominal.date, source: "FRED — DGS10" });
-  if (snapshot.macro.us10yTipsReal) sources.push({ label: "US 10Y TIPS real (DFII10)", value: `${snapshot.macro.us10yTipsReal.value}%`, date: snapshot.macro.us10yTipsReal.date, source: "FRED — DFII10" });
-  if (snapshot.macro.us2y) sources.push({ label: "US 2Y (DGS2)", value: `${snapshot.macro.us2y.value}%`, date: snapshot.macro.us2y.date, source: "FRED — DGS2" });
-  if (snapshot.macro.us5yTipsReal) sources.push({ label: "US 5Y TIPS real (DFII5)", value: `${snapshot.macro.us5yTipsReal.value}%`, date: snapshot.macro.us5yTipsReal.date, source: "FRED — DFII5" });
-  if (snapshot.macro.us30y) sources.push({ label: "US 30Y (DGS30)", value: `${snapshot.macro.us30y.value}%`, date: snapshot.macro.us30y.date, source: "FRED — DGS30" });
-  if (snapshot.macro.t3m10ySpread) sources.push({ label: "Curva 10Y/3M (T10Y3M)", value: `${snapshot.macro.t3m10ySpread.value} pp`, date: snapshot.macro.t3m10ySpread.date, source: "FRED — T10Y3M" });
-  if (snapshot.macro.fedFundsRate) sources.push({ label: "Fed Funds efectivo (DFF)", value: `${snapshot.macro.fedFundsRate.value}%`, date: snapshot.macro.fedFundsRate.date, source: "FRED — DFF" });
-  if (snapshot.macro.cpiYoY) sources.push({ label: "CPI interanual", value: `${snapshot.macro.cpiYoY.value.toFixed(2)}%`, date: snapshot.macro.cpiYoY.date, source: "FRED — CPIAUCSL" });
-  if (snapshot.macro.coreCpiYoY) sources.push({ label: "Core CPI interanual", value: `${snapshot.macro.coreCpiYoY.value.toFixed(2)}%`, date: snapshot.macro.coreCpiYoY.date, source: "FRED — CPILFESL" });
-  if (snapshot.macro.pceYoY) sources.push({ label: "PCE interanual", value: `${snapshot.macro.pceYoY.value.toFixed(2)}%`, date: snapshot.macro.pceYoY.date, source: "FRED — PCEPI" });
-  if (snapshot.macro.corePceYoY) sources.push({ label: "Core PCE interanual", value: `${snapshot.macro.corePceYoY.value.toFixed(2)}%`, date: snapshot.macro.corePceYoY.date, source: "FRED — PCEPILFE" });
-  if (snapshot.macro.ppiYoY) sources.push({ label: "PPI interanual", value: `${snapshot.macro.ppiYoY.value.toFixed(2)}%`, date: snapshot.macro.ppiYoY.date, source: "FRED — PPIACO" });
-  if (snapshot.macro.breakeven10y) sources.push({ label: "Breakeven inflación 10Y", value: `${snapshot.macro.breakeven10y.value}%`, date: snapshot.macro.breakeven10y.date, source: "FRED — T10YIE" });
-  if (snapshot.macro.breakeven5y) sources.push({ label: "Breakeven inflación 5Y", value: `${snapshot.macro.breakeven5y.value}%`, date: snapshot.macro.breakeven5y.date, source: "FRED — T5YIE" });
-  if (snapshot.macro.breakeven5y5yFwd) sources.push({ label: "Breakeven forward 5Y5Y", value: `${snapshot.macro.breakeven5y5yFwd.value}%`, date: snapshot.macro.breakeven5y5yFwd.date, source: "FRED — T5YIFR" });
-  if (snapshot.macro.michiganInflationExp) sources.push({ label: "Expectativa inflación (Michigan)", value: `${snapshot.macro.michiganInflationExp.value}%`, date: snapshot.macro.michiganInflationExp.date, source: "FRED — MICH" });
-  if (snapshot.macro.m2YoY) sources.push({ label: "M2 (oferta monetaria) interanual", value: `${snapshot.macro.m2YoY.value.toFixed(2)}%`, date: snapshot.macro.m2YoY.date, source: "FRED — M2SL" });
-  if (snapshot.liquidity.fedBalanceSheet) sources.push({ label: "Balance de la Fed", value: `$${snapshot.liquidity.fedBalanceSheet.value.toLocaleString("es-ES")} M`, date: snapshot.liquidity.fedBalanceSheet.date, source: "FRED — WALCL" });
-  if (snapshot.liquidity.onRRP) sources.push({ label: "Overnight Reverse Repo (ON RRP)", value: `$${snapshot.liquidity.onRRP.value.toLocaleString("es-ES")} MM`, date: snapshot.liquidity.onRRP.date, source: "FRED — RRPONTSYD" });
-  if (snapshot.liquidity.tga) sources.push({ label: "Treasury General Account (TGA)", value: `$${snapshot.liquidity.tga.value.toLocaleString("es-ES")} MM`, date: snapshot.liquidity.tga.date, source: "FRED — WDTGAL" });
-  if (snapshot.macro.unemploymentRate) sources.push({ label: "Tasa de desempleo", value: `${snapshot.macro.unemploymentRate.value}%`, date: snapshot.macro.unemploymentRate.date, source: "FRED — UNRATE" });
-  if (snapshot.labor.nfpChange) sources.push({ label: "Nóminas no agrícolas (cambio mensual)", value: `${snapshot.labor.nfpChange.value >= 0 ? "+" : ""}${snapshot.labor.nfpChange.value}k`, date: snapshot.labor.nfpChange.date, source: "FRED — PAYEMS" });
-  if (snapshot.labor.participationRate) sources.push({ label: "Tasa de participación laboral", value: `${snapshot.labor.participationRate.value}%`, date: snapshot.labor.participationRate.date, source: "FRED — CIVPART" });
-  if (snapshot.labor.avgHourlyEarningsYoY) sources.push({ label: "Ganancias medias por hora interanual", value: `${snapshot.labor.avgHourlyEarningsYoY.value.toFixed(2)}%`, date: snapshot.labor.avgHourlyEarningsYoY.date, source: "FRED — CES0500000003" });
-  if (snapshot.labor.joltsOpenings) sources.push({ label: "Vacantes JOLTS", value: `${snapshot.labor.joltsOpenings.value.toLocaleString("es-ES")}k`, date: snapshot.labor.joltsOpenings.date, source: "FRED — JTSJOL" });
-  if (snapshot.labor.initialClaims) sources.push({ label: "Solicitudes iniciales de desempleo", value: `${snapshot.labor.initialClaims.value.toLocaleString("es-ES")}`, date: snapshot.labor.initialClaims.date, source: "FRED — ICSA" });
-  if (snapshot.activity.retailSalesMoM) sources.push({ label: "Ventas minoristas mensual", value: `${snapshot.activity.retailSalesMoM.value.toFixed(2)}%`, date: snapshot.activity.retailSalesMoM.date, source: "FRED — RSXFS" });
-  if (snapshot.activity.gdpRealYoY) sources.push({ label: "PIB real interanual", value: `${snapshot.activity.gdpRealYoY.value.toFixed(2)}%`, date: snapshot.activity.gdpRealYoY.date, source: "FRED — GDPC1" });
-  if (snapshot.risk.hyOas) sources.push({ label: "High Yield OAS (diferencial de crédito)", value: `${snapshot.risk.hyOas.value}%`, date: snapshot.risk.hyOas.date, source: "FRED — BAMLH0A0HYM2" });
-  if (snapshot.risk.vix) sources.push({ label: "VIX (índice de volatilidad CBOE)", value: `${snapshot.risk.vix.value.toFixed(2)}`, date: snapshot.risk.vix.date, source: "FRED — VIXCLS" });
-  if (snapshot.flows.cotGoldManagedMoney) sources.push({ label: "Posicionamiento Managed Money — oro COMEX (COT)", value: `Neto ${snapshot.flows.cotGoldManagedMoney.netCurrent.toLocaleString("es-ES")} contratos`, date: snapshot.flows.cotGoldManagedMoney.date, source: "CFTC — Disaggregated COT" });
+  type SourceItem = { label: string; value: string; date: string; source: string };
+  const preciosItems: SourceItem[] = [];
+  const tasasItems: SourceItem[] = [];
+  const inflacionItems: SourceItem[] = [];
+  const liquidezItems: SourceItem[] = [];
+  const empleoItems: SourceItem[] = [];
+  const riesgoItems: SourceItem[] = [];
+  const flujosItems: SourceItem[] = [];
+
+  if (snapshot.prices.gold) preciosItems.push({ label: "Oro spot (XAU/USD)", value: `$${snapshot.prices.gold.price}`, date: "hoy", source: "Twelve Data" });
+  if (snapshot.prices.dxy) preciosItems.push({ label: "DXY", value: `${snapshot.prices.dxy.price}`, date: "hoy", source: "Twelve Data" });
+
+  if (snapshot.macro.us10yNominal) tasasItems.push({ label: "US 10Y nominal (DGS10)", value: `${snapshot.macro.us10yNominal.value}%`, date: snapshot.macro.us10yNominal.date, source: "FRED — DGS10" });
+  if (snapshot.macro.us10yTipsReal) tasasItems.push({ label: "US 10Y TIPS real (DFII10)", value: `${snapshot.macro.us10yTipsReal.value}%`, date: snapshot.macro.us10yTipsReal.date, source: "FRED — DFII10" });
+  if (snapshot.macro.us2y) tasasItems.push({ label: "US 2Y (DGS2)", value: `${snapshot.macro.us2y.value}%`, date: snapshot.macro.us2y.date, source: "FRED — DGS2" });
+  if (snapshot.macro.us5yTipsReal) tasasItems.push({ label: "US 5Y TIPS real (DFII5)", value: `${snapshot.macro.us5yTipsReal.value}%`, date: snapshot.macro.us5yTipsReal.date, source: "FRED — DFII5" });
+  if (snapshot.macro.us30y) tasasItems.push({ label: "US 30Y (DGS30)", value: `${snapshot.macro.us30y.value}%`, date: snapshot.macro.us30y.date, source: "FRED — DGS30" });
+  if (snapshot.macro.t3m10ySpread) tasasItems.push({ label: "Curva 10Y/3M (T10Y3M)", value: `${snapshot.macro.t3m10ySpread.value} pp`, date: snapshot.macro.t3m10ySpread.date, source: "FRED — T10Y3M" });
+  if (snapshot.macro.fedFundsRate) tasasItems.push({ label: "Fed Funds efectivo (DFF)", value: `${snapshot.macro.fedFundsRate.value}%`, date: snapshot.macro.fedFundsRate.date, source: "FRED — DFF" });
+
+  if (snapshot.macro.cpiYoY) inflacionItems.push({ label: "CPI interanual", value: `${snapshot.macro.cpiYoY.value.toFixed(2)}%`, date: snapshot.macro.cpiYoY.date, source: "FRED — CPIAUCSL" });
+  if (snapshot.macro.coreCpiYoY) inflacionItems.push({ label: "Core CPI interanual", value: `${snapshot.macro.coreCpiYoY.value.toFixed(2)}%`, date: snapshot.macro.coreCpiYoY.date, source: "FRED — CPILFESL" });
+  if (snapshot.macro.pceYoY) inflacionItems.push({ label: "PCE interanual", value: `${snapshot.macro.pceYoY.value.toFixed(2)}%`, date: snapshot.macro.pceYoY.date, source: "FRED — PCEPI" });
+  if (snapshot.macro.corePceYoY) inflacionItems.push({ label: "Core PCE interanual", value: `${snapshot.macro.corePceYoY.value.toFixed(2)}%`, date: snapshot.macro.corePceYoY.date, source: "FRED — PCEPILFE" });
+  if (snapshot.macro.ppiYoY) inflacionItems.push({ label: "PPI interanual", value: `${snapshot.macro.ppiYoY.value.toFixed(2)}%`, date: snapshot.macro.ppiYoY.date, source: "FRED — PPIACO" });
+  if (snapshot.macro.breakeven10y) inflacionItems.push({ label: "Breakeven inflación 10Y", value: `${snapshot.macro.breakeven10y.value}%`, date: snapshot.macro.breakeven10y.date, source: "FRED — T10YIE" });
+  if (snapshot.macro.breakeven5y) inflacionItems.push({ label: "Breakeven inflación 5Y", value: `${snapshot.macro.breakeven5y.value}%`, date: snapshot.macro.breakeven5y.date, source: "FRED — T5YIE" });
+  if (snapshot.macro.breakeven5y5yFwd) inflacionItems.push({ label: "Breakeven forward 5Y5Y", value: `${snapshot.macro.breakeven5y5yFwd.value}%`, date: snapshot.macro.breakeven5y5yFwd.date, source: "FRED — T5YIFR" });
+  if (snapshot.macro.michiganInflationExp) inflacionItems.push({ label: "Expectativa inflación (Michigan)", value: `${snapshot.macro.michiganInflationExp.value}%`, date: snapshot.macro.michiganInflationExp.date, source: "FRED — MICH" });
+
+  if (snapshot.macro.m2YoY) liquidezItems.push({ label: "M2 (oferta monetaria) interanual", value: `${snapshot.macro.m2YoY.value.toFixed(2)}%`, date: snapshot.macro.m2YoY.date, source: "FRED — M2SL" });
+  if (snapshot.liquidity.fedBalanceSheet) liquidezItems.push({ label: "Balance de la Fed", value: `$${snapshot.liquidity.fedBalanceSheet.value.toLocaleString("es-ES")} M`, date: snapshot.liquidity.fedBalanceSheet.date, source: "FRED — WALCL" });
+  if (snapshot.liquidity.onRRP) liquidezItems.push({ label: "Overnight Reverse Repo (ON RRP)", value: `$${snapshot.liquidity.onRRP.value.toLocaleString("es-ES")} MM`, date: snapshot.liquidity.onRRP.date, source: "FRED — RRPONTSYD" });
+  if (snapshot.liquidity.tga) liquidezItems.push({ label: "Treasury General Account (TGA)", value: `$${snapshot.liquidity.tga.value.toLocaleString("es-ES")} MM`, date: snapshot.liquidity.tga.date, source: "FRED — WDTGAL" });
+
+  if (snapshot.macro.unemploymentRate) empleoItems.push({ label: "Tasa de desempleo", value: `${snapshot.macro.unemploymentRate.value}%`, date: snapshot.macro.unemploymentRate.date, source: "FRED — UNRATE" });
+  if (snapshot.labor.nfpChange) empleoItems.push({ label: "Nóminas no agrícolas (cambio mensual)", value: `${snapshot.labor.nfpChange.value >= 0 ? "+" : ""}${snapshot.labor.nfpChange.value}k`, date: snapshot.labor.nfpChange.date, source: "FRED — PAYEMS" });
+  if (snapshot.labor.participationRate) empleoItems.push({ label: "Tasa de participación laboral", value: `${snapshot.labor.participationRate.value}%`, date: snapshot.labor.participationRate.date, source: "FRED — CIVPART" });
+  if (snapshot.labor.avgHourlyEarningsYoY) empleoItems.push({ label: "Ganancias medias por hora interanual", value: `${snapshot.labor.avgHourlyEarningsYoY.value.toFixed(2)}%`, date: snapshot.labor.avgHourlyEarningsYoY.date, source: "FRED — CES0500000003" });
+  if (snapshot.labor.joltsOpenings) empleoItems.push({ label: "Vacantes JOLTS", value: `${snapshot.labor.joltsOpenings.value.toLocaleString("es-ES")}k`, date: snapshot.labor.joltsOpenings.date, source: "FRED — JTSJOL" });
+  if (snapshot.labor.initialClaims) empleoItems.push({ label: "Solicitudes iniciales de desempleo", value: `${snapshot.labor.initialClaims.value.toLocaleString("es-ES")}`, date: snapshot.labor.initialClaims.date, source: "FRED — ICSA" });
+  if (snapshot.activity.retailSalesMoM) empleoItems.push({ label: "Ventas minoristas mensual", value: `${snapshot.activity.retailSalesMoM.value.toFixed(2)}%`, date: snapshot.activity.retailSalesMoM.date, source: "FRED — RSXFS" });
+  if (snapshot.activity.gdpRealYoY) empleoItems.push({ label: "PIB real interanual", value: `${snapshot.activity.gdpRealYoY.value.toFixed(2)}%`, date: snapshot.activity.gdpRealYoY.date, source: "FRED — GDPC1" });
+
+  if (snapshot.risk.vix) riesgoItems.push({ label: "VIX (índice de volatilidad CBOE)", value: `${snapshot.risk.vix.value.toFixed(2)}`, date: snapshot.risk.vix.date, source: "FRED — VIXCLS" });
+  if (snapshot.risk.hyOas) riesgoItems.push({ label: "High Yield OAS (diferencial de crédito)", value: `${snapshot.risk.hyOas.value}%`, date: snapshot.risk.hyOas.date, source: "FRED — BAMLH0A0HYM2" });
+
+  if (snapshot.flows.cotGoldManagedMoney) flujosItems.push({ label: "Posicionamiento Managed Money — oro COMEX (COT)", value: `Neto ${snapshot.flows.cotGoldManagedMoney.netCurrent.toLocaleString("es-ES")} contratos`, date: snapshot.flows.cotGoldManagedMoney.date, source: "CFTC — Disaggregated COT" });
+
+  const sourceGroups = [
+    { key: "precios", title: "Precios", items: preciosItems },
+    { key: "tasas", title: "Tasas y Política Monetaria", items: tasasItems },
+    { key: "inflacion", title: "Inflación", items: inflacionItems },
+    { key: "liquidez", title: "Liquidez", items: liquidezItems },
+    { key: "empleo", title: "Empleo y Actividad", items: empleoItems },
+    { key: "riesgo", title: "Riesgo e Intermercado", items: riesgoItems },
+    { key: "flujos", title: "Flujos y Posicionamiento", items: flujosItems },
+  ].filter((g) => g.items.length > 0);
+  const totalSources = sourceGroups.reduce((sum, g) => sum + g.items.length, 0);
 
   return (
     <div className="container" style={{ paddingTop: 40 }}>
@@ -139,7 +164,7 @@ export default async function MercadoPage() {
             { proName: "TVC:GOLD", title: "Oro (spot)" },
             { proName: "FRED:DTWEXBGS", title: "USD ponderado (Fed)" },
             { proName: "FRED:VIXCLS", title: "VIX" },
-            { proName: "FRED:DCOILBRENTEU", title: "Petróleo Brent" },
+            { proName: "CAPITALCOM:OIL_BRENT", title: "Petróleo Brent (Cash)" },
             { proName: "FRED:DGS5", title: "US 5Y" },
             { proName: "FRED:DGS10", title: "US 10Y" },
             { proName: "FRED:DGS20", title: "US 20Y" },
@@ -152,7 +177,11 @@ export default async function MercadoPage() {
         }}
       />
 
-      <div style={{ marginTop: 20, marginBottom: 10, fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.1em", color: "var(--text-dim)", textTransform: "uppercase" }}>
+      <div style={{ marginTop: 20, marginBottom: 16 }}>
+        <MarketFlowMap />
+      </div>
+
+      <div style={{ marginTop: 4, marginBottom: 10, fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.1em", color: "var(--text-dim)", textTransform: "uppercase" }}>
         Bias Score — Motor de Scoring Algorítmico
       </div>
       <div className="panel" style={{ marginBottom: 24 }}>
@@ -247,10 +276,6 @@ export default async function MercadoPage() {
             </details>
           </div>
         </div>
-      </div>
-
-      <div style={{ marginBottom: 24 }}>
-        <MarketFlowMap />
       </div>
 
       <div className="panel-title" style={{ margin: "4px 0 10px 2px" }}>Sesiones de Mercado (hora real, UTC)</div>
@@ -359,40 +384,33 @@ export default async function MercadoPage() {
         }}
       />
 
-      <div className="panel" style={{ marginTop: 24 }}>
-        <div className="panel-head">
-          <span className="panel-title">Mapa de Fuentes — Valores Usados en esta Corrida</span>
-        </div>
-        <div className="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>Dato</th>
-                <th>Valor</th>
-                <th>Fecha del dato</th>
-                <th>Fuente</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sources.map((s, i) => (
-                <tr key={i}>
-                  <td>{s.label}</td>
-                  <td style={{ fontFamily: "var(--font-mono)", color: "var(--text-primary)" }}>{s.value}</td>
-                  <td>{s.date}</td>
-                  <td>{s.source}</td>
-                </tr>
-              ))}
-              {sources.length === 0 && (
-                <tr>
-                  <td colSpan={4} style={{ color: "var(--text-dim)" }}>
-                    Todavía no hay datos en vivo — configura FRED_API_KEY y TWELVE_DATA_API_KEY en Render → Environment.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+      <div className="panel-head" style={{ margin: "4px 0 10px 2px" }}>
+        <span className="panel-title">Mapa de Fuentes — Valores Usados en esta Corrida</span>
+        <span className="panel-sub">{totalSources} datos en vivo, agrupados por categoría</span>
       </div>
+      {sourceGroups.length === 0 ? (
+        <div className="panel" style={{ padding: 20, color: "var(--text-dim)" }}>
+          Todavía no hay datos en vivo — configura FRED_API_KEY y TWELVE_DATA_API_KEY en Render → Environment.
+        </div>
+      ) : (
+        sourceGroups.map((group) => (
+          <div key={group.key} style={{ marginBottom: 20 }}>
+            <div className="source-group-title">{group.title}</div>
+            <div className="source-grid">
+              {group.items.map((s, i) => (
+                <div key={i} className="source-card">
+                  <div className="source-card-label">{s.label}</div>
+                  <div className="source-card-value">{s.value}</div>
+                  <div className="source-card-meta">
+                    <span>{s.date}</span>
+                    <span>{s.source}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))
+      )}
     </div>
   );
 }
