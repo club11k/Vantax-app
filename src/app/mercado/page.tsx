@@ -14,6 +14,14 @@ function fmtPct(n: number) {
   return `${n >= 0 ? "+" : ""}${n.toFixed(2)}%`;
 }
 
+// Notas explicativas breves para categorías de datos cuyo nombre no es
+// autoexplicativo a simple vista (p. ej. "breakeven" suena a bonos, pero es
+// en realidad una expectativa de inflación derivada de precios de bonos).
+const GROUP_NOTES: Record<string, string> = {
+  inflacion:
+    "Los datos \"breakeven\" no son un tipo de bono: son la expectativa de inflación que implica el mercado de bonos, calculada como la diferencia entre el rendimiento de un bono del Tesoro normal y el de un bono indexado a la inflación (TIPS) del mismo plazo. Si es alta, el mercado espera más inflación.",
+};
+
 function scoreColor(score: number | null) {
   if (score === null) return "var(--text-dim)";
   if (score > 8) return "var(--up)";
@@ -396,6 +404,7 @@ export default async function MercadoPage() {
         sourceGroups.map((group) => (
           <div key={group.key} style={{ marginBottom: 20 }}>
             <div className="source-group-title">{group.title}</div>
+            {GROUP_NOTES[group.key] && <div className="source-group-note">{GROUP_NOTES[group.key]}</div>}
             <div className="source-grid">
               {group.items.map((s, i) => (
                 <div key={i} className="source-card">
