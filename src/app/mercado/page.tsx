@@ -73,6 +73,8 @@ export default async function MercadoPage() {
   if (snapshot.macro.coreCpiYoY) sources.push({ label: "Core CPI interanual", value: `${snapshot.macro.coreCpiYoY.value.toFixed(2)}%`, date: snapshot.macro.coreCpiYoY.date, href: "https://fred.stlouisfed.org/series/CPILFESL", source: "FRED — CPILFESL" });
   if (snapshot.macro.unemploymentRate) sources.push({ label: "Tasa de desempleo", value: `${snapshot.macro.unemploymentRate.value}%`, date: snapshot.macro.unemploymentRate.date, href: "https://fred.stlouisfed.org/series/UNRATE", source: "FRED — UNRATE" });
   if (snapshot.technical.available) sources.push({ label: "EMA20/50/100/200 y RSI(14) — Oro", value: "ver panel técnico", date: "hoy", source: "Twelve Data (time series diario)" });
+  if (snapshot.risk.vix) sources.push({ label: "VIX (índice de volatilidad CBOE)", value: `${snapshot.risk.vix.value.toFixed(2)}`, date: snapshot.risk.vix.date, href: "https://fred.stlouisfed.org/series/VIXCLS", source: "FRED — VIXCLS" });
+  if (snapshot.flows.cotGoldManagedMoney) sources.push({ label: "Posicionamiento Managed Money — oro COMEX (COT)", value: `Neto ${snapshot.flows.cotGoldManagedMoney.netCurrent.toLocaleString("es-ES")} contratos`, date: snapshot.flows.cotGoldManagedMoney.date, href: "https://publicreporting.cftc.gov/Commitments-of-Traders/Disaggregated-Futures-Only/72hh-3qpy", source: "CFTC — Disaggregated COT" });
 
   return (
     <div className="container" style={{ paddingTop: 40 }}>
@@ -258,7 +260,26 @@ export default async function MercadoPage() {
         />
       </div>
 
-      <div className="panel-title" style={{ margin: "4px 0 10px 2px" }}>Feed de Titulares</div>
+      <div className="panel-head" style={{ margin: "4px 0 10px 2px" }}>
+        <span className="panel-title">MOVE Index — Volatilidad de Bonos del Tesoro</span>
+        <span className="panel-sub">Solo referencia visual — no entra en el cálculo del Bias Score (fuente propietaria de ICE, sin acceso gratuito)</span>
+      </div>
+      <TradingViewWidget
+        height={220}
+        src="https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js"
+        config={{
+          symbol: "TVC:MOVE",
+          width: "100%",
+          height: 220,
+          locale: "es",
+          dateRange: "12M",
+          colorTheme: "dark",
+          isTransparent: true,
+          autosize: false,
+        }}
+      />
+
+      <div className="panel-title" style={{ margin: "24px 0 10px 2px" }}>Feed de Titulares</div>
       <TradingViewWidget
         height={400}
         src="https://s3.tradingview.com/external-embedding/embed-widget-timeline.js"
@@ -319,9 +340,12 @@ export default async function MercadoPage() {
 
       <p style={{ marginTop: 24, fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-dim)", lineHeight: 1.8 }}>
         Metodología: los subscores de cada módulo son una calificación cualitativa (−100 a +100) de cada indicador
-        según su lectura direccional para el oro, promediada por módulo. Los módulos "Flujos" y "Riesgo" no están
-        disponibles en esta versión automatizada y no entran en el cálculo del total. No es asesoramiento
-        financiero — verificá cifras críticas contra la fuente primaria antes de operar.
+        según su lectura direccional para el oro, promediada por módulo. "Flujos" usa por ahora solo el
+        posicionamiento de futuros (COT); todavía no incluye flujos de ETF (GLD) ni compras oficiales (PBoC).
+        "Riesgo" usa solo el VIX; el MOVE Index se muestra aparte, como referencia visual, sin entrar en el
+        cálculo. Si un módulo no tiene ningún indicador disponible en un momento dado, se marca "no disponible"
+        y el total se recalcula solo con los módulos que sí tienen datos reales. No es asesoramiento financiero —
+        verificá cifras críticas contra la fuente primaria antes de operar.
       </p>
     </div>
   );
