@@ -5,11 +5,20 @@ import { useEffect, useState } from "react";
 // Sesiones de mercado calculadas en vivo en el navegador del usuario, en
 // horario estándar UTC (no depende de ninguna API — es aritmética de reloj,
 // así que esto sí es 100% real y exacto en todo momento).
+//
+// Horarios de referencia estándar (hora de invierno UTC, sin ajustar por
+// horario de verano de cada plaza, que puede desplazar ±1h según la época
+// del año) según Forex.com y Dukascopy: Sídney abre a las 22:00 UTC (NO a
+// las 00:00 — esa es la apertura de Tokio), Tokio 00:00–09:00, Londres
+// 08:00–16:00 y Nueva York 13:00–22:00. Con estos horarios las 4 sesiones
+// quedan encadenadas sin huecos: Nueva York cierra a las 22:00 UTC justo
+// cuando abre Sídney, que es también el cierre/apertura de la semana de
+// forex (viernes 22:00 UTC → domingo 22:00 UTC).
 const SESSION_DEFS = [
   { name: "Sydney", openH: 22, openM: 0, closeH: 7, closeM: 0 },
   { name: "Tokio", openH: 0, openM: 0, closeH: 9, closeM: 0 },
-  { name: "Londres", openH: 8, openM: 0, closeH: 16, closeM: 30 },
-  { name: "Nueva York", openH: 13, openM: 30, closeH: 20, closeM: 0 },
+  { name: "Londres", openH: 8, openM: 0, closeH: 16, closeM: 0 },
+  { name: "Nueva York", openH: 13, openM: 0, closeH: 22, closeM: 0 },
 ];
 
 function pad(n: number) {
@@ -75,8 +84,9 @@ export function SessionsClock() {
         <div>
           <div className="spot-status-title">Mercado Spot de Oro / Forex (24/5)</div>
           <div className="spot-status-desc">
-            Opera casi sin interrupción de domingo 22:00 UTC a viernes 22:00 UTC, aunque ninguna de
-            las sesiones bursátiles de abajo esté activa en este momento.
+            Opera de forma continua de domingo 22:00 UTC (apertura de Sídney) a viernes 22:00 UTC
+            (cierre de Nueva York) — las 4 sesiones de abajo están encadenadas sin huecos entre
+            semana. Cerrado solo el fin de semana.
           </div>
         </div>
       </div>
