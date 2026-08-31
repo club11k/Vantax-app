@@ -17,7 +17,7 @@ type FredObservation = { date: string; value: string };
 
 async function fetchFredSeries(
   seriesId: string,
-  opts: { units?: "lin" | "pc1" | "pch" } = {}
+  opts: { units?: "lin" | "pc1" | "pch" | "chg" } = {}
 ): Promise<{ date: string; value: number } | null> {
   const apiKey = process.env.FRED_API_KEY;
   if (!apiKey) return null;
@@ -176,15 +176,45 @@ function rsi(values: number[], period = 14): number | null {
   return 100 - 100 / (1 + rs);
 }
 
+type FredValue = { date: string; value: number } | null;
+
 export type MarketSnapshot = {
   generatedAt: string;
   macro: {
-    us10yNominal: { date: string; value: number } | null;
-    us10yTipsReal: { date: string; value: number } | null;
-    us2y: { date: string; value: number } | null;
-    cpiYoY: { date: string; value: number } | null;
-    coreCpiYoY: { date: string; value: number } | null;
-    unemploymentRate: { date: string; value: number } | null;
+    us10yNominal: FredValue;
+    us10yTipsReal: FredValue;
+    us5yTipsReal: FredValue;
+    us2y: FredValue;
+    us30y: FredValue;
+    t3m10ySpread: FredValue;
+    cpiYoY: FredValue;
+    coreCpiYoY: FredValue;
+    pceYoY: FredValue;
+    corePceYoY: FredValue;
+    ppiYoY: FredValue;
+    breakeven10y: FredValue;
+    breakeven5y: FredValue;
+    breakeven5y5yFwd: FredValue;
+    michiganInflationExp: FredValue;
+    unemploymentRate: FredValue;
+    fedFundsRate: FredValue;
+    m2YoY: FredValue;
+  };
+  liquidity: {
+    fedBalanceSheet: FredValue;
+    onRRP: FredValue;
+    tga: FredValue;
+  };
+  labor: {
+    nfpChange: FredValue;
+    participationRate: FredValue;
+    avgHourlyEarningsYoY: FredValue;
+    joltsOpenings: FredValue;
+    initialClaims: FredValue;
+  };
+  activity: {
+    retailSalesMoM: FredValue;
+    gdpRealYoY: FredValue;
   };
   prices: {
     gold: { price: number; percentChange: number } | null;
@@ -199,7 +229,8 @@ export type MarketSnapshot = {
     rsi14: number | null;
   };
   risk: {
-    vix: { date: string; value: number } | null;
+    vix: FredValue;
+    hyOas: FredValue;
   };
   flows: {
     cotGoldManagedMoney: {
@@ -218,11 +249,34 @@ export async function buildMarketSnapshot(): Promise<MarketSnapshot> {
   const [
     us10yNominal,
     us10yTipsReal,
+    us5yTipsReal,
     us2y,
+    us30y,
+    t3m10ySpread,
     cpiYoY,
     coreCpiYoY,
+    pceYoY,
+    corePceYoY,
+    ppiYoY,
+    breakeven10y,
+    breakeven5y,
+    breakeven5y5yFwd,
+    michiganInflationExp,
     unemploymentRate,
+    fedFundsRate,
+    m2YoY,
+    fedBalanceSheet,
+    onRRP,
+    tga,
+    nfpChange,
+    participationRate,
+    avgHourlyEarningsYoY,
+    joltsOpenings,
+    initialClaims,
+    retailSalesMoM,
+    gdpRealYoY,
     vix,
+    hyOas,
     gold,
     dxy,
     goldSeries,
@@ -230,11 +284,34 @@ export async function buildMarketSnapshot(): Promise<MarketSnapshot> {
   ] = await Promise.all([
     fetchFredSeries("DGS10"),
     fetchFredSeries("DFII10"),
+    fetchFredSeries("DFII5"),
     fetchFredSeries("DGS2"),
+    fetchFredSeries("DGS30"),
+    fetchFredSeries("T10Y3M"),
     fetchFredSeries("CPIAUCSL", { units: "pc1" }),
     fetchFredSeries("CPILFESL", { units: "pc1" }),
+    fetchFredSeries("PCEPI", { units: "pc1" }),
+    fetchFredSeries("PCEPILFE", { units: "pc1" }),
+    fetchFredSeries("PPIACO", { units: "pc1" }),
+    fetchFredSeries("T10YIE"),
+    fetchFredSeries("T5YIE"),
+    fetchFredSeries("T5YIFR"),
+    fetchFredSeries("MICH"),
     fetchFredSeries("UNRATE"),
+    fetchFredSeries("DFF"), // Fed Funds Effective Rate (diario) — tipo de interés de referencia de la Fed
+    fetchFredSeries("M2SL", { units: "pc1" }),
+    fetchFredSeries("WALCL"),
+    fetchFredSeries("RRPONTSYD"),
+    fetchFredSeries("WDTGAL"),
+    fetchFredSeries("PAYEMS", { units: "chg" }),
+    fetchFredSeries("CIVPART"),
+    fetchFredSeries("CES0500000003", { units: "pc1" }),
+    fetchFredSeries("JTSJOL"),
+    fetchFredSeries("ICSA"),
+    fetchFredSeries("RSXFS", { units: "pch" }),
+    fetchFredSeries("GDPC1", { units: "pc1" }),
     fetchFredSeries("VIXCLS"), // CBOE Volatility Index, gratis en FRED
+    fetchFredSeries("BAMLH0A0HYM2"), // ICE BofA US High Yield OAS
     fetchTwelveDataQuote("XAU/USD"),
     fetchTwelveDataQuote("DXY"),
     fetchTwelveDataSeries("XAU/USD"),
@@ -254,10 +331,33 @@ export async function buildMarketSnapshot(): Promise<MarketSnapshot> {
 
   return {
     generatedAt: new Date().toISOString(),
-    macro: { us10yNominal, us10yTipsReal, us2y, cpiYoY, coreCpiYoY, unemploymentRate },
+    macro: {
+      us10yNominal,
+      us10yTipsReal,
+      us5yTipsReal,
+      us2y,
+      us30y,
+      t3m10ySpread,
+      cpiYoY,
+      coreCpiYoY,
+      pceYoY,
+      corePceYoY,
+      ppiYoY,
+      breakeven10y,
+      breakeven5y,
+      breakeven5y5yFwd,
+      michiganInflationExp,
+      unemploymentRate,
+      fedFundsRate,
+      m2YoY,
+    },
+    liquidity: { fedBalanceSheet, onRRP, tga },
+    labor: { nfpChange, participationRate, avgHourlyEarningsYoY, joltsOpenings, initialClaims },
+    activity: { retailSalesMoM, gdpRealYoY },
     prices: { gold, dxy },
     technical,
-    risk: { vix },
+    risk: { vix, hyOas },
     flows: { cotGoldManagedMoney },
   };
 }
+
