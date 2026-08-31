@@ -98,6 +98,58 @@ async function fetchTwelveDataSeries(
   }
 }
 
+const CFTC_DISAGG_BASE = "https://publicreporting.cftc.gov/resource/72hh-3qpy.json";
+
+// Posicionamiento semanal de "Managed Money" (fondos especulativos) en
+// futuros de oro (COMEX), tomado del reporte Disaggregated COT que publica
+// la CFTC (Comisión de EE.UU. que regula futuros). Es un dato público y
+// gratuito, sin API key. Devolvemos el neto (largos - cortos) de esta
+// semana y de la semana anterior para poder medir el cambio de flujo.
+async function fetchCotGoldManagedMoney(): Promise<{
+  date: string;
+  netCurrent: number;
+  netPrev: number | null;
+  openInterest: number;
+} | null> {
+  try {
+    const params = new URLSearchParams({
+      $limit: "2",
+      $order: "report_date_as_yyyy_mm_dd DESC",
+      $where: "market_and_exchange_names like '%GOLD - COMMODITY EXCHANGE%'",
+    });
+    const res = await fetch(`${CFTC_DISAGG_BASE}?${params.toString()}`, {
+      next: { revalidate: 21600 }, // el reporte es semanal (viernes), cachear 6h alcanza de sobra
+      headers: { Accept: "application/json" },
+    });
+    if (!res.ok) return null;
+    const rows = (await res.json()) as any[];
+    if (!Array.isArray(rows) || rows.length === 0) return null;
+
+    const parseNet = (row: any): number | null => {
+      const long = parseFloat(row?.m_money_positions_long_all);
+      const short = parseFloat(row?.m_money_positions_short_all);
+      if (Number.isNaN(long) || Number.isNaN(short)) return null;
+      return long - short;
+    };
+
+    const latest = rows[0];
+    const netCurrent = parseNet(latest);
+    const openInterest = parseFloat(latest?.open_interest_all);
+    if (netCurrent === null || Number.isNaN(openInterest) || openInterest === 0) return null;
+
+    const netPrev = rows[1] ? parseNet(rows[1]) : null;
+
+    return {
+      date: latest.report_date_as_yyyy_mm_dd,
+      netCurrent,
+      netPrev,
+      openInterest,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function ema(values: number[], period: number): number | null {
   if (values.length < period) return null;
   const k = 2 / (period + 1);
@@ -146,24 +198,48 @@ export type MarketSnapshot = {
     ema200: number | null;
     rsi14: number | null;
   };
+  risk: {
+    vix: { date: string; value: number } | null;
+  };
+  flows: {
+    cotGoldManagedMoney: {
+      date: string;
+      netCurrent: number;
+      netPrev: number | null;
+      openInterest: number;
+    } | null;
+  };
 };
 
 // Punto de entrada principal: arma el snapshot completo que se le pasa a la IA.
 // Usalo en el endpoint de generación de análisis, y guardalo en
 // Analysis.dataSnapshot para poder auditar con qué datos se generó cada informe.
 export async function buildMarketSnapshot(): Promise<MarketSnapshot> {
-  const [us10yNominal, us10yTipsReal, us2y, cpiYoY, coreCpiYoY, unemploymentRate, gold, dxy, goldSeries] =
-    await Promise.all([
-      fetchFredSeries("DGS10"),
-      fetchFredSeries("DFII10"),
-      fetchFredSeries("DGS2"),
-      fetchFredSeries("CPIAUCSL", { units: "pc1" }),
-      fetchFredSeries("CPILFESL", { units: "pc1" }),
-      fetchFredSeries("UNRATE"),
-      fetchTwelveDataQuote("XAU/USD"),
-      fetchTwelveDataQuote("DXY"),
-      fetchTwelveDataSeries("XAU/USD"),
-    ]);
+  const [
+    us10yNominal,
+    us10yTipsReal,
+    us2y,
+    cpiYoY,
+    coreCpiYoY,
+    unemploymentRate,
+    vix,
+    gold,
+    dxy,
+    goldSeries,
+    cotGoldManagedMoney,
+  ] = await Promise.all([
+    fetchFredSeries("DGS10"),
+    fetchFredSeries("DFII10"),
+    fetchFredSeries("DGS2"),
+    fetchFredSeries("CPIAUCSL", { units: "pc1" }),
+    fetchFredSeries("CPILFESL", { units: "pc1" }),
+    fetchFredSeries("UNRATE"),
+    fetchFredSeries("VIXCLS"), // CBOE Volatility Index, gratis en FRED
+    fetchTwelveDataQuote("XAU/USD"),
+    fetchTwelveDataQuote("DXY"),
+    fetchTwelveDataSeries("XAU/USD"),
+    fetchCotGoldManagedMoney(),
+  ]);
 
   const technical = goldSeries
     ? {
@@ -181,5 +257,7 @@ export async function buildMarketSnapshot(): Promise<MarketSnapshot> {
     macro: { us10yNominal, us10yTipsReal, us2y, cpiYoY, coreCpiYoY, unemploymentRate },
     prices: { gold, dxy },
     technical,
+    risk: { vix },
+    flows: { cotGoldManagedMoney },
   };
 }
