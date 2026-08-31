@@ -1,10 +1,15 @@
 // Cálculo del Bias Score en base a los datos que la app SÍ puede traer en
-// vivo (FRED + Twelve Data). El documento de arquitectura original define 4
-// módulos (Macro 40%, Flujos 25%, Riesgo 15%, Técnico 20%), pero Flujos
-// (COT, ETF, PBoC) y Riesgo (VIX, MOVE) requieren proveedores de pago que
-// esta versión no tiene conectados — en vez de inventar números, esos
-// módulos se marcan como "no disponibles" y el score total se recalcula
-// solo sobre los módulos con datos reales, con sus pesos reescalados.
+// vivo (FRED + Twelve Data + CFTC pública). El documento de arquitectura
+// original define 4 módulos (Macro 40%, Flujos 25%, Riesgo 15%, Técnico
+// 20%). Todos están cubiertos con fuentes gratuitas, aunque de forma
+// parcial en dos casos: Flujos solo usa el posicionamiento de futuros (COT),
+// todavía sin los flujos de ETF (GLD) ni las compras oficiales (PBoC); y
+// Riesgo solo usa el VIX, sin el MOVE Index (propiedad de ICE, sin fuente
+// gratuita — se muestra aparte, solo como referencia visual, en /mercado).
+// Si un indicador puntual no está disponible en un momento dado, no se
+// inventa: el módulo se marca "no disponible" y el score total se
+// recalcula solo sobre los módulos con datos reales, con sus pesos
+// reescalados.
 //
 // La calificación de cada indicador es una heurística direccional
 // transparente (documentada al lado de cada número), no una fórmula
@@ -56,7 +61,7 @@ function scoreLabel(score: number): string {
 }
 
 export function computeBiasScore(snapshot: MarketSnapshot): BiasResult {
-  const { macro, technical } = snapshot;
+  const { macro, technical, risk, flows } = snapshot;
 
   // --- Módulo Macro & Tasas (peso 40%) ---
   const macroIndicators: BiasIndicator[] = [];
@@ -123,6 +128,43 @@ export function computeBiasScore(snapshot: MarketSnapshot): BiasResult {
     });
   }
 
+  // --- Módulo Flujos & Posicionamiento (peso 25%) ---
+  // Cubrimos la pata de futuros (COT) con datos públicos y gratuitos de la
+  // CFTC. Los ETF (GLD) y las compras oficiales (PBoC) todavía no están
+  // conectados — quedan para una siguiente vuelta.
+  const flujosIndicators: BiasIndicator[] = [];
+
+  if (flows.cotGoldManagedMoney && flows.cotGoldManagedMoney.netPrev !== null) {
+    const { netCurrent, netPrev, openInterest, date } = flows.cotGoldManagedMoney;
+    const change = netCurrent - netPrev!;
+    const pctOfOpenInterest = change / openInterest;
+    const s = clamp(pctOfOpenInterest * 1200, -100, 100);
+    flujosIndicators.push({
+      label: "Cambio semanal posicionamiento Managed Money (COT, oro COMEX)",
+      value: `Neto ${netCurrent.toLocaleString("es-ES")} contratos (cambio ${change >= 0 ? "+" : ""}${change.toLocaleString("es-ES")}) · ${date}`,
+      score: s,
+      note: "Fondos especulativos ampliando posición neta larga → flujo comprador; recortándola → flujo vendedor.",
+    });
+  }
+
+  // --- Módulo Intermercado & Riesgo (peso 15%) ---
+  // Cubrimos el VIX (gratis en FRED). El MOVE Index (volatilidad de bonos)
+  // es propiedad de ICE y no tiene fuente gratuita — se muestra solo como
+  // referencia visual en /mercado, sin entrar en este cálculo.
+  const riesgoIndicators: BiasIndicator[] = [];
+
+  if (risk.vix) {
+    const v = risk.vix.value;
+    // ~16 puntos como zona de calma histórica reciente; VIX alto = aversión al riesgo = refugio en oro.
+    const s = clamp((v - 16) * 6, -100, 100);
+    riesgoIndicators.push({
+      label: "VIX (índice de volatilidad CBOE)",
+      value: `${v.toFixed(2)} (${risk.vix.date})`,
+      score: s,
+      note: "VIX elevado → aversión al riesgo → soporte de refugio para el oro. VIX bajo → apetito por riesgo → resta soporte.",
+    });
+  }
+
   const modules: BiasModule[] = [
     {
       key: "macro",
@@ -137,20 +179,22 @@ export function computeBiasScore(snapshot: MarketSnapshot): BiasResult {
       key: "flujos",
       name: "Flujos & Posicionamiento",
       weight: 0.25,
-      available: false,
-      score: null,
+      available: flujosIndicators.length > 0,
+      score: average(flujosIndicators.map((i) => i.score)),
       unavailableReason:
-        "Requiere datos de posicionamiento COT, flujos de ETF y compras oficiales (PBoC), no cubiertos por las fuentes gratuitas conectadas.",
-      indicators: [],
+        flujosIndicators.length === 0
+          ? "Reporte COT semanal de la CFTC sin datos suficientes todavía (necesita al menos 2 semanas publicadas). Los flujos de ETF (GLD) y compras oficiales (PBoC) todavía no están conectados."
+          : undefined,
+      indicators: flujosIndicators,
     },
     {
       key: "riesgo",
       name: "Intermercado & Riesgo",
       weight: 0.15,
-      available: false,
-      score: null,
-      unavailableReason: "Requiere VIX y MOVE Index, no cubiertos por las fuentes gratuitas conectadas.",
-      indicators: [],
+      available: riesgoIndicators.length > 0,
+      score: average(riesgoIndicators.map((i) => i.score)),
+      unavailableReason: riesgoIndicators.length === 0 ? "Falta configurar FRED_API_KEY (VIX)." : undefined,
+      indicators: riesgoIndicators,
     },
     {
       key: "tecnico",
@@ -176,3 +220,5 @@ export function computeBiasScore(snapshot: MarketSnapshot): BiasResult {
     modules,
   };
 }
+
+
