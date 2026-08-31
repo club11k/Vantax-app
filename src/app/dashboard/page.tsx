@@ -43,10 +43,10 @@ export default async function DashboardPage() {
 
       {!hasActivePlan && (
         <div className="panel" style={{ marginBottom: 24 }}>
-          <h2 style={{ fontSize: 16, marginTop: 0 }}>Elegí un plan para empezar</h2>
+          <h2 style={{ fontSize: 16, marginTop: 0 }}>Elige un plan para empezar</h2>
           <p style={{ color: "var(--text-muted)", fontSize: 13.5 }}>
             {user?.subscriptionStatus === "CANCELED"
-              ? "Tu suscripción anterior está cancelada. Elegí un plan para volver a generar análisis."
+              ? "Tu suscripción anterior está cancelada. Elige un plan para volver a generar análisis."
               : "Necesitas una suscripción activa para generar análisis diarios."}
           </p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14, marginTop: 16 }}>
@@ -89,7 +89,7 @@ export default async function DashboardPage() {
           <div style={{ marginBottom: 10, fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.1em", color: "var(--text-dim)", textTransform: "uppercase" }}>
             Nuevo análisis
           </div>
-          <AnalysisGenerator remaining={quota.remaining} />
+          <AnalysisGenerator remaining={quota.remaining} isAdmin={user?.role === "ADMIN"} />
         </>
       )}
 
@@ -113,4 +113,3 @@ export default async function DashboardPage() {
     </div>
   );
 }
-
