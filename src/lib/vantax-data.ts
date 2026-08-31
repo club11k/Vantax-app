@@ -69,15 +69,19 @@ async function fetchTwelveDataQuote(symbol: string): Promise<{
   }
 }
 
-// Serie de precios OHLC para calcular indicadores técnicos (EMA/RSI/ATR).
-// Solo funciona si hay TWELVE_DATA_API_KEY configurada (tier gratuito alcanza
-// para uso moderado). Si no está configurada, el módulo técnico queda
-// marcado como no disponible, igual que en el panel anterior.
+export type PriceBar = { open: number; high: number; low: number; close: number };
+
+// Serie de precios OHLC para calcular indicadores técnicos (EMA/RSI/ATR) y
+// detectar zonas de soporte/resistencia a partir de máximos/mínimos
+// oscilantes reales (swing highs/lows), no inventados. Solo funciona si hay
+// TWELVE_DATA_API_KEY configurada (tier gratuito alcanza para uso moderado).
+// Si no está configurada, el módulo técnico queda marcado como no
+// disponible, igual que en el panel anterior.
 async function fetchTwelveDataSeries(
   symbol: string,
   interval: "1day" = "1day",
   outputsize = 210
-): Promise<number[] | null> {
+): Promise<PriceBar[] | null> {
   const apiKey = process.env.TWELVE_DATA_API_KEY;
   if (!apiKey) return null;
   try {
@@ -89,13 +93,73 @@ async function fetchTwelveDataSeries(
     );
     if (!res.ok) return null;
     const json = await res.json();
-    const values = json.values as { close: string }[] | undefined;
+    const values = json.values as { open: string; high: string; low: string; close: string }[] | undefined;
     if (!values) return null;
     // Twelve Data devuelve del más nuevo al más viejo; invertimos para calcular indicadores en orden cronológico.
-    return values.map((v) => parseFloat(v.close)).reverse();
+    return values
+      .map((v) => ({
+        open: parseFloat(v.open),
+        high: parseFloat(v.high),
+        low: parseFloat(v.low),
+        close: parseFloat(v.close),
+      }))
+      .reverse();
   } catch {
     return null;
   }
+}
+
+// Detecta zonas de soporte/resistencia a partir de máximos y mínimos
+// oscilantes (fractales de 7 velas: la vela central es el máximo/mínimo
+// dentro de una ventana de 3 velas a cada lado). Agrupa niveles cercanos
+// entre sí (dentro de un 0.8%) en una única zona y cuenta cuántas veces fue
+// "tocada" — más toques = zona más relevante. Solo usa precios reales de la
+// serie histórica, nunca valores inventados.
+export type LevelZone = { level: number; touches: number };
+export type TechnicalLevels = { supports: LevelZone[]; resistances: LevelZone[] };
+
+function findSwingLevels(bars: PriceBar[], currentPrice: number): TechnicalLevels | null {
+  const pivotWindow = 3;
+  const clusterPct = 0.008;
+  const minTouches = 2;
+  if (bars.length < pivotWindow * 2 + 10) return null;
+
+  const swingHighs: number[] = [];
+  const swingLows: number[] = [];
+  for (let i = pivotWindow; i < bars.length - pivotWindow; i++) {
+    const windowSlice = bars.slice(i - pivotWindow, i + pivotWindow + 1);
+    if (windowSlice.every((b) => b.high <= bars[i].high)) swingHighs.push(bars[i].high);
+    if (windowSlice.every((b) => b.low >= bars[i].low)) swingLows.push(bars[i].low);
+  }
+
+  function cluster(prices: number[]): LevelZone[] {
+    const sorted = [...prices].sort((a, b) => a - b);
+    const clusters: LevelZone[] = [];
+    for (const p of sorted) {
+      const last = clusters[clusters.length - 1];
+      if (last && Math.abs(p - last.level) / last.level <= clusterPct) {
+        last.level = (last.level * last.touches + p) / (last.touches + 1);
+        last.touches += 1;
+      } else {
+        clusters.push({ level: p, touches: 1 });
+      }
+    }
+    return clusters;
+  }
+
+  const highClusters = cluster(swingHighs);
+  const lowClusters = cluster(swingLows);
+
+  const resistances = highClusters.filter((c) => c.level > currentPrice).sort((a, b) => a.level - b.level);
+  const supports = lowClusters.filter((c) => c.level < currentPrice).sort((a, b) => b.level - a.level);
+
+  const strongResistances = resistances.filter((c) => c.touches >= minTouches);
+  const strongSupports = supports.filter((c) => c.touches >= minTouches);
+
+  return {
+    resistances: (strongResistances.length ? strongResistances : resistances).slice(0, 3),
+    supports: (strongSupports.length ? strongSupports : supports).slice(0, 3),
+  };
 }
 
 const CFTC_DISAGG_BASE = "https://publicreporting.cftc.gov/resource/72hh-3qpy.json";
@@ -227,6 +291,7 @@ export type MarketSnapshot = {
     ema100: number | null;
     ema200: number | null;
     rsi14: number | null;
+    levels: TechnicalLevels | null;
   };
   risk: {
     vix: FredValue;
@@ -318,16 +383,20 @@ export async function buildMarketSnapshot(): Promise<MarketSnapshot> {
     fetchCotGoldManagedMoney(),
   ]);
 
-  const technical = goldSeries
-    ? {
-        available: true,
-        ema20: ema(goldSeries, 20),
-        ema50: ema(goldSeries, 50),
-        ema100: ema(goldSeries, 100),
-        ema200: ema(goldSeries, 200),
-        rsi14: rsi(goldSeries, 14),
-      }
-    : { available: false, ema20: null, ema50: null, ema100: null, ema200: null, rsi14: null };
+  const goldCloses = goldSeries?.map((b) => b.close) ?? null;
+  const currentGoldPrice = gold?.price ?? goldCloses?.[goldCloses.length - 1] ?? null;
+  const technical =
+    goldSeries && goldCloses && currentGoldPrice !== null
+      ? {
+          available: true,
+          ema20: ema(goldCloses, 20),
+          ema50: ema(goldCloses, 50),
+          ema100: ema(goldCloses, 100),
+          ema200: ema(goldCloses, 200),
+          rsi14: rsi(goldCloses, 14),
+          levels: findSwingLevels(goldSeries, currentGoldPrice),
+        }
+      : { available: false, ema20: null, ema50: null, ema100: null, ema200: null, rsi14: null, levels: null };
 
   return {
     generatedAt: new Date().toISOString(),
@@ -360,4 +429,3 @@ export async function buildMarketSnapshot(): Promise<MarketSnapshot> {
     flows: { cotGoldManagedMoney },
   };
 }
-
