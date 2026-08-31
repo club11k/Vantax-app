@@ -42,9 +42,9 @@ export default function SignupPage() {
 
   return (
     <div className="container" style={{ maxWidth: 420, paddingTop: 80 }}>
-      <h1 style={{ fontSize: 26 }}>Creá tu cuenta</h1>
+      <h1 style={{ fontSize: 26 }}>Crea tu cuenta</h1>
       <p style={{ color: "var(--text-muted)", fontSize: 14 }}>
-        Ya tenés cuenta? <Link href="/login">Iniciá sesión</Link>
+        ¿Ya tienes cuenta? <Link href="/login">Inicia sesión</Link>
       </p>
       <form onSubmit={handleSubmit} className="panel" style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 14 }}>
         <div>
@@ -67,3 +67,4 @@ export default function SignupPage() {
     </div>
   );
 }
+
