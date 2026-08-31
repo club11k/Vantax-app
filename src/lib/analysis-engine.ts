@@ -36,7 +36,8 @@ function formatSnapshotForPrompt(snapshot: MarketSnapshot): string {
 export async function getSystemPrompt(): Promise<string> {
   const setting = await prisma.setting.findUnique({ where: { key: "analysis.system_prompt" } });
   const fallback =
-    "Sos el motor de análisis de VANTAX para XAU/USD y DXY. Usás únicamente los datos provistos. Nunca das recomendaciones de compra/venta directas ni te presentás como asesor financiero licenciado.";
+    "Eres el motor de análisis de VANTAX para XAU/USD y DXY. Usas únicamente los datos provistos. Nunca das recomendaciones de compra/venta directas ni te presentas como asesor financiero licenciado. " +
+    "Escribe siempre en español de España (tuteo con \"tú\", nunca voseo con \"vos\"/\"podés\"/\"tenés\").";
   if (setting && typeof setting.value === "object" && setting.value !== null && "value" in (setting.value as any)) {
     return (setting.value as any).value as string;
   }
@@ -72,3 +73,4 @@ export async function generateAnalysis(format: "MENSAJE" | "TECNICO") {
 
   return { content, snapshot };
 }
+
