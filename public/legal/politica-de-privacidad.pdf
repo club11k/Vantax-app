@@ -1,0 +1,72 @@
+VANTAX
+Política de Privacidad
+Vantax Project LTD · Última actualización: 31/08/2026
+1. Responsable del tratamiento
+El responsable del tratamiento de los datos personales recogidos a través de VANTAX (el «Servicio»)
+es Vantax Project LTD, sociedad registrada en Malta. Para cualquier consulta relacionada con esta
+Política de Privacidad o con el ejercicio de tus derechos, puedes escribir a vantaxproject@gmail.com.
+2. Qué datos recopilamos
+Recopilamos las siguientes categorías de datos personales:
+• Datos de cuenta: nombre, dirección de email y contraseña (almacenada siempre de forma cifrada,
+nunca en texto plano).
+• Datos de suscripción y pago: el procesamiento de pagos lo realiza íntegramente Stripe, Inc. como
+encargado del tratamiento independiente. VANTAX no almacena ni tiene acceso a los números
+completos de tarjeta; solo recibimos de Stripe el estado de la suscripción (activa, cancelada, etc.) y
+el plan contratado.
+• Datos de uso del Servicio: los análisis que generas, la fecha y hora de generación, el formato
+elegido y tu consumo de cuota mensual.
+• Datos técnicos: dirección IP, tipo de navegador y registros («logs») del servidor, recogidos
+automáticamente por motivos de seguridad y para el correcto funcionamiento técnico del Servicio.
+• Cookies: usamos únicamente una cookie de sesión esencial (gestión de inicio de sesión) necesaria
+para que el Servicio funcione. No usamos cookies de publicidad ni de seguimiento propias.
+3. Con qué finalidad y base legal tratamos tus datos
+• Prestación del Servicio (ejecución del contrato): crear y gestionar tu cuenta, procesar tu
+suscripción, generar los análisis solicitados y aplicar tu cuota mensual.
+• Seguridad y prevención de abuso (interés legítimo): detectar y prevenir accesos no autorizados o
+uso indebido del Servicio.
+• Comunicaciones sobre el Servicio (ejecución del contrato): avisos operativos relacionados con tu
+cuenta o tu suscripción (por ejemplo, un pago rechazado).
+• Cumplimiento de obligaciones legales: cuando la normativa fiscal o mercantil aplicable así lo
+requiera.
+4. Con quién compartimos tus datos
+No vendemos tus datos personales. Los compartimos únicamente con los siguientes encargados del
+tratamiento, en la medida necesaria para prestar el Servicio:
+• Stripe, Inc. — procesamiento de pagos y gestión de suscripciones.
+• Anthropic — proveedor del modelo de inteligencia artificial que redacta los análisis que solicitas;
+recibe el contexto de mercado necesario para generar cada análisis, no tus datos de pago.
+• Render Services, Inc. — proveedor de alojamiento (hosting) donde corre la aplicación y su base de
+datos.
+• TradingView — el Centro de Mercado incluye widgets (gráficos, calendario económico, titulares)
+que TradingView sirve directamente en tu navegador; TradingView puede fijar sus propias cookies
+conforme a su propia política de privacidad, ajena a VANTAX.
+Nuestras fuentes de datos de mercado (Reserva Federal / FRED, Twelve Data, CFTC) son datos
+públicos y no involucran ningún dato personal tuyo.
+5. Transferencias internacionales
+Algunos de los proveedores anteriores (Stripe, Anthropic, Render) pueden procesar datos en servidores
+ubicados fuera del Espacio Económico Europeo, incluido Estados Unidos. En esos casos, dichas
+transferencias se amparan en las Cláusulas Contractuales Tipo de la Comisión Europea u otro
+mecanismo de transferencia reconocido por el Reglamento General de Protección de Datos (RGPD).
+6. Cuánto tiempo conservamos tus datos
+Conservamos tus datos de cuenta mientras la cuenta permanezca activa. Si solicitas la baja,
+eliminamos o anonimizamos tus datos personales en un plazo razonable, salvo la información que
+debamos conservar por obligación legal (por ejemplo, registros contables de facturación).
+7. Tus derechos
+Si eres residente del Espacio Económico Europeo, el RGPD te reconoce los siguientes derechos sobre
+tus datos personales: acceso, rectificación, supresión, limitación del tratamiento, portabilidad y
+oposición. Puedes ejercerlos escribiendo a vantaxproject@gmail.com. También tienes derecho a
+presentar una reclamación ante la autoridad de control competente, la Information and Data
+Protection Commissioner (IDPC) de Malta (idpc.org.mt), o ante la autoridad de protección de datos de
+tu país de residencia.
+8. Seguridad
+Aplicamos medidas técnicas razonables para proteger tus datos: las contraseñas se almacenan cifradas
+(hash), las comunicaciones entre tu navegador y nuestros servidores viajan cifradas (HTTPS/TLS), y el
+acceso administrativo al panel interno está restringido a personal autorizado. Ningún sistema es 100%
+infalible; te recomendamos usar una contraseña única y no compartir tus credenciales.
+9. Menores de edad
+El Servicio no está dirigido a menores de 18 años y no recopilamos deliberadamente datos de menores.
+Si crees que un menor nos proporcionó datos personales, escríbenos a vantaxproject@gmail.com y
+los eliminaremos.
+10. Cambios a esta Política
+Podemos actualizar esta Política de Privacidad ocasionalmente. Si el cambio es sustancial, te
+avisaremos por email o mediante un aviso visible en el Servicio antes de que entre en vigor.
+Vantax Project LTD · Malta · vantaxproject@gmail.com
