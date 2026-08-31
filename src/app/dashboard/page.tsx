@@ -25,14 +25,14 @@ export default async function DashboardPage() {
 
   return (
     <div className="container" style={{ paddingTop: 40 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 24 }}>
+      <div className="header-row" style={{ marginBottom: 24 }}>
         <div>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.14em", color: "var(--violet)", textTransform: "uppercase" }}>
             VANTAX
           </div>
           <h1 style={{ fontSize: 26, margin: "4px 0 0" }}>Hola, {user?.name || user?.email}</h1>
         </div>
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+        <div className="btn-row">
           {user?.role === "ADMIN" && (
             <Link href="/admin" className="btn">Panel de admin</Link>
           )}
@@ -106,11 +106,10 @@ export default async function DashboardPage() {
                 {new Date(a.createdAt).toLocaleString("es-ES")}
               </span>
             </div>
-            <div style={{ fontSize: 13, whiteSpace: "pre-wrap", color: "var(--text-muted)" }}>{a.content}</div>
+            <div className="pre-wrap-safe" style={{ fontSize: 13, color: "var(--text-muted)" }}>{a.content}</div>
           </div>
         ))}
       </div>
     </div>
   );
 }
-
