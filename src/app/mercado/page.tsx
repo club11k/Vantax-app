@@ -55,6 +55,12 @@ export default async function MercadoPage() {
       label: `TIPS 10y ${snapshot.macro.us10yTipsReal.value.toFixed(2)}%`,
       color: "var(--violet)",
     },
+    snapshot.macro.us10yNominal && {
+      name: "Tipos de Interés (US 10Y)",
+      value: Math.round(Math.max(0, Math.min(100, (snapshot.macro.us10yNominal.value / 6) * 100))),
+      label: `US 10Y ${snapshot.macro.us10yNominal.value.toFixed(2)}%`,
+      color: "var(--gold-bright)",
+    },
     snapshot.risk.vix && {
       name: "Índice de Volatilidad (VIX)",
       value: Math.round(Math.max(0, Math.min(100, (snapshot.risk.vix.value / 40) * 100))),
@@ -63,18 +69,17 @@ export default async function MercadoPage() {
     },
   ].filter(Boolean) as { name: string; value: number; label: string; color: string }[];
 
-  const sources: { label: string; value: string; date: string; href?: string; source: string }[] = [];
-  if (snapshot.prices.gold) sources.push({ label: "Oro spot (XAU/USD)", value: `$${snapshot.prices.gold.price}`, date: "hoy", href: "https://twelvedata.com", source: "Twelve Data" });
-  if (snapshot.prices.dxy) sources.push({ label: "DXY", value: `${snapshot.prices.dxy.price}`, date: "hoy", href: "https://twelvedata.com", source: "Twelve Data" });
-  if (snapshot.macro.us10yNominal) sources.push({ label: "US 10Y nominal (DGS10)", value: `${snapshot.macro.us10yNominal.value}%`, date: snapshot.macro.us10yNominal.date, href: "https://fred.stlouisfed.org/series/DGS10", source: "FRED — DGS10" });
-  if (snapshot.macro.us10yTipsReal) sources.push({ label: "US 10Y TIPS real (DFII10)", value: `${snapshot.macro.us10yTipsReal.value}%`, date: snapshot.macro.us10yTipsReal.date, href: "https://fred.stlouisfed.org/series/DFII10", source: "FRED — DFII10" });
-  if (snapshot.macro.us2y) sources.push({ label: "US 2Y (DGS2)", value: `${snapshot.macro.us2y.value}%`, date: snapshot.macro.us2y.date, href: "https://fred.stlouisfed.org/series/DGS2", source: "FRED — DGS2" });
-  if (snapshot.macro.cpiYoY) sources.push({ label: "CPI interanual", value: `${snapshot.macro.cpiYoY.value.toFixed(2)}%`, date: snapshot.macro.cpiYoY.date, href: "https://fred.stlouisfed.org/series/CPIAUCSL", source: "FRED — CPIAUCSL" });
-  if (snapshot.macro.coreCpiYoY) sources.push({ label: "Core CPI interanual", value: `${snapshot.macro.coreCpiYoY.value.toFixed(2)}%`, date: snapshot.macro.coreCpiYoY.date, href: "https://fred.stlouisfed.org/series/CPILFESL", source: "FRED — CPILFESL" });
-  if (snapshot.macro.unemploymentRate) sources.push({ label: "Tasa de desempleo", value: `${snapshot.macro.unemploymentRate.value}%`, date: snapshot.macro.unemploymentRate.date, href: "https://fred.stlouisfed.org/series/UNRATE", source: "FRED — UNRATE" });
-  if (snapshot.technical.available) sources.push({ label: "EMA20/50/100/200 y RSI(14) — Oro", value: "ver panel técnico", date: "hoy", source: "Twelve Data (time series diario)" });
-  if (snapshot.risk.vix) sources.push({ label: "VIX (índice de volatilidad CBOE)", value: `${snapshot.risk.vix.value.toFixed(2)}`, date: snapshot.risk.vix.date, href: "https://fred.stlouisfed.org/series/VIXCLS", source: "FRED — VIXCLS" });
-  if (snapshot.flows.cotGoldManagedMoney) sources.push({ label: "Posicionamiento Managed Money — oro COMEX (COT)", value: `Neto ${snapshot.flows.cotGoldManagedMoney.netCurrent.toLocaleString("es-ES")} contratos`, date: snapshot.flows.cotGoldManagedMoney.date, href: "https://publicreporting.cftc.gov/Commitments-of-Traders/Disaggregated-Futures-Only/72hh-3qpy", source: "CFTC — Disaggregated COT" });
+  const sources: { label: string; value: string; date: string; source: string }[] = [];
+  if (snapshot.prices.gold) sources.push({ label: "Oro spot (XAU/USD)", value: `$${snapshot.prices.gold.price}`, date: "hoy", source: "Twelve Data" });
+  if (snapshot.prices.dxy) sources.push({ label: "DXY", value: `${snapshot.prices.dxy.price}`, date: "hoy", source: "Twelve Data" });
+  if (snapshot.macro.us10yNominal) sources.push({ label: "US 10Y nominal (DGS10)", value: `${snapshot.macro.us10yNominal.value}%`, date: snapshot.macro.us10yNominal.date, source: "FRED — DGS10" });
+  if (snapshot.macro.us10yTipsReal) sources.push({ label: "US 10Y TIPS real (DFII10)", value: `${snapshot.macro.us10yTipsReal.value}%`, date: snapshot.macro.us10yTipsReal.date, source: "FRED — DFII10" });
+  if (snapshot.macro.us2y) sources.push({ label: "US 2Y (DGS2)", value: `${snapshot.macro.us2y.value}%`, date: snapshot.macro.us2y.date, source: "FRED — DGS2" });
+  if (snapshot.macro.cpiYoY) sources.push({ label: "CPI interanual", value: `${snapshot.macro.cpiYoY.value.toFixed(2)}%`, date: snapshot.macro.cpiYoY.date, source: "FRED — CPIAUCSL" });
+  if (snapshot.macro.coreCpiYoY) sources.push({ label: "Core CPI interanual", value: `${snapshot.macro.coreCpiYoY.value.toFixed(2)}%`, date: snapshot.macro.coreCpiYoY.date, source: "FRED — CPILFESL" });
+  if (snapshot.macro.unemploymentRate) sources.push({ label: "Tasa de desempleo", value: `${snapshot.macro.unemploymentRate.value}%`, date: snapshot.macro.unemploymentRate.date, source: "FRED — UNRATE" });
+  if (snapshot.risk.vix) sources.push({ label: "VIX (índice de volatilidad CBOE)", value: `${snapshot.risk.vix.value.toFixed(2)}`, date: snapshot.risk.vix.date, source: "FRED — VIXCLS" });
+  if (snapshot.flows.cotGoldManagedMoney) sources.push({ label: "Posicionamiento Managed Money — oro COMEX (COT)", value: `Neto ${snapshot.flows.cotGoldManagedMoney.netCurrent.toLocaleString("es-ES")} contratos`, date: snapshot.flows.cotGoldManagedMoney.date, source: "CFTC — Disaggregated COT" });
 
   return (
     <div className="container" style={{ paddingTop: 40 }}>
@@ -197,7 +202,7 @@ export default async function MercadoPage() {
                     {bias.modules.every((m) => m.indicators.length === 0) && (
                       <tr>
                         <td colSpan={4} style={{ color: "var(--text-dim)" }}>
-                          Todavía no hay datos — configurá FRED_API_KEY y TWELVE_DATA_API_KEY en Render.
+                          Todavía no hay datos — configura FRED_API_KEY y TWELVE_DATA_API_KEY en Render.
                         </td>
                       </tr>
                     )}
@@ -237,13 +242,13 @@ export default async function MercadoPage() {
         </>
       )}
 
-      <div className="grid-main" style={{ marginBottom: 24 }}>
+      <div className="grid-even" style={{ marginBottom: 16 }}>
         <TradingViewWidget
           height={420}
           src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js"
           config={{
             symbol: "OANDA:XAUUSD",
-            interval: "D",
+            interval: "5",
             theme: "dark",
             style: "1",
             locale: "es",
@@ -255,18 +260,36 @@ export default async function MercadoPage() {
         />
         <TradingViewWidget
           height={420}
-          src="https://s3.tradingview.com/external-embedding/embed-widget-events.js"
+          src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js"
           config={{
-            width: "100%",
-            height: 420,
-            colorTheme: "dark",
-            isTransparent: true,
+            symbol: "CAPITALCOM:DXY",
+            interval: "5",
+            theme: "dark",
+            style: "1",
             locale: "es",
-            countryFilter: "us,eu,gb,jp,cn",
-            importanceFilter: "0,1",
+            hide_top_toolbar: true,
+            hide_legend: false,
+            allow_symbol_change: false,
+            save_image: false,
           }}
         />
       </div>
+
+      <div className="panel-title" style={{ margin: "4px 0 10px 2px" }}>Calendario Económico (Estados Unidos)</div>
+      <TradingViewWidget
+        height={420}
+        src="https://s3.tradingview.com/external-embedding/embed-widget-events.js"
+        config={{
+          width: "100%",
+          height: 420,
+          colorTheme: "dark",
+          isTransparent: true,
+          locale: "es",
+          countryFilter: "us",
+          importanceFilter: "0,1",
+        }}
+      />
+      <div style={{ marginBottom: 24 }} />
 
       <div className="panel-head" style={{ margin: "4px 0 10px 2px" }}>
         <span className="panel-title">MOVE Index — Volatilidad de Bonos del Tesoro</span>
@@ -321,21 +344,13 @@ export default async function MercadoPage() {
                   <td>{s.label}</td>
                   <td style={{ fontFamily: "var(--font-mono)", color: "var(--text-primary)" }}>{s.value}</td>
                   <td>{s.date}</td>
-                  <td>
-                    {s.href ? (
-                      <a href={s.href} target="_blank" rel="noopener noreferrer">
-                        {s.source}
-                      </a>
-                    ) : (
-                      s.source
-                    )}
-                  </td>
+                  <td>{s.source}</td>
                 </tr>
               ))}
               {sources.length === 0 && (
                 <tr>
                   <td colSpan={4} style={{ color: "var(--text-dim)" }}>
-                    Todavía no hay datos en vivo — configurá FRED_API_KEY y TWELVE_DATA_API_KEY en Render → Environment.
+                    Todavía no hay datos en vivo — configura FRED_API_KEY y TWELVE_DATA_API_KEY en Render → Environment.
                   </td>
                 </tr>
               )}
@@ -343,16 +358,7 @@ export default async function MercadoPage() {
           </table>
         </div>
       </div>
-
-      <p style={{ marginTop: 24, fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-dim)", lineHeight: 1.8 }}>
-        Metodología: los subscores de cada módulo son una calificación cualitativa (−100 a +100) de cada indicador
-        según su lectura direccional para el oro, promediada por módulo. "Flujos" usa por ahora solo el
-        posicionamiento de futuros (COT); todavía no incluye flujos de ETF (GLD) ni compras oficiales (PBoC).
-        "Riesgo" usa solo el VIX; el MOVE Index se muestra aparte, como referencia visual, sin entrar en el
-        cálculo. Si un módulo no tiene ningún indicador disponible en un momento dado, se marca "no disponible"
-        y el total se recalcula solo con los módulos que sí tienen datos reales. No es asesoramiento financiero —
-        verificá cifras críticas contra la fuente primaria antes de operar.
-      </p>
     </div>
   );
 }
+
