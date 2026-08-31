@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { buildMarketSnapshot } from "@/lib/vantax-data";
 import { computeBiasScore } from "@/lib/bias-score";
 import { SessionsClock } from "@/components/market/SessionsClock";
+import { MarketFlowMap } from "@/components/market/MarketFlowMap";
 import { TradingViewWidget } from "@/components/market/TradingViewWidget";
 
 export const revalidate = 300; // recachea esta página cada 5 minutos
@@ -37,7 +38,7 @@ export default async function MercadoPage() {
       color: "var(--gold-bright)",
     },
     snapshot.prices.dxy && {
-      name: "Fortaleza del USD",
+      name: "Fortaleza del USD (DXY)",
       value: Math.round(Math.max(0, Math.min(100, 50 + snapshot.prices.dxy.percentChange * 25))),
       label: `${fmtPct(snapshot.prices.dxy.percentChange)} hoy`,
       color: "var(--text-muted)",
@@ -54,13 +55,12 @@ export default async function MercadoPage() {
       label: `TIPS 10y ${snapshot.macro.us10yTipsReal.value.toFixed(2)}%`,
       color: "var(--violet)",
     },
-    snapshot.technical.available &&
-      snapshot.technical.rsi14 !== null && {
-        name: "RSI Oro (14)",
-        value: Math.round(snapshot.technical.rsi14),
-        label: snapshot.technical.rsi14 > 70 ? "Sobrecompra" : snapshot.technical.rsi14 < 30 ? "Sobreventa" : "Neutral",
-        color: "var(--gold)",
-      },
+    snapshot.risk.vix && {
+      name: "Índice de Volatilidad (VIX)",
+      value: Math.round(Math.max(0, Math.min(100, (snapshot.risk.vix.value / 40) * 100))),
+      label: `VIX ${snapshot.risk.vix.value.toFixed(1)}`,
+      color: "var(--violet-bright)",
+    },
   ].filter(Boolean) as { name: string; value: number; label: string; color: string }[];
 
   const sources: { label: string; value: string; date: string; href?: string; source: string }[] = [];
@@ -96,10 +96,14 @@ export default async function MercadoPage() {
         config={{
           symbols: [
             { proName: "OANDA:XAUUSD", title: "Oro (XAU/USD)" },
-            { proName: "TVC:DXY", title: "DXY" },
-            { proName: "FRED:DGS10", title: "US 10Y" },
             { proName: "TVC:GOLD", title: "Oro (spot)" },
-            { proName: "TVC:VIX", title: "VIX" },
+            { proName: "FRED:DTWEXBGS", title: "USD ponderado (Fed)" },
+            { proName: "FRED:VIXCLS", title: "VIX" },
+            { proName: "FRED:DCOILBRENTEU", title: "Petróleo Brent" },
+            { proName: "FRED:DGS5", title: "US 5Y" },
+            { proName: "FRED:DGS10", title: "US 10Y" },
+            { proName: "FRED:DGS20", title: "US 20Y" },
+            { proName: "FRED:DGS30", title: "US 30Y" },
           ],
           colorTheme: "dark",
           isTransparent: true,
@@ -205,6 +209,10 @@ export default async function MercadoPage() {
         </div>
       </div>
 
+      <div style={{ marginBottom: 24 }}>
+        <MarketFlowMap />
+      </div>
+
       <div className="panel-title" style={{ margin: "4px 0 10px 2px" }}>Sesiones de Mercado (hora real, UTC)</div>
       <SessionsClock />
 
@@ -264,21 +272,18 @@ export default async function MercadoPage() {
         <span className="panel-title">MOVE Index — Volatilidad de Bonos del Tesoro</span>
         <span className="panel-sub">Solo referencia visual — no entra en el cálculo del Bias Score (fuente propietaria de ICE, sin acceso gratuito)</span>
       </div>
-      <TradingViewWidget
-        height={280}
-        src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js"
-        config={{
-          symbol: "TVC:MOVE",
-          interval: "D",
-          theme: "dark",
-          style: "3",
-          locale: "es",
-          hide_top_toolbar: true,
-          hide_legend: false,
-          allow_symbol_change: false,
-          save_image: false,
-        }}
-      />
+      <div className="panel" style={{ padding: 20 }}>
+        <p style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.6, margin: 0 }}>
+          El MOVE Index es propiedad de ICE (Intercontinental Exchange) y no está disponible en los
+          widgets públicos/gratuitos de TradingView (ni siquiera con cuenta Premium — es una
+          restricción de licencia del dato, no de la cuenta del usuario). Para verlo en vivo, se puede
+          consultar directo en{" "}
+          <a href="https://www.tradingview.com/symbols/TVC-MOVE/" target="_blank" rel="noreferrer" style={{ color: "var(--violet-bright)" }}>
+            tradingview.com/symbols/TVC-MOVE
+          </a>
+          . No entra en el cálculo del Bias Score de todas formas — solo era referencia visual.
+        </p>
+      </div>
 
       <div className="panel-title" style={{ margin: "24px 0 10px 2px" }}>Feed de Titulares</div>
       <TradingViewWidget
@@ -351,5 +356,3 @@ export default async function MercadoPage() {
     </div>
   );
 }
-
-
