@@ -129,6 +129,7 @@ td { padding: 9px 10px; border-bottom: 1px solid var(--line); color: var(--text-
 .spot-status-title { font-family: var(--font-body); font-size: 12.5px; font-weight: 600; }
 .spot-status-desc { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); margin-top: 3px; line-height: 1.5; }
 .source-group-title { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--violet); margin: 0 0 8px 2px; }
+.source-group-note { font-family: var(--font-body); font-size: 12px; color: var(--text-muted); line-height: 1.5; margin: -3px 0 10px 2px; max-width: 720px; }
 .source-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
 .source-card { background: var(--bg-panel); border: 1px solid var(--line); border-radius: 6px; padding: 11px 13px; transition: border-color 0.15s ease, transform 0.15s ease; }
 .source-card:hover { border-color: var(--violet); transform: translateY(-1px); }
@@ -170,3 +171,4 @@ details.indicators summary::-webkit-details-marker { display: none; }
 details.indicators summary::before { content: '▸ '; }
 details.indicators[open] summary::before { content: '▾ '; }
 .table-scroll { overflow-x: auto; }
+
