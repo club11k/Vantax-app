@@ -265,17 +265,18 @@ export default async function MercadoPage() {
         <span className="panel-sub">Solo referencia visual — no entra en el cálculo del Bias Score (fuente propietaria de ICE, sin acceso gratuito)</span>
       </div>
       <TradingViewWidget
-        height={220}
-        src="https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js"
+        height={280}
+        src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js"
         config={{
           symbol: "TVC:MOVE",
-          width: "100%",
-          height: 220,
+          interval: "D",
+          theme: "dark",
+          style: "3",
           locale: "es",
-          dateRange: "12M",
-          colorTheme: "dark",
-          isTransparent: true,
-          autosize: false,
+          hide_top_toolbar: true,
+          hide_legend: false,
+          allow_symbol_change: false,
+          save_image: false,
         }}
       />
 
@@ -350,3 +351,5 @@ export default async function MercadoPage() {
     </div>
   );
 }
+
+
