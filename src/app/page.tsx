@@ -31,12 +31,12 @@ export default async function HomePage() {
 
   return (
     <div className="container" style={{ paddingTop: 40 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 40 }}>
+      <div className="header-row" style={{ marginBottom: 40 }}>
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, letterSpacing: "0.14em", color: "var(--gold-bright)", textTransform: "uppercase" }}>
           VANTAX
         </div>
         {session?.user ? (
-          <div style={{ display: "flex", gap: 10 }}>
+          <div className="btn-row">
             {(session.user as any).role === "ADMIN" && (
               <Link href="/admin" className="btn">Panel de admin</Link>
             )}
@@ -44,14 +44,14 @@ export default async function HomePage() {
             <Link href="/dashboard" className="btn btn-primary">Ir a mi panel</Link>
           </div>
         ) : (
-          <div style={{ display: "flex", gap: 10 }}>
+          <div className="btn-row">
             <Link href="/login" className="btn">Ingresar</Link>
             <Link href="/signup" className="btn btn-primary">Crear cuenta</Link>
           </div>
         )}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1.1fr 0.9fr", gap: 32, alignItems: "center", marginBottom: 60 }}>
+      <div className="hero-grid" style={{ display: "grid", gridTemplateColumns: "1.1fr 0.9fr", gap: 32, alignItems: "center", marginBottom: 60 }}>
         <div>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 10.5, letterSpacing: "0.18em", color: "var(--violet)", textTransform: "uppercase", marginBottom: 10 }}>
             Centro global de operaciones
