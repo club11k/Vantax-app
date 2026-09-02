@@ -101,6 +101,10 @@ td { padding: 9px 10px; border-bottom: 1px solid var(--line); color: var(--text-
 
 .error-msg { color: var(--down); font-family: var(--font-mono); font-size: 12.5px; margin-top: 8px; }
 
+/* Panel de acceso bloqueado (dashboard, mientras el acceso se gestiona a mano) */
+.locked-panel { display: flex; gap: 14px; align-items: flex-start; }
+.locked-icon { font-size: 26px; line-height: 1; flex-shrink: 0; }
+
 /* --- Panel de mercado (/mercado) --- */
 
 .grid-main { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; }
@@ -171,4 +175,24 @@ details.indicators summary::-webkit-details-marker { display: none; }
 details.indicators summary::before { content: '▸ '; }
 details.indicators[open] summary::before { content: '▾ '; }
 .table-scroll { overflow-x: auto; }
+
+/* En móvil, la tabla de indicadores (4 columnas, una con texto largo de
+   nota) no entra bien ni siquiera con scroll horizontal — se convierte en
+   una lista de tarjetas, una fila por indicador con etiquetas. */
+@media (max-width: 640px) {
+  table.indicators-table thead { display: none; }
+  table.indicators-table, table.indicators-table tbody, table.indicators-table tr, table.indicators-table td {
+    display: block; width: 100%;
+  }
+  table.indicators-table tr {
+    border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; margin-bottom: 10px; background: var(--bg-panel-raised);
+  }
+  table.indicators-table td {
+    border-bottom: none; padding: 4px 0;
+  }
+  table.indicators-table td::before {
+    content: attr(data-label); display: block; font-family: var(--font-mono); font-size: 9.5px;
+    letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 2px;
+  }
+}
 
