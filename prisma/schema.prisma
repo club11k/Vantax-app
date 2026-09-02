@@ -52,6 +52,13 @@ model User {
   analyses          Analysis[]
   suspended         Boolean  @default(false)
 
+  // Acceso al Centro de Mercado (/mercado), independiente del acceso a
+  // Análisis (que sigue dependiendo de subscriptionStatus + plan). Un admin
+  // otorga cada uno por separado desde /admin/usuarios — así se puede dar
+  // acceso solo al centro de mercado, solo a análisis, o a los dos, a
+  // miembros de la comunidad sin pasar por Stripe.
+  marketAccess      Boolean  @default(false)
+
   @@index([role])
 }
 
@@ -101,3 +108,4 @@ model AdminAuditLog {
   detail    Json?
   createdAt DateTime @default(now())
 }
+
