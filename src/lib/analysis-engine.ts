@@ -229,3 +229,4 @@ export async function generateAnalysis(format: "MENSAJE" | "TECNICO", images?: A
   return { content, snapshot };
 }
 
+
