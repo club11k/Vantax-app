@@ -14,14 +14,23 @@ export default async function DashboardPage() {
   }
   const userId = (session.user as any).id as string;
 
-  const [user, quota, plans, analyses] = await Promise.all([
+  const [user, quota, plans, analyses, accessGateSetting] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId }, include: { plan: true } }),
     getRemainingQuota(userId),
     prisma.plan.findMany({ where: { active: true }, orderBy: { sortOrder: "asc" } }),
     prisma.analysis.findMany({ where: { userId }, orderBy: { createdAt: "desc" }, take: 10 }),
+    prisma.setting.findUnique({ where: { key: "access.public_signup_locked" } }),
   ]);
 
   const hasActivePlan = user?.subscriptionStatus === "ACTIVE" && user.plan;
+
+  // Mientras el acceso se gestiona a mano (ver /admin/settings), a los
+  // usuarios sin plan no se les ofrece pagar — se les dice que su cuenta ya
+  // existe y que el equipo activará su acceso. Por defecto (ajuste nunca
+  // tocado) el candado está puesto.
+  const accessGateValue = accessGateSetting?.value as any;
+  const publicSignupLocked =
+    !(accessGateValue && typeof accessGateValue === "object" && "value" in accessGateValue && accessGateValue.value === "false");
 
   return (
     <div className="container" style={{ paddingTop: 40 }}>
@@ -41,7 +50,21 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {!hasActivePlan && (
+      {!hasActivePlan && publicSignupLocked && (
+        <div className="panel locked-panel" style={{ marginBottom: 24 }}>
+          <span className="locked-icon">🔒</span>
+          <div>
+            <h2 style={{ fontSize: 16, marginTop: 0 }}>Tu cuenta está creada — el acceso lo activamos nosotros</h2>
+            <p style={{ color: "var(--text-muted)", fontSize: 13.5, marginBottom: 0 }}>
+              Por ahora estamos dando acceso a la comunidad de forma manual, sin necesidad de pagar
+              nada. En cuanto activemos tu cuenta desde nuestro lado verás aquí mismo el generador de
+              análisis. Más adelante abriremos las suscripciones de pago para quien quiera más cuota.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {!hasActivePlan && !publicSignupLocked && (
         <div className="panel" style={{ marginBottom: 24 }}>
           <h2 style={{ fontSize: 16, marginTop: 0 }}>Elige un plan para empezar</h2>
           <p style={{ color: "var(--text-muted)", fontSize: 13.5 }}>
@@ -113,3 +136,5 @@ export default async function DashboardPage() {
     </div>
   );
 }
+
+
