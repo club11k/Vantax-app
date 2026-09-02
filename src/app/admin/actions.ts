@@ -81,6 +81,17 @@ export async function grantFreeAccess(userId: string, monthlyQuota: number = 30)
   revalidatePath("/admin/users");
 }
 
+// Acceso al Centro de Mercado (/mercado), independiente del acceso a
+// Análisis (que se sigue dando con setUserPlan/grantFreeAccess). Con esto se
+// puede abrir solo el centro de mercado, solo análisis, o los dos, para
+// cada miembro de la comunidad.
+export async function toggleMarketAccess(userId: string, enabled: boolean) {
+  const admin = await requireAdmin();
+  await prisma.user.update({ where: { id: userId }, data: { marketAccess: enabled } });
+  await logAction(admin.id, "toggle_market_access", { userId, enabled });
+  revalidatePath("/admin/users");
+}
+
 export async function toggleUserSuspended(userId: string, suspended: boolean) {
   const admin = await requireAdmin();
   await prisma.user.update({ where: { id: userId }, data: { suspended } });
@@ -156,3 +167,4 @@ export async function updateSetting(key: string, value: string) {
   await logAction(admin.id, "update_setting", { key });
   revalidatePath("/admin/settings");
 }
+
