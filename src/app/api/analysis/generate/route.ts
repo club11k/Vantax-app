@@ -3,7 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getRemainingQuota, consumeQuota } from "@/lib/quota";
-import { generateAnalysis, AnalysisImageInput } from "@/lib/analysis-engine";
+import { generateAnalysis } from "@/lib/analysis-engine";
+import type { AnalysisImageInput } from "@/lib/analysis-engine";
 
 const MAX_IMAGES = 8;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // ~5MB por imagen en base64 (aprox., ya decodificado sería menor)
@@ -70,5 +71,4 @@ export async function POST(req: Request) {
     );
   }
 }
-
 
