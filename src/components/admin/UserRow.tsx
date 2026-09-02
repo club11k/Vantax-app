@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { resetUserQuota, setUserPlan, toggleUserSuspended, setUserRole, grantFreeAccess } from "@/app/admin/actions";
+import { resetUserQuota, setUserPlan, toggleUserSuspended, setUserRole, grantFreeAccess, toggleMarketAccess } from "@/app/admin/actions";
 
 type Plan = { id: string; name: string };
 type UserRowData = {
@@ -16,6 +16,7 @@ type UserRowData = {
   planName: string | null;
   planQuota: number | null;
   planIsFree: boolean;
+  marketAccess: boolean;
 };
 
 export function UserRow({ user, plans }: { user: UserRowData; plans: Plan[] }) {
@@ -32,6 +33,16 @@ export function UserRow({ user, plans }: { user: UserRowData; plans: Plan[] }) {
         <span className={`tag ${user.subscriptionStatus === "ACTIVE" ? "pos" : "neu"}`}>{user.subscriptionStatus}</span>
         {user.planIsFree && <span className="tag pos" style={{ marginLeft: 6 }}>Gratis (admin)</span>}
         {user.suspended && <span className="tag neg" style={{ marginLeft: 6 }}>Suspendido</span>}
+      </td>
+      <td>
+        <button
+          className="btn"
+          disabled={isPending}
+          style={user.marketAccess ? { borderColor: "var(--up)", color: "var(--up)" } : {}}
+          onClick={() => startTransition(() => toggleMarketAccess(user.id, !user.marketAccess))}
+        >
+          {user.marketAccess ? "Mercado: abierto" : "Mercado: bloqueado"}
+        </button>
       </td>
       <td>
         <select
@@ -96,3 +107,4 @@ export function UserRow({ user, plans }: { user: UserRowData; plans: Plan[] }) {
     </tr>
   );
 }
+
