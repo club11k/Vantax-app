@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import { buildMarketSnapshot } from "@/lib/vantax-data";
 import { computeBiasScore } from "@/lib/bias-score";
 import { SessionsClock } from "@/components/market/SessionsClock";
@@ -29,6 +30,34 @@ export default async function MercadoPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     redirect("/login");
+  }
+
+  const userId = (session.user as any).id as string;
+  const isAdmin = (session.user as any).role === "ADMIN";
+
+  // El acceso al Centro de Mercado lo concede un admin por separado del
+  // acceso a Análisis (ver /admin/usuarios) — se comprueba en cada visita
+  // porque un admin puede activarlo/desactivarlo en cualquier momento.
+  if (!isAdmin) {
+    const dbUser = await prisma.user.findUnique({ where: { id: userId }, select: { marketAccess: true } });
+    if (!dbUser?.marketAccess) {
+      return (
+        <div className="container" style={{ paddingTop: 40, maxWidth: 640 }}>
+          <div className="panel locked-panel">
+            <span className="locked-icon">🔒</span>
+            <div>
+              <h1 style={{ fontSize: 20, marginTop: 0 }}>Acceso al Centro de Mercado pendiente</h1>
+              <p style={{ color: "var(--text-muted)", fontSize: 13.5, marginBottom: 16 }}>
+                Por ahora estamos dando acceso a la comunidad de forma manual. En cuanto activemos tu cuenta
+                desde nuestro lado podrás entrar aquí y ver sesiones, gráficos, calendario y todos los datos en
+                vivo.
+              </p>
+              <Link href="/dashboard" className="btn">Volver a mi panel</Link>
+            </div>
+          </div>
+        </div>
+      );
+    }
   }
 
   const snapshot = await buildMarketSnapshot();
@@ -402,5 +431,4 @@ export default async function MercadoPage() {
     </div>
   );
 }
-
 
