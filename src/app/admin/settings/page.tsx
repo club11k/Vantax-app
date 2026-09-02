@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { SettingForm } from "@/components/admin/SettingForm";
+import { AccessGateToggle } from "@/components/admin/AccessGateToggle";
 
 function extractValue(setting: { value: unknown } | null, fallback: string): string {
   if (!setting) return fallback;
@@ -9,9 +10,14 @@ function extractValue(setting: { value: unknown } | null, fallback: string): str
 }
 
 export default async function AdminSettingsPage() {
-  const keys = ["analysis.system_prompt", "analysis.refresh_cron", "branding.support_email"];
+  const keys = ["analysis.system_prompt", "analysis.refresh_cron", "branding.support_email", "access.public_signup_locked"];
   const settings = await prisma.setting.findMany({ where: { key: { in: keys } } });
   const byKey = new Map(settings.map((s) => [s.key, s]));
+
+  // Por defecto (si nunca se tocó este ajuste) el candado está activado: no
+  // se ofrece pago público hasta que un admin lo desactive explícitamente.
+  const accessLockedValue = extractValue(byKey.get("access.public_signup_locked") ?? null, "true");
+  const accessLocked = accessLockedValue !== "false";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -19,6 +25,7 @@ export default async function AdminSettingsPage() {
         Esta configuración se guarda en la base de datos y se usa en el momento de generar cada análisis
         (no hace falta redeployar para que un cambio tome efecto).
       </div>
+      <AccessGateToggle settingKey="access.public_signup_locked" initialLocked={accessLocked} />
       <SettingForm
         settingKey="analysis.system_prompt"
         label="Prompt de sistema del motor de análisis"
@@ -38,3 +45,4 @@ export default async function AdminSettingsPage() {
     </div>
   );
 }
+
