@@ -94,6 +94,27 @@ export default async function HomePage() {
         Planes
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16 }}>
+        <div className="panel" style={{ borderColor: "var(--violet)", background: "var(--violet-dim)" }}>
+          <div style={{ fontFamily: "var(--font-display)", fontSize: 22 }}>Club 11k</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 15, color: "var(--violet-bright)", margin: "10px 0", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+            Acceso gratuito
+          </div>
+          <p style={{ fontSize: 13, color: "var(--text-muted)", minHeight: 40 }}>
+            Si formas parte de la comunidad de Club 11k, entra a nuestro curso gratuito de Telegram para
+            conseguir tu acceso sin coste.
+          </p>
+          <p style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--text-dim)", marginBottom: 16 }}>
+            Acceso activado a mano por el equipo
+          </p>
+          <a
+            href="https://t.me/+cj_Ck7EpgyowZDk0"
+            target="_blank"
+            rel="noreferrer"
+            className="btn btn-primary"
+          >
+            Acceso gratuito para miembros del Club 11k
+          </a>
+        </div>
         {plans.map((plan) => (
           <div key={plan.id} className="panel">
             <div style={{ fontFamily: "var(--font-display)", fontSize: 22 }}>{plan.name}</div>
