@@ -70,7 +70,6 @@ function formatSnapshotForPrompt(snapshot: MarketSnapshot): string {
   lines.push("RIESGO E INTERMERCADO:");
   lines.push(`- VIX: ${fmtFred(r.vix, "", 2)}`);
   lines.push(`- High Yield OAS (diferencial de crédito): ${fmtFred(r.hyOas)}`);
-  lines.push(`- MOVE Index: no disponible (dato propietario de ICE, sin fuente gratuita).`);
   lines.push("");
   lines.push("FLUJOS Y POSICIONAMIENTO:");
   if (f.cotGoldManagedMoney) {
@@ -228,5 +227,4 @@ export async function generateAnalysis(format: "MENSAJE" | "TECNICO", images?: A
 
   return { content, snapshot };
 }
-
 
