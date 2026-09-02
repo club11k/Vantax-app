@@ -63,8 +63,8 @@ export default function SignupPage() {
       </p>
       <form onSubmit={handleSubmit} className="panel" style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 14 }}>
         <div>
-          <label htmlFor="name">Nombre (opcional)</label>
-          <input id="name" value={name} onChange={(e) => setName(e.target.value)} />
+          <label htmlFor="name">Nombre</label>
+          <input id="name" required minLength={1} value={name} onChange={(e) => setName(e.target.value)} />
         </div>
         <div>
           <label htmlFor="email">Email</label>
@@ -82,5 +82,6 @@ export default function SignupPage() {
     </div>
   );
 }
+
 
 
