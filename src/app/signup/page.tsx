@@ -18,25 +18,40 @@ export default function SignupPage() {
     setError(null);
     setLoading(true);
 
-    const res = await fetch("/api/signup", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, name }),
-    });
-    const data = await res.json();
+    try {
+      const res = await fetch("/api/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, name }),
+      });
 
-    if (!res.ok) {
-      setError(data.error ?? "Algo salió mal.");
+      let data: { error?: string } | null = null;
+      try {
+        data = await res.json();
+      } catch {
+        // La respuesta no era JSON (por ejemplo, un error 500 sin cuerpo) —
+        // seguimos con data en null y mostramos un mensaje genérico abajo.
+      }
+
+      if (!res.ok) {
+        setError(data?.error ?? "Algo salió mal creando la cuenta. Inténtalo de nuevo.");
+        return;
+      }
+
+      const signInRes = await signIn("credentials", { email, password, redirect: false });
+      if (signInRes?.ok) {
+        router.push("/dashboard");
+      } else {
+        // La cuenta sí se creó — mandamos a login por si el inicio de sesión
+        // automático falló por cualquier motivo.
+        router.push("/login");
+      }
+    } catch {
+      setError(
+        "La cuenta puede haberse creado, pero no se pudo iniciar sesión automáticamente. Prueba a iniciar sesión con tu email y contraseña."
+      );
+    } finally {
       setLoading(false);
-      return;
-    }
-
-    const signInRes = await signIn("credentials", { email, password, redirect: false });
-    setLoading(false);
-    if (signInRes?.ok) {
-      router.push("/dashboard");
-    } else {
-      router.push("/login");
     }
   }
 
@@ -67,4 +82,5 @@ export default function SignupPage() {
     </div>
   );
 }
+
 
