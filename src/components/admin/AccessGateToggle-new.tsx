@@ -40,3 +40,4 @@ export function AccessGateToggle({ settingKey, initialLocked }: { settingKey: st
     </div>
   );
 }
+
