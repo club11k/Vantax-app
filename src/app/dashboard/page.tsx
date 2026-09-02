@@ -56,9 +56,10 @@ export default async function DashboardPage() {
           <div>
             <h2 style={{ fontSize: 16, marginTop: 0 }}>Tu cuenta está creada — el acceso lo activamos nosotros</h2>
             <p style={{ color: "var(--text-muted)", fontSize: 13.5, marginBottom: 0 }}>
-              Por ahora estamos dando acceso a la comunidad de forma manual, sin necesidad de pagar
-              nada. En cuanto activemos tu cuenta desde nuestro lado verás aquí mismo el generador de
-              análisis. Más adelante abriremos las suscripciones de pago para quien quiera más cuota.
+              {user?.marketAccess
+                ? "Ya tienes abierto el Centro de Mercado. El generador de análisis todavía está pendiente de que lo activemos por nuestra parte, sin necesidad de que pagues nada."
+                : "Por ahora estamos dando acceso a la comunidad de forma manual, sin necesidad de pagar nada. Ni el Centro de Mercado ni el generador de análisis están disponibles todavía — en cuanto activemos tu cuenta desde nuestro lado los verás aquí mismo."}{" "}
+              Más adelante abriremos las suscripciones de pago para quien quiera más cuota.
             </p>
           </div>
         </div>
@@ -136,5 +137,4 @@ export default async function DashboardPage() {
     </div>
   );
 }
-
 
