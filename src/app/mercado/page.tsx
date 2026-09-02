@@ -15,12 +15,8 @@ function fmtPct(n: number) {
 }
 
 // Notas explicativas breves para categorías de datos cuyo nombre no es
-// autoexplicativo a simple vista (p. ej. "breakeven" suena a bonos, pero es
-// en realidad una expectativa de inflación derivada de precios de bonos).
-const GROUP_NOTES: Record<string, string> = {
-  inflacion:
-    "Los datos \"breakeven\" no son un tipo de bono: son la expectativa de inflación que implica el mercado de bonos, calculada como la diferencia entre el rendimiento de un bono del Tesoro normal y el de un bono indexado a la inflación (TIPS) del mismo plazo. Si es alta, el mercado espera más inflación.",
-};
+// autoexplicativo a simple vista.
+const GROUP_NOTES: Record<string, string> = {};
 
 function scoreColor(score: number | null) {
   if (score === null) return "var(--text-dim)";
@@ -249,7 +245,7 @@ export default async function MercadoPage() {
             <details className="indicators" style={{ marginTop: 6 }}>
               <summary>Ver los indicadores subyacentes y cómo se calificó cada uno</summary>
               <div className="table-scroll">
-                <table>
+                <table className="indicators-table">
                   <thead>
                     <tr>
                       <th>Indicador</th>
@@ -263,12 +259,12 @@ export default async function MercadoPage() {
                       .flatMap((m) => m.indicators)
                       .map((ind, i) => (
                         <tr key={i}>
-                          <td>{ind.label}</td>
-                          <td style={{ fontFamily: "var(--font-mono)", color: "var(--text-primary)" }}>{ind.value}</td>
-                          <td style={{ color: ind.score === null ? "var(--text-dim)" : ind.score >= 0 ? "var(--up)" : "var(--down)" }}>
+                          <td data-label="Indicador">{ind.label}</td>
+                          <td data-label="Valor" style={{ fontFamily: "var(--font-mono)", color: "var(--text-primary)" }}>{ind.value}</td>
+                          <td data-label="Score" style={{ color: ind.score === null ? "var(--text-dim)" : ind.score >= 0 ? "var(--up)" : "var(--down)" }}>
                             {ind.score !== null ? `${ind.score >= 0 ? "+" : ""}${ind.score.toFixed(0)}` : "—"}
                           </td>
-                          <td style={{ fontSize: 12 }}>{ind.note}</td>
+                          <td data-label="Nota" style={{ fontSize: 12 }}>{ind.note}</td>
                         </tr>
                       ))}
                     {bias.modules.every((m) => m.indicators.length === 0) && (
@@ -359,24 +355,7 @@ export default async function MercadoPage() {
       />
       <div style={{ marginBottom: 24 }} />
 
-      <div className="panel-head" style={{ margin: "4px 0 10px 2px" }}>
-        <span className="panel-title">MOVE Index — Volatilidad de Bonos del Tesoro</span>
-        <span className="panel-sub">Solo referencia visual — no entra en el cálculo del Bias Score (fuente propietaria de ICE, sin acceso gratuito)</span>
-      </div>
-      <div className="panel" style={{ padding: 20 }}>
-        <p style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.6, margin: 0 }}>
-          El MOVE Index es propiedad de ICE (Intercontinental Exchange) y no está disponible en los
-          widgets públicos/gratuitos de TradingView (ni siquiera con cuenta Premium — es una
-          restricción de licencia del dato, no de la cuenta del usuario). Para verlo en vivo, se puede
-          consultar directo en{" "}
-          <a href="https://www.tradingview.com/symbols/TVC-MOVE/" target="_blank" rel="noreferrer" style={{ color: "var(--violet-bright)" }}>
-            tradingview.com/symbols/TVC-MOVE
-          </a>
-          . No entra en el cálculo del Bias Score de todas formas — solo era referencia visual.
-        </p>
-      </div>
-
-      <div className="panel-title" style={{ margin: "24px 0 10px 2px" }}>Feed de Titulares</div>
+      <div className="panel-title" style={{ margin: "4px 0 10px 2px" }}>Feed de Titulares</div>
       <TradingViewWidget
         height={400}
         src="https://s3.tradingview.com/external-embedding/embed-widget-timeline.js"
@@ -423,4 +402,5 @@ export default async function MercadoPage() {
     </div>
   );
 }
+
 
