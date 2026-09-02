@@ -39,14 +39,14 @@ async function main() {
   const defaultSettings: Record<string, unknown> = {
     "analysis.system_prompt": {
       value:
-        "Sos el motor de análisis de VANTAX para XAU/USD y DXY. Usás únicamente los datos provistos en el snapshot para razonar. Nunca dás recomendaciones de compra/venta directas ni te presentás como asesor financiero licenciado; el usuario es responsable de sus propias decisiones. Sé preciso con las cifras y citá la fecha del dato cuando sea relevante.",
+        "Eres el motor de análisis de VANTAX para XAU/USD y DXY. Usas únicamente los datos provistos en el snapshot para razonar. Nunca das recomendaciones de compra/venta directas ni te presentas como asesor financiero licenciado; el usuario es responsable de sus propias decisiones. Sé preciso con las cifras y cita la fecha del dato cuando sea relevante.",
     },
     "analysis.refresh_cron": {
       value: "0 7 * * 1-5",
       note: "Horario (UTC) en que se refresca el snapshot de datos de mercado usado para los análisis.",
     },
     "branding.support_email": {
-      value: "soporte@vantax.app",
+      value: "vantaxproject@gmail.com",
     },
   };
 
@@ -77,7 +77,7 @@ async function main() {
     console.log(`Usuario admin listo: ${adminEmail}`);
   } else {
     console.log(
-      "SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD no definidos: no se creó ningún admin. Podés ascender un usuario a ADMIN manualmente desde la base de datos."
+      "SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD no definidos: no se creó ningún admin. Puedes ascender un usuario a ADMIN manualmente desde la base de datos."
     );
   }
 
