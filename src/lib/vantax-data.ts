@@ -214,6 +214,57 @@ async function fetchCotGoldManagedMoney(): Promise<{
   }
 }
 
+// Igual que fetchCotGoldManagedMoney pero para el contrato "Micro Gold"
+// (10 oz, código CFTC 088695) — un contrato más chico pensado para
+// operadores minoristas. Se ofrece como dato adicional informativo junto al
+// contrato estándar de 100 oz; no participa en el cálculo del Bias Score
+// (que ya usa el contrato estándar, mucho más líquido, como referencia de
+// posicionamiento institucional).
+async function fetchCotGoldMicro(): Promise<{
+  date: string;
+  netCurrent: number;
+  netPrev: number | null;
+  openInterest: number;
+} | null> {
+  try {
+    const params = new URLSearchParams({
+      $limit: "2",
+      $order: "report_date_as_yyyy_mm_dd DESC",
+      $where: "market_and_exchange_names like '%MICRO GOLD%'",
+    });
+    const res = await fetch(`${CFTC_DISAGG_BASE}?${params.toString()}`, {
+      next: { revalidate: 21600 },
+      headers: { Accept: "application/json" },
+    });
+    if (!res.ok) return null;
+    const rows = (await res.json()) as any[];
+    if (!Array.isArray(rows) || rows.length === 0) return null;
+
+    const parseNet = (row: any): number | null => {
+      const long = parseFloat(row?.m_money_positions_long_all);
+      const short = parseFloat(row?.m_money_positions_short_all);
+      if (Number.isNaN(long) || Number.isNaN(short)) return null;
+      return long - short;
+    };
+
+    const latest = rows[0];
+    const netCurrent = parseNet(latest);
+    const openInterest = parseFloat(latest?.open_interest_all);
+    if (netCurrent === null || Number.isNaN(openInterest) || openInterest === 0) return null;
+
+    const netPrev = rows[1] ? parseNet(rows[1]) : null;
+
+    return {
+      date: latest.report_date_as_yyyy_mm_dd,
+      netCurrent,
+      netPrev,
+      openInterest,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function ema(values: number[], period: number): number | null {
   if (values.length < period) return null;
   const k = 2 / (period + 1);
@@ -304,6 +355,12 @@ export type MarketSnapshot = {
       netPrev: number | null;
       openInterest: number;
     } | null;
+    cotGoldMicro: {
+      date: string;
+      netCurrent: number;
+      netPrev: number | null;
+      openInterest: number;
+    } | null;
   };
 };
 
@@ -346,6 +403,7 @@ export async function buildMarketSnapshot(): Promise<MarketSnapshot> {
     dxy,
     goldSeries,
     cotGoldManagedMoney,
+    cotGoldMicro,
   ] = await Promise.all([
     fetchFredSeries("DGS10"),
     fetchFredSeries("DFII10"),
@@ -381,6 +439,7 @@ export async function buildMarketSnapshot(): Promise<MarketSnapshot> {
     fetchTwelveDataQuote("DXY"),
     fetchTwelveDataSeries("XAU/USD"),
     fetchCotGoldManagedMoney(),
+    fetchCotGoldMicro(),
   ]);
 
   const goldCloses = goldSeries?.map((b) => b.close) ?? null;
@@ -426,6 +485,6 @@ export async function buildMarketSnapshot(): Promise<MarketSnapshot> {
     prices: { gold, dxy },
     technical,
     risk: { vix, hyOas },
-    flows: { cotGoldManagedMoney },
+    flows: { cotGoldManagedMoney, cotGoldMicro },
   };
 }
