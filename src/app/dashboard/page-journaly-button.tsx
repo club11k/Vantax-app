@@ -46,6 +46,7 @@ export default async function DashboardPage() {
             <Link href="/admin" className="btn">Panel de admin</Link>
           )}
           <Link href="/mercado" className="btn">Centro de mercado</Link>
+          <Link href="/journal" className="btn">Journaly</Link>
           {hasActivePlan && <ManageSubscriptionButton />}
         </div>
       </div>
@@ -137,4 +138,3 @@ export default async function DashboardPage() {
     </div>
   );
 }
-
