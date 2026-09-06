@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 type Currency = "EUR" | "USD" | "CENT";
 type Source = "MANUAL" | "AI_PHOTO";
+type ChartPeriod = "day" | "week" | "month";
 
 type Account = {
   accountUid: string;
@@ -19,6 +20,8 @@ type Entry = {
   imageNote?: string | null;
 };
 
+type ChartPoint = { key: string; label: string; value: number };
+
 const CURRENCY_OPTIONS: { value: Currency; label: string }[] = [
   { value: "EUR", label: "Euros (€)" },
   { value: "USD", label: "Dólares (US$)" },
@@ -26,6 +29,20 @@ const CURRENCY_OPTIONS: { value: Currency; label: string }[] = [
 ];
 
 const CURRENCY_SYMBOL: Record<Currency, string> = { EUR: "€", USD: "$", CENT: "¢" };
+
+const MONTH_NAMES_ES = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+];
+const WEEKDAY_NAMES_ES = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
 
 function formatMoney(amount: number, currency: Currency): string {
   const symbol = CURRENCY_SYMBOL[currency];
@@ -53,18 +70,99 @@ function fileToBase64(file: File): Promise<{ mediaType: string; base64Data: stri
   });
 }
 
-function buildLinePath(values: number[], width: number, height: number, padding: number): string {
-  if (values.length < 2) return "";
+// --- Agregación del progreso por día / semana / mes ---
+// Todo se calcula a partir de los mismos resultados reales que el usuario
+// registró — nunca se inventa ni interpola nada, solo se agrupa la misma
+// cifra a distinta granularidad.
+
+function monthKey(dateStr: string): string {
+  return dateStr.slice(0, 7); // "YYYY-MM"
+}
+
+// Semana ISO-8601 (lunes a domingo, semana 1 = la que contiene el primer jueves del año).
+function isoWeekKey(dateStr: string): string {
+  const date = new Date(`${dateStr}T00:00:00Z`);
+  const target = new Date(date.getTime());
+  const dayNr = (date.getUTCDay() + 6) % 7; // lunes = 0 ... domingo = 6
+  target.setUTCDate(target.getUTCDate() - dayNr + 3);
+  const firstThursday = new Date(Date.UTC(target.getUTCFullYear(), 0, 4));
+  const firstDayNr = (firstThursday.getUTCDay() + 6) % 7;
+  firstThursday.setUTCDate(firstThursday.getUTCDate() - firstDayNr + 3);
+  const weekNumber = 1 + Math.round((target.getTime() - firstThursday.getTime()) / (7 * 86400000));
+  return `${target.getUTCFullYear()}-S${pad2(weekNumber)}`;
+}
+
+function formatDayLabel(dateStr: string): string {
+  const [, m, d] = dateStr.split("-").map(Number);
+  return `${d} ${MONTH_NAMES_ES[m - 1].slice(0, 3)}`;
+}
+
+function formatWeekLabel(key: string): string {
+  const [year, week] = key.split("-");
+  return `Semana ${week.replace("S", "")} · ${year}`;
+}
+
+function formatMonthLabel(key: string): string {
+  const [y, m] = key.split("-").map(Number);
+  return `${capitalize(MONTH_NAMES_ES[m - 1])} ${y}`;
+}
+
+function buildPeriodSeries(sortedEntries: Entry[], initialBalance: number, period: ChartPeriod): ChartPoint[] {
+  const points: ChartPoint[] = [{ key: "inicio", label: "Inicio", value: initialBalance }];
+
+  if (period === "day") {
+    let running = initialBalance;
+    for (const e of sortedEntries) {
+      running += e.resultAmount;
+      points.push({ key: e.date, label: formatDayLabel(e.date), value: running });
+    }
+    return points;
+  }
+
+  const keyFn = period === "week" ? isoWeekKey : monthKey;
+  const labelFn = period === "week" ? formatWeekLabel : formatMonthLabel;
+  const buckets = new Map<string, number>();
+  for (const e of sortedEntries) {
+    const k = keyFn(e.date);
+    buckets.set(k, (buckets.get(k) ?? 0) + e.resultAmount);
+  }
+  const keys = [...buckets.keys()].sort();
+  let running = initialBalance;
+  for (const k of keys) {
+    running += buckets.get(k)!;
+    points.push({ key: k, label: labelFn(k), value: running });
+  }
+  return points;
+}
+
+function computeCoords(values: number[], width: number, height: number, padding: number): { x: number; y: number }[] {
+  if (values.length < 2) return [];
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = max - min || 1;
   const stepX = (width - padding * 2) / (values.length - 1);
-  const points = values.map((v, i) => {
-    const x = padding + i * stepX;
-    const y = padding + (height - padding * 2) * (1 - (v - min) / range);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  });
-  return `M ${points.join(" L ")}`;
+  return values.map((v, i) => ({
+    x: padding + i * stepX,
+    y: padding + (height - padding * 2) * (1 - (v - min) / range),
+  }));
+}
+
+function buildLinePath(coords: { x: number; y: number }[]): string {
+  if (coords.length < 2) return "";
+  return `M ${coords.map((c) => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(" L ")}`;
+}
+
+// --- Calendario mensual ---
+
+function buildMonthGrid(year: number, month: number): (string | null)[] {
+  const firstDay = new Date(Date.UTC(year, month, 1));
+  const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  const startWeekday = (firstDay.getUTCDay() + 6) % 7; // lunes = 0
+  const cells: (string | null)[] = [];
+  for (let i = 0; i < startWeekday; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(`${year}-${pad2(month + 1)}-${pad2(d)}`);
+  while (cells.length % 7 !== 0) cells.push(null);
+  return cells;
 }
 
 const inputStyle: React.CSSProperties = {
@@ -86,6 +184,7 @@ export function JournalDashboard({
   const [account, setAccount] = useState<Account | null>(initialAccount);
   const [entries, setEntries] = useState<Entry[]>(initialEntries);
   const [editingSetup, setEditingSetup] = useState(!initialAccount);
+  const manualFormRef = useRef<HTMLDivElement>(null);
 
   // --- Formulario de configuración (saldo inicial / UID / moneda) ---
   const [setupUid, setSetupUid] = useState(initialAccount?.accountUid ?? "");
@@ -128,7 +227,7 @@ export function JournalDashboard({
     }
   }
 
-  // --- Formulario de resultado manual ---
+  // --- Formulario de resultado manual (también lo rellena un clic en el calendario) ---
   const [manualDate, setManualDate] = useState(todayStr());
   const [manualAmount, setManualAmount] = useState("");
   const [manualLoading, setManualLoading] = useState(false);
@@ -176,15 +275,6 @@ export function JournalDashboard({
     } catch (err: any) {
       setManualLoading(false);
       setManualError(err?.message ?? "No se pudo guardar el resultado.");
-    }
-  }
-
-  function editEntry(entry: Entry) {
-    setManualDate(entry.date);
-    setManualAmount(String(entry.resultAmount));
-    setManualError(null);
-    if (typeof window !== "undefined") {
-      window.scrollTo({ top: 0, behavior: "smooth" });
     }
   }
 
@@ -256,28 +346,77 @@ export function JournalDashboard({
     }
   }
 
-  // --- Totales y gráfico ---
+  // --- Totales ---
   const sortedEntries = useMemo(() => [...entries].sort((a, b) => a.date.localeCompare(b.date)), [entries]);
+  const entriesByDate = useMemo(() => new Map(sortedEntries.map((e) => [e.date, e])), [sortedEntries]);
   const totalResult = useMemo(() => sortedEntries.reduce((sum, e) => sum + e.resultAmount, 0), [sortedEntries]);
   const currentBalance = (account?.initialBalance ?? 0) + totalResult;
   const pctChange =
     account && account.initialBalance !== 0 ? (totalResult / Math.abs(account.initialBalance)) * 100 : null;
 
-  const chartValues = useMemo(() => {
-    if (!account) return [];
-    let running = account.initialBalance;
-    const values = [running];
-    for (const e of sortedEntries) {
-      running += e.resultAmount;
-      values.push(running);
-    }
-    return values;
-  }, [account, sortedEntries]);
+  // --- Gráfico interactivo (días / semanas / meses) ---
+  const [chartPeriod, setChartPeriod] = useState<ChartPeriod>("day");
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
+  const chartPoints = useMemo(
+    () => (account ? buildPeriodSeries(sortedEntries, account.initialBalance, chartPeriod) : []),
+    [account, sortedEntries, chartPeriod]
+  );
   const chartWidth = 600;
   const chartHeight = 180;
-  const chartPath = buildLinePath(chartValues, chartWidth, chartHeight, 16);
-  const isUp = chartValues.length > 1 && chartValues[chartValues.length - 1] >= chartValues[0];
+  const chartPadding = 16;
+  const chartCoords = useMemo(
+    () => computeCoords(chartPoints.map((p) => p.value), chartWidth, chartHeight, chartPadding),
+    [chartPoints]
+  );
+  const chartPath = buildLinePath(chartCoords);
+  const isUp = chartPoints.length > 1 && chartPoints[chartPoints.length - 1].value >= chartPoints[0].value;
+  const activePoint = chartPoints.length > 0 ? chartPoints[hoverIndex ?? chartPoints.length - 1] : null;
+
+  function selectPeriod(p: ChartPeriod) {
+    setChartPeriod(p);
+    setHoverIndex(null);
+  }
+
+  // --- Calendario mensual (clic en un día = editar/añadir ese resultado) ---
+  const [calendarCursor, setCalendarCursor] = useState<{ year: number; month: number }>(() => {
+    if (sortedEntries.length > 0) {
+      const [y, m] = sortedEntries[sortedEntries.length - 1].date.split("-").map(Number);
+      return { year: y, month: m - 1 };
+    }
+    const now = new Date();
+    return { year: now.getFullYear(), month: now.getMonth() };
+  });
+
+  const calendarCells = useMemo(
+    () => buildMonthGrid(calendarCursor.year, calendarCursor.month),
+    [calendarCursor]
+  );
+  const calendarMonthKey = `${calendarCursor.year}-${pad2(calendarCursor.month + 1)}`;
+  const calendarMonthTotal = useMemo(
+    () => sortedEntries.filter((e) => e.date.startsWith(calendarMonthKey)).reduce((s, e) => s + e.resultAmount, 0),
+    [sortedEntries, calendarMonthKey]
+  );
+
+  function shiftMonth(delta: number) {
+    setCalendarCursor(({ year, month }) => {
+      const total = year * 12 + month + delta;
+      return { year: Math.floor(total / 12), month: ((total % 12) + 12) % 12 };
+    });
+  }
+
+  function goToCurrentMonth() {
+    const now = new Date();
+    setCalendarCursor({ year: now.getFullYear(), month: now.getMonth() });
+  }
+
+  function selectDay(dateStr: string) {
+    const entry = entriesByDate.get(dateStr);
+    setManualDate(dateStr);
+    setManualAmount(entry ? String(entry.resultAmount) : "");
+    setManualError(null);
+    manualFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
 
   if (!account || editingSetup) {
     return (
@@ -363,20 +502,62 @@ export function JournalDashboard({
       </div>
 
       <div className="panel">
-        <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-dim)", textTransform: "uppercase", marginBottom: 10 }}>
-          Progreso
+        <div className="panel-head" style={{ marginBottom: 6 }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-dim)", textTransform: "uppercase" }}>
+            Progreso
+          </div>
+          <div className="btn-row">
+            {(["day", "week", "month"] as ChartPeriod[]).map((p) => (
+              <button
+                key={p}
+                className="btn"
+                style={{ fontSize: 12, padding: "5px 12px", ...(chartPeriod === p ? { borderColor: "var(--violet)" } : {}) }}
+                onClick={() => selectPeriod(p)}
+              >
+                {p === "day" ? "Días" : p === "week" ? "Semanas" : "Meses"}
+              </button>
+            ))}
+          </div>
         </div>
-        {chartValues.length > 1 ? (
-          <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} style={{ width: "100%", height: "auto", display: "block" }}>
-            <path
-              d={chartPath}
-              fill="none"
-              stroke={isUp ? "var(--up)" : "var(--down)"}
-              strokeWidth={2}
-              strokeLinejoin="round"
-              strokeLinecap="round"
-            />
-          </svg>
+
+        {chartPoints.length > 1 ? (
+          <>
+            <svg
+              viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+              style={{ width: "100%", height: "auto", display: "block" }}
+              onMouseLeave={() => setHoverIndex(null)}
+            >
+              <path
+                d={chartPath}
+                fill="none"
+                stroke={isUp ? "var(--up)" : "var(--down)"}
+                strokeWidth={2}
+                strokeLinejoin="round"
+                strokeLinecap="round"
+              />
+              {chartCoords.map((c, i) => (
+                <circle
+                  key={chartPoints[i].key}
+                  cx={c.x}
+                  cy={c.y}
+                  r={hoverIndex === i ? 5 : 3}
+                  fill={isUp ? "var(--up)" : "var(--down)"}
+                  stroke="var(--bg-panel)"
+                  strokeWidth={1}
+                  style={{ cursor: "pointer" }}
+                  onMouseEnter={() => setHoverIndex(i)}
+                  onClick={() => setHoverIndex(i)}
+                >
+                  <title>{`${chartPoints[i].label}: ${formatMoney(chartPoints[i].value, account.currency)}`}</title>
+                </circle>
+              ))}
+            </svg>
+            {activePoint && (
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--text-muted)", marginTop: 8 }}>
+                {activePoint.label}: <strong style={{ color: "var(--text-primary)" }}>{formatMoney(activePoint.value, account.currency)}</strong>
+              </div>
+            )}
+          </>
         ) : (
           <p style={{ color: "var(--text-muted)", fontSize: 13, margin: 0 }}>
             Registra al menos un día para ver tu progreso en el gráfico.
@@ -385,7 +566,7 @@ export function JournalDashboard({
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20 }}>
-        <div className="panel" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div className="panel" style={{ display: "flex", flexDirection: "column", gap: 10 }} ref={manualFormRef}>
           <h3 style={{ fontSize: 14, margin: 0 }}>Registrar resultado a mano</h3>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <input
@@ -404,7 +585,8 @@ export function JournalDashboard({
             />
           </div>
           <p style={{ fontSize: 11.5, color: "var(--text-dim)", margin: 0 }}>
-            Un resultado por día — si ya existe uno para esa fecha, se actualiza.
+            Un resultado por día — si ya existe uno para esa fecha, se actualiza. También puedes hacer clic en un día
+            del calendario de abajo para editarlo aquí.
           </p>
           {manualError && <div className="error-msg">{manualError}</div>}
           <button className="btn btn-primary" onClick={handleManualSubmit} disabled={manualLoading}>
@@ -474,49 +656,66 @@ export function JournalDashboard({
         </div>
       </div>
 
-      <div className="panel">
-        <h3 style={{ fontSize: 14, marginTop: 0 }}>Historial de resultados</h3>
-        {sortedEntries.length === 0 && (
-          <p style={{ color: "var(--text-muted)", fontSize: 13.5 }}>Todavía no registraste ningún día.</p>
-        )}
-        {sortedEntries.length > 0 && (
-          <div style={{ display: "flex", flexDirection: "column" }}>
-            {[...sortedEntries].reverse().map((entry) => (
-              <div
-                key={entry.id}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 12,
-                  borderBottom: "1px solid var(--line)",
-                  padding: "10px 0",
-                  flexWrap: "wrap",
-                }}
-              >
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--text-dim)", minWidth: 90 }}>
-                  {entry.date}
-                </span>
-                <span
-                  style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 13.5,
-                    color: entry.resultAmount >= 0 ? "var(--up)" : "var(--down)",
-                    minWidth: 100,
-                  }}
-                >
-                  {entry.resultAmount >= 0 ? "+" : ""}
-                  {formatMoney(entry.resultAmount, account.currency)}
-                </span>
-                <span className="tag neu" style={{ fontSize: 10.5 }}>
-                  {entry.source === "AI_PHOTO" ? "Foto + IA" : "Manual"}
-                </span>
-                <button className="btn" style={{ marginLeft: "auto", fontSize: 11.5, padding: "4px 10px" }} onClick={() => editEntry(entry)}>
-                  Editar
-                </button>
-              </div>
-            ))}
+      <div className="panel journal-calendar">
+        <div className="journal-calendar-head">
+          <h3 style={{ fontSize: 14, margin: 0 }}>Calendario de resultados</h3>
+          <div className="btn-row" style={{ alignItems: "center" }}>
+            <button className="btn" style={{ fontSize: 12, padding: "5px 10px" }} onClick={() => shiftMonth(-1)}>
+              ←
+            </button>
+            <div className="journal-calendar-title">
+              {capitalize(MONTH_NAMES_ES[calendarCursor.month])} {calendarCursor.year}
+            </div>
+            <button className="btn" style={{ fontSize: 12, padding: "5px 10px" }} onClick={() => shiftMonth(1)}>
+              →
+            </button>
+            <button className="btn" style={{ fontSize: 12, padding: "5px 10px" }} onClick={goToCurrentMonth}>
+              Hoy
+            </button>
           </div>
-        )}
+        </div>
+        <div className="journal-calendar-total">
+          Total del mes:{" "}
+          <strong style={{ color: calendarMonthTotal >= 0 ? "var(--up)" : "var(--down)" }}>
+            {calendarMonthTotal >= 0 ? "+" : ""}
+            {formatMoney(calendarMonthTotal, account.currency)}
+          </strong>
+        </div>
+
+        <div className="cal-weekdays">
+          {WEEKDAY_NAMES_ES.map((w) => (
+            <div key={w} className="cal-weekday">
+              {w}
+            </div>
+          ))}
+        </div>
+        <div className="cal-grid">
+          {calendarCells.map((dateStr, idx) => {
+            if (!dateStr) return <div key={`empty-${idx}`} className="cal-cell cal-cell-empty" />;
+            const entry = entriesByDate.get(dateStr);
+            const dayNum = parseInt(dateStr.slice(8, 10), 10);
+            const isToday = dateStr === todayStr();
+            return (
+              <button
+                key={dateStr}
+                type="button"
+                className={`cal-cell${isToday ? " cal-cell-today" : ""}`}
+                onClick={() => selectDay(dateStr)}
+              >
+                <span className="cal-day-num">{dayNum}</span>
+                {entry && (
+                  <span
+                    className="cal-cell-amount"
+                    style={{ color: entry.resultAmount >= 0 ? "var(--up)" : "var(--down)" }}
+                  >
+                    {entry.resultAmount >= 0 ? "+" : ""}
+                    {formatMoney(entry.resultAmount, account.currency)}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
