@@ -78,6 +78,12 @@ function formatSnapshotForPrompt(snapshot: MarketSnapshot): string {
   } else {
     lines.push("- COT Managed Money oro: no disponible.");
   }
+  if (f.cotGoldMicro) {
+    const c = f.cotGoldMicro;
+    lines.push(`- COT Managed Money Micro Gold (10 oz, neto): ${c.netCurrent.toLocaleString("es-ES")} contratos, semana anterior ${c.netPrev?.toLocaleString("es-ES") ?? "n/d"} (${c.date}), open interest ${c.openInterest.toLocaleString("es-ES")}`);
+  } else {
+    lines.push("- COT Managed Money Micro Gold: no disponible.");
+  }
   lines.push("- Flujos de ETF (GLD) y compras oficiales de bancos centrales (PBoC/World Gold Council): no disponible, sin fuente gratuita conectada todavía.");
   lines.push("");
   lines.push("TÉCNICO (oro, diario):");
@@ -227,4 +233,3 @@ export async function generateAnalysis(format: "MENSAJE" | "TECNICO", images?: A
 
   return { content, snapshot };
 }
-
