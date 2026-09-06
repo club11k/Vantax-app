@@ -161,7 +161,9 @@ export default async function MercadoPage() {
   if (snapshot.risk.vix) riesgoItems.push({ label: "VIX (índice de volatilidad CBOE)", value: `${snapshot.risk.vix.value.toFixed(2)}`, date: snapshot.risk.vix.date, source: "FRED — VIXCLS" });
   if (snapshot.risk.hyOas) riesgoItems.push({ label: "High Yield OAS (diferencial de crédito)", value: `${snapshot.risk.hyOas.value}%`, date: snapshot.risk.hyOas.date, source: "FRED — BAMLH0A0HYM2" });
 
-  if (snapshot.flows.cotGoldManagedMoney) flujosItems.push({ label: "Posicionamiento Managed Money — oro COMEX (COT)", value: `Neto ${snapshot.flows.cotGoldManagedMoney.netCurrent.toLocaleString("es-ES")} contratos`, date: snapshot.flows.cotGoldManagedMoney.date, source: "CFTC — Disaggregated COT" });
+  if (snapshot.flows.cotGoldManagedMoney) flujosItems.push({ label: "Gold Futures (GC) — Managed Money, neto", value: `Neto ${snapshot.flows.cotGoldManagedMoney.netCurrent.toLocaleString("es-ES")} contratos`, date: snapshot.flows.cotGoldManagedMoney.date, source: "CFTC — Disaggregated COT" });
+  if (snapshot.flows.cotGoldManagedMoney) flujosItems.push({ label: "Open Interest — Gold Futures (GC)", value: `${snapshot.flows.cotGoldManagedMoney.openInterest.toLocaleString("es-ES")} contratos abiertos`, date: snapshot.flows.cotGoldManagedMoney.date, source: "CFTC — Disaggregated COT" });
+  if (snapshot.flows.cotGoldMicro) flujosItems.push({ label: "Micro Gold Futures (10 oz) — Managed Money, neto", value: `Neto ${snapshot.flows.cotGoldMicro.netCurrent.toLocaleString("es-ES")} contratos`, date: snapshot.flows.cotGoldMicro.date, source: "CFTC — Disaggregated COT" });
 
   const sourceGroups = [
     { key: "precios", title: "Precios", items: preciosItems },
