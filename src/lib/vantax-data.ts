@@ -176,10 +176,14 @@ async function fetchCotGoldManagedMoney(): Promise<{
   openInterest: number;
 } | null> {
   try {
+    // Coincidencia EXACTA del nombre de mercado, no "like": un filtro parcial como
+    // '%GOLD - COMMODITY EXCHANGE%' también hace match con "MICRO GOLD - COMMODITY
+    // EXCHANGE INC." (el contrato Micro Gold), mezclando ambos contratos y
+    // devolviendo cifras equivocadas — bug real detectado en producción.
     const params = new URLSearchParams({
       $limit: "2",
       $order: "report_date_as_yyyy_mm_dd DESC",
-      $where: "market_and_exchange_names like '%GOLD - COMMODITY EXCHANGE%'",
+      $where: "market_and_exchange_names = 'GOLD - COMMODITY EXCHANGE INC.'",
     });
     const res = await fetch(`${CFTC_DISAGG_BASE}?${params.toString()}`, {
       next: { revalidate: 21600 }, // el reporte es semanal (viernes), cachear 6h alcanza de sobra
@@ -227,10 +231,11 @@ async function fetchCotGoldMicro(): Promise<{
   openInterest: number;
 } | null> {
   try {
+    // Coincidencia exacta también aquí, por la misma razón que en fetchCotGoldManagedMoney.
     const params = new URLSearchParams({
       $limit: "2",
       $order: "report_date_as_yyyy_mm_dd DESC",
-      $where: "market_and_exchange_names like '%MICRO GOLD%'",
+      $where: "market_and_exchange_names = 'MICRO GOLD - COMMODITY EXCHANGE INC.'",
     });
     const res = await fetch(`${CFTC_DISAGG_BASE}?${params.toString()}`, {
       next: { revalidate: 21600 },
