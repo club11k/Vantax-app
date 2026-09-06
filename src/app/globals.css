@@ -230,3 +230,9 @@ details.indicators[open] summary::before { content: '▾ '; }
   .cal-cell-amount { font-size: 9px; }
   .journal-calendar-title { min-width: 0; font-size: 11.5px; }
 }
+
+/* --- Journaly: pestañas para varias cuentas --- */
+.journal-account-tabs {
+  display: flex; gap: 8px; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px;
+}
+.journal-account-tabs .btn { flex: 0 0 auto; white-space: nowrap; }
