@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 
+type TopTab = "ratios" | "promedios";
 type Mode = "lote" | "sl";
 type Direction = "compra" | "venta";
 type RiskType = "pct" | "usd";
@@ -25,6 +26,221 @@ function pillStyle(active: boolean): React.CSSProperties {
 }
 
 export function RiskCalculator() {
+  const [topTab, setTopTab] = useState<TopTab>("promedios");
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div className="pill-row">
+        <button className="btn" style={pillStyle(topTab === "promedios")} onClick={() => setTopTab("promedios")}>
+          Rangos con promedios
+        </button>
+        <button className="btn" style={pillStyle(topTab === "ratios")} onClick={() => setTopTab("ratios")}>
+          Ratios
+        </button>
+      </div>
+
+      {topTab === "promedios" ? <PromediosCalculator /> : <RatiosCalculator />}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Pestaña "Rangos con promedios": réplica y ampliación de la pestaña  */
+/* "Riesgo Avanzado" de la calculadora de Club 11K — una escalera de   */
+/* entradas separadas por una distancia fija en pips, mismo lote en   */
+/* todas, hasta el total de pips que definas como Stop Loss.          */
+/* ------------------------------------------------------------------ */
+
+type PromedioEntry = { n: number; lote: number; pipsPerdida: number; perdidaUsd: number };
+
+function PromediosCalculator() {
+  const [balance, setBalance] = useState("300");
+  const [lotaje, setLotaje] = useState("0.01");
+  const [distancia, setDistancia] = useState("100");
+  const [totalPipsSL, setTotalPipsSL] = useState("600");
+  const [pipValuePerLot, setPipValuePerLot] = useState("10");
+
+  const [direction, setDirection] = useState<Direction>("compra");
+  const [entryPrice, setEntryPrice] = useState("");
+  const [priceStep, setPriceStep] = useState("0.01");
+
+  const balanceNum = parseNum(balance);
+  const lotajeNum = parseNum(lotaje);
+  const distanciaNum = parseNum(distancia);
+  const totalPipsSLNum = parseNum(totalPipsSL);
+  const pipValueNum = parseNum(pipValuePerLot);
+  const priceStepNum = parseNum(priceStep);
+  const entryPriceNum = parseNum(entryPrice);
+
+  const entries: PromedioEntry[] = useMemo(() => {
+    if (distanciaNum <= 0 || totalPipsSLNum <= 0 || lotajeNum <= 0) return [];
+    const rows: PromedioEntry[] = [];
+    let n = 1;
+    while (n <= 500) {
+      const pipsPerdida = totalPipsSLNum - (n - 1) * distanciaNum;
+      if (pipsPerdida <= 0) break;
+      rows.push({ n, lote: lotajeNum, pipsPerdida, perdidaUsd: pipsPerdida * lotajeNum * pipValueNum });
+      n++;
+    }
+    return rows;
+  }, [distanciaNum, totalPipsSLNum, lotajeNum, pipValueNum]);
+
+  const totalPerdida = entries.reduce((acc, e) => acc + e.perdidaUsd, 0);
+  const drawdownPct = balanceNum > 0 ? (totalPerdida / balanceNum) * 100 : 0;
+  const numEntradas = entries.length;
+  const loteTotal = numEntradas * lotajeNum;
+
+  // Con el mismo lote en todas las entradas, el precio medio (breakeven) de
+  // la cesta es la media simple de los offsets de cada entrada respecto a
+  // la primera (que se asume abierta al precio de mercado, offset 0).
+  const avgOffsetPips = numEntradas > 0 ? (distanciaNum * (numEntradas - 1)) / 2 : 0;
+
+  const priceLevels = useMemo(() => {
+    if (entryPrice.trim() === "" || priceStepNum <= 0 || numEntradas === 0) return null;
+    const breakevenDelta = avgOffsetPips * priceStepNum;
+    const slDelta = totalPipsSLNum * priceStepNum;
+    const breakevenPrice = direction === "compra" ? entryPriceNum - breakevenDelta : entryPriceNum + breakevenDelta;
+    const slPrice = direction === "compra" ? entryPriceNum - slDelta : entryPriceNum + slDelta;
+    return { breakevenPrice, slPrice };
+  }, [entryPrice, entryPriceNum, priceStepNum, avgOffsetPips, totalPipsSLNum, numEntradas, direction]);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div className="panel" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14 }}>
+          <div>
+            <label>Balance cuenta ($)</label>
+            <input type="text" inputMode="decimal" value={balance} onChange={(e) => setBalance(e.target.value)} />
+          </div>
+          <div>
+            <label>Lotaje (igual en cada entrada)</label>
+            <input type="text" inputMode="decimal" value={lotaje} onChange={(e) => setLotaje(e.target.value)} />
+          </div>
+          <div>
+            <label>Distancia entre promedios (pips)</label>
+            <input type="text" inputMode="decimal" value={distancia} onChange={(e) => setDistancia(e.target.value)} />
+          </div>
+          <div>
+            <label>Total de pips en SL (ej. 600)</label>
+            <input type="text" inputMode="decimal" value={totalPipsSL} onChange={(e) => setTotalPipsSL(e.target.value)} />
+            <div style={{ fontSize: 11.5, color: "var(--text-dim)", marginTop: 4 }}>
+              Es el movimiento máximo en contra que asumes: ahí se cierra toda la cesta (tu Stop Loss).
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14 }}>
+          <div>
+            <label>Valor de 1 pip por lote estándar (1.00), en $</label>
+            <input type="text" inputMode="decimal" value={pipValuePerLot} onChange={(e) => setPipValuePerLot(e.target.value)} />
+          </div>
+          <div>
+            <label>Dirección</label>
+            <div className="pill-row">
+              <button className="btn" style={pillStyle(direction === "compra")} onClick={() => setDirection("compra")}>
+                Compra
+              </button>
+              <button className="btn" style={pillStyle(direction === "venta")} onClick={() => setDirection("venta")}>
+                Venta
+              </button>
+            </div>
+          </div>
+          <div>
+            <label>Precio de la 1ª entrada (opcional)</label>
+            <input type="text" inputMode="decimal" value={entryPrice} onChange={(e) => setEntryPrice(e.target.value)} placeholder="ej. 2450.30" />
+          </div>
+          <div>
+            <label>Valor de 1 pip en precio</label>
+            <input type="text" inputMode="decimal" value={priceStep} onChange={(e) => setPriceStep(e.target.value)} />
+          </div>
+        </div>
+      </div>
+
+      <div className="panel" style={{ overflowX: "auto" }}>
+        {entries.length === 0 ? (
+          <p style={{ color: "var(--text-muted)", fontSize: 13.5 }}>
+            Ajusta el lotaje, la distancia entre promedios y el total de pips en SL para ver la escalera de entradas.
+          </p>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>Entrada</th>
+                <th>Lote</th>
+                <th>Pips pérdida</th>
+                <th>Pérdida ($)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {entries.map((e) => (
+                <tr key={e.n}>
+                  <td>{e.n}</td>
+                  <td>{fmt(e.lote, 2)}</td>
+                  <td>{fmt(e.pipsPerdida, 0)}</td>
+                  <td style={{ color: "var(--down)" }}>-{fmt(e.perdidaUsd)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div className="panel" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 16 }}>
+          <div>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 10.5, color: "var(--text-dim)", textTransform: "uppercase" }}>Nº de entradas</div>
+            <div style={{ fontSize: 20, fontFamily: "var(--font-mono)" }}>{numEntradas}</div>
+          </div>
+          <div>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 10.5, color: "var(--text-dim)", textTransform: "uppercase" }}>Lote total de la cesta</div>
+            <div style={{ fontSize: 20, fontFamily: "var(--font-mono)" }}>{fmt(loteTotal, 2)}</div>
+          </div>
+          <div>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 10.5, color: "var(--text-dim)", textTransform: "uppercase" }}>Pérdida total ($)</div>
+            <div style={{ fontSize: 20, fontFamily: "var(--font-mono)", color: "var(--down)" }}>-{fmt(totalPerdida)}</div>
+          </div>
+          <div>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 10.5, color: "var(--text-dim)", textTransform: "uppercase" }}>Drawdown (%)</div>
+            <div style={{ fontSize: 20, fontFamily: "var(--font-mono)", color: "var(--down)" }}>-{fmt(Math.abs(drawdownPct))}%</div>
+          </div>
+        </div>
+
+        <div style={{ borderTop: "1px solid var(--line)", paddingTop: 14, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
+          <div>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 10.5, color: "var(--text-dim)", textTransform: "uppercase" }}>
+              Precio medio de la cesta (breakeven)
+            </div>
+            <div style={{ fontSize: 18, fontFamily: "var(--font-mono)" }}>
+              {avgOffsetPips > 0 ? `${fmt(avgOffsetPips, 1)} pips ${direction === "compra" ? "por debajo" : "por encima"} de tu 1ª entrada` : "—"}
+            </div>
+            {priceLevels && (
+              <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 2 }}>Precio: {fmt(priceLevels.breakevenPrice, 2)}</div>
+            )}
+          </div>
+          {priceLevels && (
+            <div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 10.5, color: "var(--text-dim)", textTransform: "uppercase" }}>Precio del Stop Loss</div>
+              <div style={{ fontSize: 18, fontFamily: "var(--font-mono)", color: "var(--down)" }}>{fmt(priceLevels.slPrice, 2)}</div>
+            </div>
+          )}
+        </div>
+
+        <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
+          El precio medio es el nivel al que, si vuelve el mercado, toda la cesta queda en 0 (sin contar spread/swap) —
+          calculado con el mismo lote en cada entrada, separadas {fmt(distanciaNum, 0)} pips entre sí.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Pestaña "Ratios": calculadora de Stop Loss / Take Profit a partir   */
+/* de un ratio riesgo:beneficio (1:1, 1:2, 1:3...) para una operación  */
+/* suelta (sin escalera de promedios).                                */
+/* ------------------------------------------------------------------ */
+
+function RatiosCalculator() {
   const [mode, setMode] = useState<Mode>("lote");
   const [direction, setDirection] = useState<Direction>("compra");
 
@@ -93,20 +309,11 @@ export function RiskCalculator() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* Modo */}
       <div className="pill-row">
-        <button
-          className="btn"
-          style={pillStyle(mode === "lote")}
-          onClick={() => setMode("lote")}
-        >
+        <button className="btn" style={pillStyle(mode === "lote")} onClick={() => setMode("lote")}>
           Desde mi lote → calcular Stop Loss
         </button>
-        <button
-          className="btn"
-          style={pillStyle(mode === "sl")}
-          onClick={() => setMode("sl")}
-        >
+        <button className="btn" style={pillStyle(mode === "sl")} onClick={() => setMode("sl")}>
           Desde mi Stop Loss → calcular lote
         </button>
       </div>
@@ -120,27 +327,11 @@ export function RiskCalculator() {
           <div>
             <label>Riesgo por operación</label>
             <div style={{ display: "flex", gap: 6 }}>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={riskValue}
-                onChange={(e) => setRiskValue(e.target.value)}
-                style={{ flex: 1 }}
-              />
-              <button
-                type="button"
-                className="btn"
-                style={{ padding: "10px 12px", ...pillStyle(riskType === "pct") }}
-                onClick={() => setRiskType("pct")}
-              >
+              <input type="text" inputMode="decimal" value={riskValue} onChange={(e) => setRiskValue(e.target.value)} style={{ flex: 1 }} />
+              <button type="button" className="btn" style={{ padding: "10px 12px", ...pillStyle(riskType === "pct") }} onClick={() => setRiskType("pct")}>
                 %
               </button>
-              <button
-                type="button"
-                className="btn"
-                style={{ padding: "10px 12px", ...pillStyle(riskType === "usd") }}
-                onClick={() => setRiskType("usd")}
-              >
+              <button type="button" className="btn" style={{ padding: "10px 12px", ...pillStyle(riskType === "usd") }} onClick={() => setRiskType("usd")}>
                 $
               </button>
             </div>
@@ -176,7 +367,6 @@ export function RiskCalculator() {
         </div>
       </div>
 
-      {/* Ratio riesgo:beneficio */}
       <div className="panel" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <label style={{ marginBottom: 0 }}>Ratio riesgo : beneficio</label>
         <div className="pill-row">
@@ -204,7 +394,6 @@ export function RiskCalculator() {
         </div>
       </div>
 
-      {/* Datos específicos del modo elegido */}
       <div className="panel" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {mode === "lote" ? (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14 }}>
@@ -218,18 +407,10 @@ export function RiskCalculator() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14 }}>
               <div>
                 <label>Stop Loss (en pips)</label>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={slPipsInput}
-                  onChange={(e) => setSlPipsInput(e.target.value)}
-                  disabled={slPipsFromPrices !== null}
-                />
+                <input type="text" inputMode="decimal" value={slPipsInput} onChange={(e) => setSlPipsInput(e.target.value)} disabled={slPipsFromPrices !== null} />
               </div>
             </div>
-            <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
-              O, si lo prefieres, indica los precios y calculamos los pips por ti:
-            </div>
+            <div style={{ fontSize: 12, color: "var(--text-dim)" }}>O, si lo prefieres, indica los precios y calculamos los pips por ti:</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14 }}>
               <div>
                 <label>Precio de entrada</label>
@@ -257,7 +438,6 @@ export function RiskCalculator() {
         )}
       </div>
 
-      {/* Resultados */}
       <div className="panel" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.1em", color: "var(--text-dim)", textTransform: "uppercase" }}>
           Resultado — ratio 1 : {fmt(effectiveRatio, effectiveRatio % 1 === 0 ? 0 : 1)}
