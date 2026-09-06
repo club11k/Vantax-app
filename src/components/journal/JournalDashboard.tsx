@@ -1,16 +1,11 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Currency = "EUR" | "USD" | "CENT";
 type Source = "MANUAL" | "AI_PHOTO";
 type ChartPeriod = "day" | "week" | "month";
-
-type Account = {
-  accountUid: string;
-  currency: Currency;
-  initialBalance: number;
-};
+type FormMode = "create" | "edit" | null;
 
 type Entry = {
   id: string;
@@ -18,6 +13,14 @@ type Entry = {
   resultAmount: number;
   source: Source;
   imageNote?: string | null;
+};
+
+type AccountData = {
+  id: string;
+  accountUid: string;
+  currency: Currency;
+  initialBalance: number;
+  entries: Entry[];
 };
 
 type ChartPoint = { key: string; label: string; value: number };
@@ -174,28 +177,39 @@ const inputStyle: React.CSSProperties = {
   color: "var(--text)",
 };
 
-export function JournalDashboard({
-  initialAccount,
-  initialEntries,
-}: {
-  initialAccount: Account | null;
-  initialEntries: Entry[];
-}) {
-  const [account, setAccount] = useState<Account | null>(initialAccount);
-  const [entries, setEntries] = useState<Entry[]>(initialEntries);
-  const [editingSetup, setEditingSetup] = useState(!initialAccount);
+export function JournalDashboard({ initialAccounts }: { initialAccounts: AccountData[] }) {
+  const [accounts, setAccounts] = useState<AccountData[]>(initialAccounts);
+  const [activeId, setActiveId] = useState<string | null>(initialAccounts[0]?.id ?? null);
+  const [formMode, setFormMode] = useState<FormMode>(initialAccounts.length === 0 ? "create" : null);
   const manualFormRef = useRef<HTMLDivElement>(null);
 
-  // --- Formulario de configuración (saldo inicial / UID / moneda) ---
-  const [setupUid, setSetupUid] = useState(initialAccount?.accountUid ?? "");
-  const [setupCurrency, setSetupCurrency] = useState<Currency>(initialAccount?.currency ?? "USD");
-  const [setupBalance, setSetupBalance] = useState(
-    initialAccount ? String(initialAccount.initialBalance) : ""
-  );
+  const account = accounts.find((a) => a.id === activeId) ?? null;
+
+  // --- Formulario de cuenta: crear una nueva o editar la activa ---
+  const [setupUid, setSetupUid] = useState("");
+  const [setupCurrency, setSetupCurrency] = useState<Currency>("USD");
+  const [setupBalance, setSetupBalance] = useState("");
   const [setupLoading, setSetupLoading] = useState(false);
   const [setupError, setSetupError] = useState<string | null>(null);
 
-  async function saveSetup() {
+  function openCreateForm() {
+    setSetupUid("");
+    setSetupCurrency("USD");
+    setSetupBalance("");
+    setSetupError(null);
+    setFormMode("create");
+  }
+
+  function openEditForm() {
+    if (!account) return;
+    setSetupUid(account.accountUid);
+    setSetupCurrency(account.currency);
+    setSetupBalance(String(account.initialBalance));
+    setSetupError(null);
+    setFormMode("edit");
+  }
+
+  async function submitSetup() {
     setSetupError(null);
     const balanceNum = parseFloat(setupBalance.replace(",", "."));
     if (!setupUid.trim()) {
@@ -208,23 +222,91 @@ export function JournalDashboard({
     }
     setSetupLoading(true);
     try {
-      const res = await fetch("/api/journal/account", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accountUid: setupUid.trim(), currency: setupCurrency, initialBalance: balanceNum }),
-      });
+      if (formMode === "create") {
+        const res = await fetch("/api/journal/account", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ accountUid: setupUid.trim(), currency: setupCurrency, initialBalance: balanceNum }),
+        });
+        const data = await res.json().catch(() => ({}));
+        setSetupLoading(false);
+        if (!res.ok) {
+          setSetupError(data.error ?? "No se pudo crear la cuenta.");
+          return;
+        }
+        const newAccount: AccountData = {
+          id: data.account.id,
+          accountUid: data.account.accountUid,
+          currency: data.account.currency,
+          initialBalance: data.account.initialBalance,
+          entries: [],
+        };
+        setAccounts((prev) => [...prev, newAccount]);
+        setActiveId(newAccount.id);
+        setFormMode(null);
+      } else if (formMode === "edit" && account) {
+        const res = await fetch(`/api/journal/account/${account.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ accountUid: setupUid.trim(), currency: setupCurrency, initialBalance: balanceNum }),
+        });
+        const data = await res.json().catch(() => ({}));
+        setSetupLoading(false);
+        if (!res.ok) {
+          setSetupError(data.error ?? "No se pudo actualizar la cuenta.");
+          return;
+        }
+        setAccounts((prev) =>
+          prev.map((a) =>
+            a.id === account.id
+              ? { ...a, accountUid: data.account.accountUid, currency: data.account.currency, initialBalance: data.account.initialBalance }
+              : a
+          )
+        );
+        setFormMode(null);
+      }
+    } catch {
+      setSetupLoading(false);
+      setSetupError("No se pudo guardar. Revisa tu conexión e inténtalo de nuevo.");
+    }
+  }
+
+  async function deleteActiveAccount() {
+    if (!account) return;
+    const confirmed =
+      typeof window !== "undefined" &&
+      window.confirm(`¿Seguro que quieres borrar la cuenta "${account.accountUid}"? Se perderán todos sus resultados registrados.`);
+    if (!confirmed) return;
+    setSetupLoading(true);
+    setSetupError(null);
+    try {
+      const res = await fetch(`/api/journal/account/${account.id}`, { method: "DELETE" });
       const data = await res.json().catch(() => ({}));
       setSetupLoading(false);
       if (!res.ok) {
-        setSetupError(data.error ?? "No se pudo guardar la configuración.");
+        setSetupError(data.error ?? "No se pudo borrar la cuenta.");
         return;
       }
-      setAccount({ accountUid: setupUid.trim(), currency: setupCurrency, initialBalance: balanceNum });
-      setEditingSetup(false);
+      const rest = accounts.filter((a) => a.id !== account.id);
+      setAccounts(rest);
+      setActiveId(rest[0]?.id ?? null);
+      setFormMode(rest.length === 0 ? "create" : null);
     } catch {
       setSetupLoading(false);
-      setSetupError("No se pudo guardar la configuración. Revisa tu conexión e inténtalo de nuevo.");
+      setSetupError("No se pudo borrar la cuenta. Inténtalo de nuevo.");
     }
+  }
+
+  function switchAccount(id: string) {
+    setActiveId(id);
+    setFormMode(null);
+    setManualDate(todayStr());
+    setManualAmount("");
+    setManualError(null);
+    setProposal(null);
+    setPhotoFile(null);
+    setPhotoPreview(null);
+    setPhotoError(null);
   }
 
   // --- Formulario de resultado manual (también lo rellena un clic en el calendario) ---
@@ -234,10 +316,11 @@ export function JournalDashboard({
   const [manualError, setManualError] = useState<string | null>(null);
 
   async function saveEntry(date: string, amount: number, source: Source, imageNote?: string) {
+    if (!account) return;
     const res = await fetch("/api/journal/entries", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date, resultAmount: amount, source, imageNote }),
+      body: JSON.stringify({ accountId: account.id, date, resultAmount: amount, source, imageNote }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -250,10 +333,14 @@ export function JournalDashboard({
       source: data.entry.source,
       imageNote: data.entry.imageNote,
     };
-    setEntries((prev) => {
-      const rest = prev.filter((e) => e.date !== saved.date);
-      return [...rest, saved].sort((a, b) => a.date.localeCompare(b.date));
-    });
+    const accountId = account.id;
+    setAccounts((prev) =>
+      prev.map((a) => {
+        if (a.id !== accountId) return a;
+        const rest = a.entries.filter((e) => e.date !== saved.date);
+        return { ...a, entries: [...rest, saved].sort((x, y) => x.date.localeCompare(y.date)) };
+      })
+    );
   }
 
   async function handleManualSubmit() {
@@ -347,7 +434,10 @@ export function JournalDashboard({
   }
 
   // --- Totales ---
-  const sortedEntries = useMemo(() => [...entries].sort((a, b) => a.date.localeCompare(b.date)), [entries]);
+  const sortedEntries = useMemo(
+    () => (account ? [...account.entries].sort((a, b) => a.date.localeCompare(b.date)) : []),
+    [account]
+  );
   const entriesByDate = useMemo(() => new Map(sortedEntries.map((e) => [e.date, e])), [sortedEntries]);
   const totalResult = useMemo(() => sortedEntries.reduce((sum, e) => sum + e.resultAmount, 0), [sortedEntries]);
   const currentBalance = (account?.initialBalance ?? 0) + totalResult;
@@ -357,6 +447,10 @@ export function JournalDashboard({
   // --- Gráfico interactivo (días / semanas / meses) ---
   const [chartPeriod, setChartPeriod] = useState<ChartPeriod>("day");
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    setHoverIndex(null);
+  }, [activeId]);
 
   const chartPoints = useMemo(
     () => (account ? buildPeriodSeries(sortedEntries, account.initialBalance, chartPeriod) : []),
@@ -371,7 +465,8 @@ export function JournalDashboard({
   );
   const chartPath = buildLinePath(chartCoords);
   const isUp = chartPoints.length > 1 && chartPoints[chartPoints.length - 1].value >= chartPoints[0].value;
-  const activePoint = chartPoints.length > 0 ? chartPoints[hoverIndex ?? chartPoints.length - 1] : null;
+  const safeHoverIndex = hoverIndex !== null && hoverIndex < chartPoints.length ? hoverIndex : null;
+  const activePoint = chartPoints.length > 0 ? chartPoints[safeHoverIndex ?? chartPoints.length - 1] : null;
 
   function selectPeriod(p: ChartPeriod) {
     setChartPeriod(p);
@@ -380,8 +475,8 @@ export function JournalDashboard({
 
   // --- Calendario mensual (clic en un día = editar/añadir ese resultado) ---
   const [calendarCursor, setCalendarCursor] = useState<{ year: number; month: number }>(() => {
-    if (sortedEntries.length > 0) {
-      const [y, m] = sortedEntries[sortedEntries.length - 1].date.split("-").map(Number);
+    if (initialAccounts[0]?.entries.length) {
+      const [y, m] = initialAccounts[0].entries[initialAccounts[0].entries.length - 1].date.split("-").map(Number);
       return { year: y, month: m - 1 };
     }
     const now = new Date();
@@ -418,64 +513,101 @@ export function JournalDashboard({
     manualFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
-  if (!account || editingSetup) {
+  const accountTabs = accounts.length > 0 && (
+    <div className="journal-account-tabs">
+      {accounts.map((a) => (
+        <button
+          key={a.id}
+          className="btn"
+          style={{ fontSize: 12.5, ...(a.id === activeId && !formMode ? { borderColor: "var(--violet)" } : {}) }}
+          onClick={() => switchAccount(a.id)}
+        >
+          {a.accountUid}
+        </button>
+      ))}
+      <button className="btn" style={{ fontSize: 12.5 }} onClick={openCreateForm}>
+        + Añadir cuenta
+      </button>
+    </div>
+  );
+
+  if (formMode === "create" || formMode === "edit") {
     return (
-      <div className="panel" style={{ maxWidth: 480, display: "flex", flexDirection: "column", gap: 12 }}>
-        <h2 style={{ fontSize: 16, margin: 0 }}>
-          {account ? "Editar configuración de tu cuenta" : "Configura tu cuenta para empezar"}
-        </h2>
-        <div>
-          <label style={{ display: "block", fontSize: 12.5, marginBottom: 4 }}>UID de la cuenta</label>
-          <input
-            type="text"
-            value={setupUid}
-            onChange={(e) => setSetupUid(e.target.value)}
-            placeholder="Ej: 51234567"
-            style={{ ...inputStyle, width: "100%" }}
-          />
-        </div>
-        <div>
-          <label style={{ display: "block", fontSize: 12.5, marginBottom: 4 }}>Moneda de la cuenta</label>
-          <select
-            value={setupCurrency}
-            onChange={(e) => setSetupCurrency(e.target.value as Currency)}
-            style={{ ...inputStyle, width: "100%" }}
-          >
-            {CURRENCY_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label style={{ display: "block", fontSize: 12.5, marginBottom: 4 }}>Saldo inicial</label>
-          <input
-            type="text"
-            inputMode="decimal"
-            value={setupBalance}
-            onChange={(e) => setSetupBalance(e.target.value)}
-            placeholder="Ej: 1000"
-            style={{ ...inputStyle, width: "100%" }}
-          />
-        </div>
-        {setupError && <div className="error-msg">{setupError}</div>}
-        <div className="btn-row">
-          <button className="btn btn-primary" onClick={saveSetup} disabled={setupLoading}>
-            {setupLoading ? "Guardando…" : "Guardar y continuar"}
-          </button>
-          {account && (
-            <button className="btn" onClick={() => setEditingSetup(false)} disabled={setupLoading}>
-              Cancelar
+      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+        {accountTabs}
+        <div className="panel" style={{ maxWidth: 480, display: "flex", flexDirection: "column", gap: 12 }}>
+          <h2 style={{ fontSize: 16, margin: 0 }}>
+            {formMode === "create" ? "Añadir una cuenta nueva" : "Editar cuenta"}
+          </h2>
+          <div>
+            <label style={{ display: "block", fontSize: 12.5, marginBottom: 4 }}>UID de la cuenta</label>
+            <input
+              type="text"
+              value={setupUid}
+              onChange={(e) => setSetupUid(e.target.value)}
+              placeholder="Ej: 51234567"
+              style={{ ...inputStyle, width: "100%" }}
+            />
+          </div>
+          <div>
+            <label style={{ display: "block", fontSize: 12.5, marginBottom: 4 }}>Moneda de la cuenta</label>
+            <select
+              value={setupCurrency}
+              onChange={(e) => setSetupCurrency(e.target.value as Currency)}
+              style={{ ...inputStyle, width: "100%" }}
+            >
+              {CURRENCY_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label style={{ display: "block", fontSize: 12.5, marginBottom: 4 }}>Saldo inicial</label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={setupBalance}
+              onChange={(e) => setSetupBalance(e.target.value)}
+              placeholder="Ej: 1000"
+              style={{ ...inputStyle, width: "100%" }}
+            />
+          </div>
+          {setupError && <div className="error-msg">{setupError}</div>}
+          <div className="btn-row">
+            <button className="btn btn-primary" onClick={submitSetup} disabled={setupLoading}>
+              {setupLoading ? "Guardando…" : formMode === "create" ? "Crear cuenta" : "Guardar cambios"}
             </button>
-          )}
+            {accounts.length > 0 && (
+              <button className="btn" onClick={() => setFormMode(null)} disabled={setupLoading}>
+                Cancelar
+              </button>
+            )}
+            {formMode === "edit" && (
+              <button
+                className="btn"
+                style={{ marginLeft: "auto", color: "var(--down)", borderColor: "var(--down)" }}
+                onClick={deleteActiveAccount}
+                disabled={setupLoading}
+              >
+                Borrar esta cuenta
+              </button>
+            )}
+          </div>
         </div>
       </div>
     );
   }
 
+  if (!account) {
+    return <div>{accountTabs}</div>;
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {accountTabs}
+
       <div className="panel" style={{ display: "flex", flexWrap: "wrap", gap: 24, justifyContent: "space-between" }}>
         <div>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-dim)", textTransform: "uppercase" }}>
@@ -496,8 +628,8 @@ export function JournalDashboard({
           </div>
           <div style={{ fontSize: 16, marginTop: 4 }}>{formatMoney(account.initialBalance, account.currency)}</div>
         </div>
-        <button className="btn" style={{ alignSelf: "center", fontSize: 12.5 }} onClick={() => setEditingSetup(true)}>
-          Editar configuración
+        <button className="btn" style={{ alignSelf: "center", fontSize: 12.5 }} onClick={openEditForm}>
+          Editar esta cuenta
         </button>
       </div>
 
@@ -540,7 +672,7 @@ export function JournalDashboard({
                   key={chartPoints[i].key}
                   cx={c.x}
                   cy={c.y}
-                  r={hoverIndex === i ? 5 : 3}
+                  r={safeHoverIndex === i ? 5 : 3}
                   fill={isUp ? "var(--up)" : "var(--down)"}
                   stroke="var(--bg-panel)"
                   strokeWidth={1}
