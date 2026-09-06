@@ -21,6 +21,7 @@
   --font-display: 'Inter', sans-serif;
   --font-body: 'Inter', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -195,4 +196,3 @@ details.indicators[open] summary::before { content: '▾ '; }
     letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 2px;
   }
 }
-
