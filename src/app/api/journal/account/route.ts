@@ -7,6 +7,11 @@ import { prisma } from "@/lib/prisma";
 // Journaly está disponible para cualquier usuario con sesión iniciada,
 // independiente del acceso a Análisis o al Centro de Mercado — es una
 // herramienta de seguimiento personal, no una funcionalidad de pago.
+//
+// Un usuario puede tener varias cuentas de trading en su diario (ej. una
+// cuenta principal y otra de una prop firm). Esta ruta lista todas las del
+// usuario y crea cuentas nuevas; para editar o borrar una cuenta concreta,
+// ver /api/journal/account/[id].
 
 const accountSchema = z.object({
   accountUid: z.string().trim().min(1, "El UID de la cuenta es obligatorio.").max(100),
@@ -21,8 +26,11 @@ export async function GET() {
   }
   const userId = (session.user as any).id as string;
 
-  const account = await prisma.journalAccount.findUnique({ where: { userId } });
-  return NextResponse.json({ account });
+  const accounts = await prisma.journalAccount.findMany({
+    where: { userId },
+    orderBy: { createdAt: "asc" },
+  });
+  return NextResponse.json({ accounts });
 }
 
 export async function POST(req: Request) {
@@ -39,14 +47,8 @@ export async function POST(req: Request) {
   }
 
   try {
-    const account = await prisma.journalAccount.upsert({
-      where: { userId },
-      update: {
-        accountUid: parsed.data.accountUid,
-        currency: parsed.data.currency,
-        initialBalance: parsed.data.initialBalance,
-      },
-      create: {
+    const account = await prisma.journalAccount.create({
+      data: {
         userId,
         accountUid: parsed.data.accountUid,
         currency: parsed.data.currency,
@@ -55,9 +57,9 @@ export async function POST(req: Request) {
     });
     return NextResponse.json({ account });
   } catch (err) {
-    console.error("Error guardando la cuenta de Journaly:", err);
+    console.error("Error creando la cuenta de Journaly:", err);
     return NextResponse.json(
-      { error: "No se pudo guardar la configuración de Journaly. Inténtalo de nuevo en unos segundos." },
+      { error: "No se pudo crear la cuenta. Inténtalo de nuevo en unos segundos." },
       { status: 500 }
     );
   }
