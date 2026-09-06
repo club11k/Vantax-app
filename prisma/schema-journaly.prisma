@@ -28,6 +28,17 @@ enum AnalysisFormat {
   TECNICO // salida estructurada de datos/estadísticas
 }
 
+enum JournalCurrency {
+  EUR
+  USD
+  CENT // cuenta "cent" (broker denomina la cuenta en céntimos, ej. 100.00 = 1,00 unidad base)
+}
+
+enum JournalEntrySource {
+  MANUAL   // el usuario escribió la cifra a mano
+  AI_PHOTO // la cifra vino de una foto leída por IA, confirmada por el usuario antes de guardarse
+}
+
 model User {
   id                String   @id @default(cuid())
   email             String   @unique
@@ -58,6 +69,8 @@ model User {
   // acceso solo al centro de mercado, solo a análisis, o a los dos, a
   // miembros de la comunidad sin pasar por Stripe.
   marketAccess      Boolean  @default(false)
+
+  journalAccount    JournalAccount?
 
   @@index([role])
 }
@@ -107,5 +120,38 @@ model AdminAuditLog {
   action    String
   detail    Json?
   createdAt DateTime @default(now())
+}
+
+// Journaly: diario de trading personal. Un JournalAccount por usuario (el
+// "setup" con saldo inicial, UID de cuenta y moneda), y muchos
+// JournalEntry (uno por día operado) que se van sumando al saldo inicial
+// para mostrar el progreso. Disponible para cualquier usuario con sesión
+// iniciada, independiente del acceso a Análisis o Centro de Mercado.
+model JournalAccount {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountUid     String   // UID/número de cuenta de trading, tal como lo escribe el usuario
+  currency       JournalCurrency @default(USD)
+  initialBalance Float
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  entries        JournalEntry[]
+}
+
+model JournalEntry {
+  id           String   @id @default(cuid())
+  accountId    String
+  account      JournalAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  date         DateTime @db.Date // un resultado por día (fecha calendario, sin hora)
+  resultAmount Float    // resultado del día: positivo (ganancia) o negativo (pérdida), en la moneda de la cuenta
+  source       JournalEntrySource @default(MANUAL)
+  imageNote    String?  // nota/lectura textual de la IA cuando source = AI_PHOTO (auditoría, no se usa para calcular nada más)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([accountId, date])
+  @@index([accountId, date])
 }
 
