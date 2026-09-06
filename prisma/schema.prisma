@@ -70,7 +70,7 @@ model User {
   // miembros de la comunidad sin pasar por Stripe.
   marketAccess      Boolean  @default(false)
 
-  journalAccount    JournalAccount?
+  journalAccounts   JournalAccount[]
 
   @@index([role])
 }
@@ -122,14 +122,15 @@ model AdminAuditLog {
   createdAt DateTime @default(now())
 }
 
-// Journaly: diario de trading personal. Un JournalAccount por usuario (el
-// "setup" con saldo inicial, UID de cuenta y moneda), y muchos
-// JournalEntry (uno por día operado) que se van sumando al saldo inicial
-// para mostrar el progreso. Disponible para cualquier usuario con sesión
-// iniciada, independiente del acceso a Análisis o Centro de Mercado.
+// Journaly: diario de trading personal. Un usuario puede tener varias
+// JournalAccount (varias cuentas de trading que quiera llevar por separado),
+// y cada una tiene muchas JournalEntry (una por día operado) que se van
+// sumando al saldo inicial de esa cuenta para mostrar el progreso.
+// Disponible para cualquier usuario con sesión iniciada, independiente del
+// acceso a Análisis o Centro de Mercado.
 model JournalAccount {
   id             String   @id @default(cuid())
-  userId         String   @unique
+  userId         String
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   accountUid     String   // UID/número de cuenta de trading, tal como lo escribe el usuario
   currency       JournalCurrency @default(USD)
@@ -138,6 +139,8 @@ model JournalAccount {
   updatedAt      DateTime @updatedAt
 
   entries        JournalEntry[]
+
+  @@index([userId])
 }
 
 model JournalEntry {
