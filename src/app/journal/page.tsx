@@ -8,7 +8,9 @@ import { JournalDashboard } from "@/components/journal/JournalDashboard";
 // Journaly no depende de marketAccess ni de subscriptionStatus/plan: es una
 // herramienta de seguimiento personal disponible para cualquier usuario con
 // sesión iniciada, sin importar qué acceso tenga a Análisis o al Centro de
-// Mercado.
+// Mercado. Un usuario puede llevar varias cuentas de trading a la vez (ej.
+// una principal y otra de una prop firm), así que aquí se traen todas sus
+// cuentas junto con las entradas de cada una.
 export default async function JournalPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
@@ -16,10 +18,13 @@ export default async function JournalPage() {
   }
   const userId = (session.user as any).id as string;
 
-  const account = await prisma.journalAccount.findUnique({ where: { userId } });
-  const entries = account
-    ? await prisma.journalEntry.findMany({ where: { accountId: account.id }, orderBy: { date: "asc" } })
-    : [];
+  const accounts = await prisma.journalAccount.findMany({
+    where: { userId },
+    orderBy: { createdAt: "asc" },
+  });
+  const entriesByAccount = await Promise.all(
+    accounts.map((a) => prisma.journalEntry.findMany({ where: { accountId: a.id }, orderBy: { date: "asc" } }))
+  );
 
   return (
     <div className="container" style={{ paddingTop: 40 }}>
@@ -45,26 +50,23 @@ export default async function JournalPage() {
         </div>
       </div>
       <p style={{ color: "var(--text-muted)", fontSize: 13.5, marginBottom: 24, maxWidth: 640 }}>
-        Tu diario de trading personal: registra el resultado de cada día a mano o subiendo una foto, y sigue tu
-        progreso desde tu saldo inicial.
+        Tu diario de trading personal: lleva una o varias cuentas, registra el resultado de cada día a mano o
+        subiendo una foto, y sigue el progreso de cada una desde su saldo inicial.
       </p>
 
       <JournalDashboard
-        initialAccount={
-          account
-            ? {
-                accountUid: account.accountUid,
-                currency: account.currency as "EUR" | "USD" | "CENT",
-                initialBalance: account.initialBalance,
-              }
-            : null
-        }
-        initialEntries={entries.map((e) => ({
-          id: e.id,
-          date: e.date.toISOString().slice(0, 10),
-          resultAmount: e.resultAmount,
-          source: e.source as "MANUAL" | "AI_PHOTO",
-          imageNote: e.imageNote,
+        initialAccounts={accounts.map((account, i) => ({
+          id: account.id,
+          accountUid: account.accountUid,
+          currency: account.currency as "EUR" | "USD" | "CENT",
+          initialBalance: account.initialBalance,
+          entries: entriesByAccount[i].map((e) => ({
+            id: e.id,
+            date: e.date.toISOString().slice(0, 10),
+            resultAmount: e.resultAmount,
+            source: e.source as "MANUAL" | "AI_PHOTO",
+            imageNote: e.imageNote,
+          })),
         }))}
       />
     </div>
