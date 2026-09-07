@@ -92,6 +92,17 @@ export async function toggleMarketAccess(userId: string, enabled: boolean) {
   revalidatePath("/admin/users");
 }
 
+// Permiso para pedirle cambios a la IA sobre un análisis recién generado,
+// como una conversación, antes de darlo por bueno. Independiente en base de
+// datos, pero sin efecto real si el usuario no tiene además acceso a
+// Análisis (plan activo) — sin plan no hay nada que editar.
+export async function toggleAnalysisChatAccess(userId: string, enabled: boolean) {
+  const admin = await requireAdmin();
+  await prisma.user.update({ where: { id: userId }, data: { analysisChatAccess: enabled } });
+  await logAction(admin.id, "toggle_analysis_chat_access", { userId, enabled });
+  revalidatePath("/admin/users");
+}
+
 export async function toggleUserSuspended(userId: string, suspended: boolean) {
   const admin = await requireAdmin();
   await prisma.user.update({ where: { id: userId }, data: { suspended } });
@@ -167,4 +178,3 @@ export async function updateSetting(key: string, value: string) {
   await logAction(admin.id, "update_setting", { key });
   revalidatePath("/admin/settings");
 }
-
