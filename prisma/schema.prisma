@@ -70,6 +70,14 @@ model User {
   // miembros de la comunidad sin pasar por Stripe.
   marketAccess      Boolean  @default(false)
 
+  // Permite, justo después de generar un análisis, pedirle cambios a la IA
+  // como una conversación ("cámbiame esto", "añade lo otro") antes de darlo
+  // por bueno — los ajustes dentro de esa conversación no gastan cuota, solo
+  // la generación inicial. Depende de que el usuario ya tenga acceso a
+  // Análisis (subscriptionStatus + plan): sin eso no tiene efecto aunque
+  // esté activado. Se otorga por separado desde /admin/usuarios.
+  analysisChatAccess Boolean @default(false)
+
   journalAccounts   JournalAccount[]
 
   @@index([role])
@@ -157,4 +165,3 @@ model JournalEntry {
   @@unique([accountId, date])
   @@index([accountId, date])
 }
-
