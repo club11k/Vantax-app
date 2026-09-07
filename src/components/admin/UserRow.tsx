@@ -1,7 +1,15 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { resetUserQuota, setUserPlan, toggleUserSuspended, setUserRole, grantFreeAccess, toggleMarketAccess } from "@/app/admin/actions";
+import {
+  resetUserQuota,
+  setUserPlan,
+  toggleUserSuspended,
+  setUserRole,
+  grantFreeAccess,
+  toggleMarketAccess,
+  toggleAnalysisChatAccess,
+} from "@/app/admin/actions";
 
 type Plan = { id: string; name: string };
 type UserRowData = {
@@ -17,6 +25,7 @@ type UserRowData = {
   planQuota: number | null;
   planIsFree: boolean;
   marketAccess: boolean;
+  analysisChatAccess: boolean;
 };
 
 export function UserRow({ user, plans }: { user: UserRowData; plans: Plan[] }) {
@@ -35,14 +44,29 @@ export function UserRow({ user, plans }: { user: UserRowData; plans: Plan[] }) {
         {user.suspended && <span className="tag neg" style={{ marginLeft: 6 }}>Suspendido</span>}
       </td>
       <td>
-        <button
-          className="btn"
-          disabled={isPending}
-          style={user.marketAccess ? { borderColor: "var(--up)", color: "var(--up)" } : {}}
-          onClick={() => startTransition(() => toggleMarketAccess(user.id, !user.marketAccess))}
-        >
-          {user.marketAccess ? "Mercado: abierto" : "Mercado: bloqueado"}
-        </button>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-start" }}>
+          <button
+            className="btn"
+            disabled={isPending}
+            style={user.marketAccess ? { borderColor: "var(--up)", color: "var(--up)" } : {}}
+            onClick={() => startTransition(() => toggleMarketAccess(user.id, !user.marketAccess))}
+          >
+            {user.marketAccess ? "Mercado: abierto" : "Mercado: bloqueado"}
+          </button>
+          <button
+            className="btn"
+            disabled={isPending}
+            title={
+              user.subscriptionStatus !== "ACTIVE"
+                ? "Sin efecto: este usuario no tiene acceso a Análisis (plan activo) todavía."
+                : undefined
+            }
+            style={user.analysisChatAccess ? { borderColor: "var(--up)", color: "var(--up)" } : {}}
+            onClick={() => startTransition(() => toggleAnalysisChatAccess(user.id, !user.analysisChatAccess))}
+          >
+            {user.analysisChatAccess ? "Editar con IA: abierto" : "Editar con IA: bloqueado"}
+          </button>
+        </div>
       </td>
       <td>
         <select
@@ -107,4 +131,3 @@ export function UserRow({ user, plans }: { user: UserRowData; plans: Plan[] }) {
     </tr>
   );
 }
-
