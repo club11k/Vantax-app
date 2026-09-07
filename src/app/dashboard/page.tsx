@@ -115,7 +115,11 @@ export default async function DashboardPage() {
           <div style={{ marginBottom: 10, fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.1em", color: "var(--text-dim)", textTransform: "uppercase" }}>
             Nuevo análisis
           </div>
-          <AnalysisGenerator remaining={quota.remaining} isAdmin={user?.role === "ADMIN"} />
+          <AnalysisGenerator
+            remaining={quota.remaining}
+            isAdmin={user?.role === "ADMIN"}
+            chatAccess={!!hasActivePlan && !!user?.analysisChatAccess}
+          />
         </>
       )}
 
