@@ -33,14 +33,29 @@ function newRow(label: string): ImageRow {
   return { id: `row-${rowIdCounter}`, label, file: null, preview: null };
 }
 
-export function AnalysisGenerator({ remaining, isAdmin = false }: { remaining: number; isAdmin?: boolean }) {
+type ChatTurn = { instruction: string; loading?: boolean; error?: string | null };
+
+export function AnalysisGenerator({
+  remaining,
+  isAdmin = false,
+  chatAccess = false,
+}: {
+  remaining: number;
+  isAdmin?: boolean;
+  chatAccess?: boolean;
+}) {
   const [format, setFormat] = useState<Format>("MENSAJE");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
+  const [analysisId, setAnalysisId] = useState<string | null>(null);
   const [imageRows, setImageRows] = useState<ImageRow[]>(() =>
     isAdmin ? [newRow("1H"), newRow("4H"), newRow("Diario"), newRow("Semanal")] : []
   );
+
+  const [chatInstruction, setChatInstruction] = useState("");
+  const [chatTurns, setChatTurns] = useState<ChatTurn[]>([]);
+  const [chatLoading, setChatLoading] = useState(false);
 
   function addRow() {
     setImageRows((rows) => [...rows, newRow("")]);
@@ -64,6 +79,9 @@ export function AnalysisGenerator({ remaining, isAdmin = false }: { remaining: n
     setLoading(true);
     setError(null);
     setResult(null);
+    setAnalysisId(null);
+    setChatTurns([]);
+    setChatInstruction("");
 
     try {
       let images: { label: string; mediaType: string; base64Data: string }[] | undefined;
@@ -92,11 +110,49 @@ export function AnalysisGenerator({ remaining, isAdmin = false }: { remaining: n
         return;
       }
       setResult(data.content);
-      // Refrescamos para que la cuota mostrada en el resto de la página se actualice.
-      setTimeout(() => window.location.reload(), 1200);
+      setAnalysisId(data.id ?? null);
+      if (!chatAccess) {
+        // Refrescamos para que la cuota mostrada en el resto de la página se actualice.
+        setTimeout(() => window.location.reload(), 1200);
+      }
+      // Con acceso al chat de edición no recargamos automáticamente: dejamos
+      // la conversación abierta y es el propio usuario quien, con el botón
+      // "Terminar y volver a mi panel", decide cuándo cerrarla.
     } catch {
       setLoading(false);
       setError("No se pudieron procesar las imágenes. Prueba de nuevo.");
+    }
+  }
+
+  async function handleSendChat() {
+    const instruction = chatInstruction.trim();
+    if (!instruction || !analysisId) return;
+
+    setChatInstruction("");
+    setChatLoading(true);
+    setChatTurns((turns) => [...turns, { instruction, loading: true }]);
+
+    try {
+      const res = await fetch("/api/analysis/refine", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ analysisId, instruction }),
+      });
+      const data = await res.json();
+      setChatLoading(false);
+      if (!res.ok) {
+        setChatTurns((turns) =>
+          turns.map((t, i) => (i === turns.length - 1 ? { ...t, loading: false, error: data.error ?? "No se pudo aplicar el cambio." } : t))
+        );
+        return;
+      }
+      setResult(data.content);
+      setChatTurns((turns) => turns.map((t, i) => (i === turns.length - 1 ? { ...t, loading: false } : t)));
+    } catch {
+      setChatLoading(false);
+      setChatTurns((turns) =>
+        turns.map((t, i) => (i === turns.length - 1 ? { ...t, loading: false, error: "No se pudo aplicar el cambio. Prueba de nuevo." } : t))
+      );
     }
   }
 
@@ -193,8 +249,57 @@ export function AnalysisGenerator({ remaining, isAdmin = false }: { remaining: n
           {result}
         </div>
       )}
+
+      {result && chatAccess && analysisId && (
+        <div className="panel" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.1em", color: "var(--text-dim)", textTransform: "uppercase" }}>
+            Pide cambios a la IA
+          </div>
+          <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: 0 }}>
+            Escribe qué quieres ajustar ("cámbiame esto", "añade lo otro"...) — no gasta cuota, puedes pedir tantos
+            cambios como quieras antes de terminar.
+          </p>
+
+          {chatTurns.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {chatTurns.map((t, i) => (
+                <div key={i} style={{ fontSize: 12.5 }}>
+                  <div style={{ color: "var(--violet-bright)" }}>Tú: {t.instruction}</div>
+                  {t.loading && <div style={{ color: "var(--text-dim)" }}>Aplicando el cambio…</div>}
+                  {t.error && <div className="error-msg">{t.error}</div>}
+                  {!t.loading && !t.error && <div style={{ color: "var(--up)" }}>Cambio aplicado ✓</div>}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <input
+              type="text"
+              placeholder="Ej: hazlo más corto, o añade el dato de NFP"
+              value={chatInstruction}
+              onChange={(e) => setChatInstruction(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !chatLoading) handleSendChat();
+              }}
+              style={{ flex: 1, minWidth: 220 }}
+              disabled={chatLoading}
+            />
+            <button className="btn" onClick={handleSendChat} disabled={chatLoading || !chatInstruction.trim()}>
+              {chatLoading ? "Enviando…" : "Enviar"}
+            </button>
+          </div>
+
+          <button
+            className="btn btn-primary"
+            style={{ alignSelf: "flex-start" }}
+            onClick={() => window.location.reload()}
+          >
+            Terminar y volver a mi panel
+          </button>
+        </div>
+      )}
     </div>
   );
 }
-
 
