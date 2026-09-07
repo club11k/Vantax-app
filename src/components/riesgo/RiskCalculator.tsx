@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 
-type TopTab = "ratios" | "promedios";
+type TopTab = "ratios" | "promedios" | "diaria" | "mensual";
 type Mode = "lote" | "sl";
 type RiskType = "pct" | "usd";
 
@@ -38,12 +38,222 @@ export function RiskCalculator() {
         <button className="btn" style={pillStyle(topTab === "promedios")} onClick={() => setTopTab("promedios")}>
           Rangos con promedios
         </button>
+        <button className="btn" style={pillStyle(topTab === "diaria")} onClick={() => setTopTab("diaria")}>
+          Calculadora diaria
+        </button>
+        <button className="btn" style={pillStyle(topTab === "mensual")} onClick={() => setTopTab("mensual")}>
+          Calculadora mensual
+        </button>
         <button className="btn" style={pillStyle(topTab === "ratios")} onClick={() => setTopTab("ratios")}>
           Ratios
         </button>
       </div>
 
-      {topTab === "promedios" ? <PromediosCalculator /> : <RatiosCalculator />}
+      {topTab === "promedios" && <PromediosCalculator />}
+      {topTab === "diaria" && <DiariaCalculator />}
+      {topTab === "mensual" && <MensualCalculator />}
+      {topTab === "ratios" && <RatiosCalculator />}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Pestaña "Calculadora diaria": réplica de la pestaña "Calculadora    */
+/* diaria" de Club 11K — pips fijos cada día de trading, ganancia      */
+/* acumulada día a día hasta el balance final.                        */
+/* ------------------------------------------------------------------ */
+
+type DiaRow = { dia: number; pips: number; ganancia: number; acumulada: number; balance: number };
+
+function DiariaCalculator() {
+  const [balance, setBalance] = useState("10000");
+  const [pipsDiarios, setPipsDiarios] = useState("500");
+  const [lotaje, setLotaje] = useState("0.03");
+  const [diasOperados, setDiasOperados] = useState("22");
+
+  const balanceNum = parseNum(balance);
+  const pipsNum = parseNum(pipsDiarios);
+  const lotajeNum = parseNum(lotaje);
+  const diasNum = Math.max(0, Math.min(366, Math.round(parseNum(diasOperados))));
+
+  const ganPorDia = pipsNum * lotajeNum * PIP_VALUE_PER_LOT;
+
+  const rows: DiaRow[] = useMemo(() => {
+    const out: DiaRow[] = [];
+    let acumulada = 0;
+    for (let d = 1; d <= diasNum; d++) {
+      acumulada += ganPorDia;
+      out.push({ dia: d, pips: pipsNum, ganancia: ganPorDia, acumulada, balance: balanceNum + acumulada });
+    }
+    return out;
+  }, [diasNum, ganPorDia, pipsNum, balanceNum]);
+
+  const totalPips = pipsNum * diasNum;
+  const totalGanancia = ganPorDia * diasNum;
+  const balanceFinal = balanceNum + totalGanancia;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div className="panel" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 14 }}>
+          <div>
+            <label>Balance inicial ($)</label>
+            <input type="text" inputMode="decimal" value={balance} onChange={(e) => setBalance(e.target.value)} />
+          </div>
+          <div>
+            <label>Pips diarios</label>
+            <input type="text" inputMode="decimal" value={pipsDiarios} onChange={(e) => setPipsDiarios(e.target.value)} />
+          </div>
+          <div>
+            <label>Lotaje</label>
+            <input type="text" inputMode="decimal" value={lotaje} onChange={(e) => setLotaje(e.target.value)} />
+          </div>
+          <div>
+            <label>Días operados</label>
+            <input type="text" inputMode="decimal" value={diasOperados} onChange={(e) => setDiasOperados(e.target.value)} />
+          </div>
+        </div>
+      </div>
+
+      <div className="panel" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 16 }}>
+        <div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 10.5, color: "var(--text-dim)", textTransform: "uppercase" }}>Total pips</div>
+          <div style={{ fontSize: 20, fontFamily: "var(--font-mono)" }}>{fmt(totalPips, 0)}</div>
+        </div>
+        <div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 10.5, color: "var(--text-dim)", textTransform: "uppercase" }}>Total ganancia ($)</div>
+          <div style={{ fontSize: 20, fontFamily: "var(--font-mono)", color: "var(--up)" }}>+{fmt(totalGanancia)}</div>
+        </div>
+        <div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 10.5, color: "var(--text-dim)", textTransform: "uppercase" }}>Balance final ($)</div>
+          <div style={{ fontSize: 20, fontFamily: "var(--font-mono)" }}>{fmt(balanceFinal)}</div>
+        </div>
+      </div>
+
+      <div className="panel" style={{ overflowX: "auto" }}>
+        {rows.length === 0 ? (
+          <p style={{ color: "var(--text-muted)", fontSize: 13.5 }}>Indica los días operados para ver la tabla día a día.</p>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>Día</th>
+                <th>Pips</th>
+                <th>Ganancia $</th>
+                <th>Ganancia acumulada $</th>
+                <th>Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.dia}>
+                  <td>{r.dia}</td>
+                  <td>{fmt(r.pips, 0)}</td>
+                  <td style={{ color: "var(--up)" }}>+{fmt(r.ganancia)}</td>
+                  <td style={{ color: "var(--up)" }}>+{fmt(r.acumulada)}</td>
+                  <td>{fmt(r.balance)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Pestaña "Calculadora mensual": réplica de la pestaña "Calculadora   */
+/* mensual" de Club 11K — proyección a 12 meses reinvirtiendo siempre  */
+/* sobre el mismo capital inicial (sin componer el lote).             */
+/* ------------------------------------------------------------------ */
+
+type MesRow = { mes: number; capitalInicial: number; ganAcumuladas: number; capitalTotal: number };
+
+function MensualCalculator() {
+  const [balance, setBalance] = useState("10000");
+  const [pipsDiarios, setPipsDiarios] = useState("500");
+  const [lotaje, setLotaje] = useState("0.01");
+  const [diasOperadosMes, setDiasOperadosMes] = useState("22");
+
+  const balanceNum = parseNum(balance);
+  const pipsNum = parseNum(pipsDiarios);
+  const lotajeNum = parseNum(lotaje);
+  const diasMesNum = parseNum(diasOperadosMes);
+
+  const pipsMensuales = pipsNum * diasMesNum;
+  const ganMensual = pipsMensuales * lotajeNum * PIP_VALUE_PER_LOT;
+
+  const rows: MesRow[] = useMemo(() => {
+    const out: MesRow[] = [];
+    for (let m = 1; m <= 12; m++) {
+      const ganAcumuladas = ganMensual * m;
+      out.push({ mes: m, capitalInicial: balanceNum, ganAcumuladas, capitalTotal: balanceNum + ganAcumuladas });
+    }
+    return out;
+  }, [ganMensual, balanceNum]);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div className="panel" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 14 }}>
+          <div>
+            <label>Balance inicial ($)</label>
+            <input type="text" inputMode="decimal" value={balance} onChange={(e) => setBalance(e.target.value)} />
+          </div>
+          <div>
+            <label>Pips diarios</label>
+            <input type="text" inputMode="decimal" value={pipsDiarios} onChange={(e) => setPipsDiarios(e.target.value)} />
+          </div>
+          <div>
+            <label>Lotaje</label>
+            <input type="text" inputMode="decimal" value={lotaje} onChange={(e) => setLotaje(e.target.value)} />
+          </div>
+          <div>
+            <label>Días operados al mes</label>
+            <input type="text" inputMode="decimal" value={diasOperadosMes} onChange={(e) => setDiasOperadosMes(e.target.value)} />
+          </div>
+        </div>
+      </div>
+
+      <div className="panel" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 16 }}>
+        <div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 10.5, color: "var(--text-dim)", textTransform: "uppercase" }}>Pips mensuales</div>
+          <div style={{ fontSize: 20, fontFamily: "var(--font-mono)" }}>{fmt(pipsMensuales, 0)}</div>
+        </div>
+        <div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 10.5, color: "var(--text-dim)", textTransform: "uppercase" }}>Ganancia mensual ($)</div>
+          <div style={{ fontSize: 20, fontFamily: "var(--font-mono)", color: "var(--up)" }}>+{fmt(ganMensual)}</div>
+        </div>
+      </div>
+
+      <div className="panel" style={{ overflowX: "auto" }}>
+        <table>
+          <thead>
+            <tr>
+              <th>Mes</th>
+              <th>Capital inicial</th>
+              <th>Gan. acumuladas</th>
+              <th>Capital total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.mes}>
+                <td>{r.mes}</td>
+                <td>{fmt(r.capitalInicial)}</td>
+                <td style={{ color: "var(--up)" }}>+{fmt(r.ganAcumuladas)}</td>
+                <td>{fmt(r.capitalTotal)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
+        Cada mes reparte la misma ganancia mensual sobre el capital inicial (no compone el lote mes a mes) — igual que
+        tu calculadora mensual de Club 11K.
+      </div>
     </div>
   );
 }
