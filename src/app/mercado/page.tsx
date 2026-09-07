@@ -138,7 +138,7 @@ export default async function MercadoPage() {
   if (snapshot.macro.coreCpiYoY) inflacionItems.push({ label: "Core CPI interanual", value: `${snapshot.macro.coreCpiYoY.value.toFixed(2)}%`, date: snapshot.macro.coreCpiYoY.date, source: "FRED — CPILFESL" });
   if (snapshot.macro.pceYoY) inflacionItems.push({ label: "PCE interanual", value: `${snapshot.macro.pceYoY.value.toFixed(2)}%`, date: snapshot.macro.pceYoY.date, source: "FRED — PCEPI" });
   if (snapshot.macro.corePceYoY) inflacionItems.push({ label: "Core PCE interanual", value: `${snapshot.macro.corePceYoY.value.toFixed(2)}%`, date: snapshot.macro.corePceYoY.date, source: "FRED — PCEPILFE" });
-  if (snapshot.macro.ppiYoY) inflacionItems.push({ label: "PPI interanual", value: `${snapshot.macro.ppiYoY.value.toFixed(2)}%`, date: snapshot.macro.ppiYoY.date, source: "FRED — PPIACO" });
+  if (snapshot.macro.ppiYoY) inflacionItems.push({ label: "PPI interanual", value: `${snapshot.macro.ppiYoY.value.toFixed(2)}%`, date: snapshot.macro.ppiYoY.date, source: "FRED — PPIFIS" });
   if (snapshot.macro.breakeven10y) inflacionItems.push({ label: "Breakeven inflación 10Y", value: `${snapshot.macro.breakeven10y.value}%`, date: snapshot.macro.breakeven10y.date, source: "FRED — T10YIE" });
   if (snapshot.macro.breakeven5y) inflacionItems.push({ label: "Breakeven inflación 5Y", value: `${snapshot.macro.breakeven5y.value}%`, date: snapshot.macro.breakeven5y.date, source: "FRED — T5YIE" });
   if (snapshot.macro.breakeven5y5yFwd) inflacionItems.push({ label: "Breakeven forward 5Y5Y", value: `${snapshot.macro.breakeven5y5yFwd.value}%`, date: snapshot.macro.breakeven5y5yFwd.date, source: "FRED — T5YIFR" });
