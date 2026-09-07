@@ -420,7 +420,13 @@ export async function buildMarketSnapshot(): Promise<MarketSnapshot> {
     fetchFredSeries("CPILFESL", { units: "pc1" }),
     fetchFredSeries("PCEPI", { units: "pc1" }),
     fetchFredSeries("PCEPILFE", { units: "pc1" }),
-    fetchFredSeries("PPIACO", { units: "pc1" }),
+    // PPIFIS = "Producer Price Index by Commodity: Final Demand" — es la serie que
+    // corresponde al PPI de cabecera que publica el BLS cada mes (el que sale en
+    // prensa). Antes se usaba PPIACO ("All Commodities"), una serie mucho más
+    // volátil y dominada por energía/materias primas, que no es el mismo dato:
+    // en julio 2026 PPIACO daba +8,27% interanual mientras el PPI real (Final
+    // Demand) del BLS fue +4,7%.
+    fetchFredSeries("PPIFIS", { units: "pc1" }),
     fetchFredSeries("T10YIE"),
     fetchFredSeries("T5YIE"),
     fetchFredSeries("T5YIFR"),
@@ -493,3 +499,4 @@ export async function buildMarketSnapshot(): Promise<MarketSnapshot> {
     flows: { cotGoldManagedMoney, cotGoldMicro },
   };
 }
+
