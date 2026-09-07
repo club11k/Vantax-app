@@ -16,7 +16,7 @@ export default async function AdminUsersPage() {
             <tr>
               <th>Usuario</th>
               <th>Estado (Análisis)</th>
-              <th>Centro de Mercado</th>
+              <th>Accesos (Mercado / Editar con IA)</th>
               <th>Plan</th>
               <th>Uso este mes</th>
               <th>Rol</th>
@@ -40,6 +40,7 @@ export default async function AdminUsersPage() {
                   planQuota: u.plan?.monthlyQuota ?? null,
                   planIsFree: u.plan?.isFree ?? false,
                   marketAccess: u.marketAccess,
+                  analysisChatAccess: u.analysisChatAccess,
                 }}
                 plans={plans.map((p) => ({ id: p.id, name: p.name }))}
               />
