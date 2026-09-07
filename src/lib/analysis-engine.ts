@@ -14,7 +14,7 @@ function fmtFred(v: { date: string; value: number } | null, suffix = "%", digits
   return v ? `${v.value.toFixed(digits)}${suffix} (${v.date})` : "no disponible";
 }
 
-function formatSnapshotForPrompt(snapshot: MarketSnapshot): string {
+export function formatSnapshotForPrompt(snapshot: MarketSnapshot): string {
   const lines: string[] = [];
   const m = snapshot.macro;
   const liq = snapshot.liquidity;
@@ -132,6 +132,12 @@ export async function getSystemPrompt(): Promise<string> {
     "instrucción. Terminas siempre recordando, de forma natural y no como aviso legal aparte, que esto no es " +
     "asesoramiento financiero. Escribes siempre en español de España (tuteo con \"tú\", nunca voseo con " +
     "\"vos\"/\"podés\"/\"tenés\").\n\n" +
+    "FORMATO DE TEXTO — nunca uses marcado tipo markdown: ni asteriscos para negrita (**así**), ni guiones o " +
+    "viñetas al principio de línea (\"- así\"), ni almohadillas para títulos (\"# así\"). El texto se muestra " +
+    "tal cual, sin ningún renderizador de markdown detrás, así que cualquier símbolo de marcado aparece " +
+    "literalmente y queda mal. Escribe siempre en texto plano: usa saltos de línea para separar ideas o " +
+    "bloques, y si quieres dar énfasis a una cifra o una palabra, hazlo con el propio lenguaje (\"y esto es lo " +
+    "importante:\", \"ojo aquí\") en vez de con símbolos.\n\n" +
     "TONO Y ESTILO — esto es lo más importante: escribes como un analista experimentado que se comunica de " +
     "forma cercana y directa con su comunidad, no como un informe corporativo. Primera persona, frases " +
     "naturales, alguna pregunta retórica ocasional (\"¿me explico?\") si encaja, sin forzarla. Nada de listas " +
@@ -180,7 +186,9 @@ export async function generateAnalysis(format: "MENSAJE" | "TECNICO", images?: A
         "su valor y una lectura de una línea cada uno (alcista/bajista/neutral para el oro); después, un " +
         "bloque \"NIVELES CLAVE\" con los soportes y resistencias exactos que se te dan en los datos (nunca " +
         "inventados); después, un Bias Score (-100 a 100) con su desglose por módulo (Macro, Flujos, Riesgo, " +
-        "Técnico). Todo en texto plano bien estructurado, sin markdown de tablas complejas. Termina con el " +
+        "Técnico). Todo en texto plano bien estructurado, cada indicador y cada nivel en su propia línea pero " +
+        "sin ningún símbolo de marcado delante (nunca \"- \" ni \"* \" ni negrita con asteriscos) — usa el " +
+        "propio salto de línea y dos puntos (\"Nombre: valor — lectura\") para separar. Termina con el " +
         "mismo recordatorio de que no es asesoramiento financiero, integrado de forma natural.";
 
   const userContent: Array<
@@ -232,4 +240,52 @@ export async function generateAnalysis(format: "MENSAJE" | "TECNICO", images?: A
     .join("\n");
 
   return { content, snapshot };
+}
+
+// Ajusta un análisis ya generado a partir de una instrucción en lenguaje natural
+// ("cámbiame esto", "añade lo otro"...), como si fuera una conversación con la
+// IA. No es un chat multi-turno de verdad: cada llamada le pasa a la IA la
+// versión actual del texto más el snapshot de datos que lo respalda (para que
+// no invente cifras nuevas al reescribir) y la nueva petición, y la IA
+// devuelve el análisis completo ya corregido. Esto es intencional — así cada
+// ajuste parte siempre del texto realmente guardado, sin arrastrar un
+// historial de mensajes que se pueda desincronizar.
+export async function refineAnalysis(params: {
+  format: "MENSAJE" | "TECNICO";
+  currentContent: string;
+  snapshot: MarketSnapshot;
+  instruction: string;
+}): Promise<string> {
+  const { format, currentContent, snapshot, instruction } = params;
+  const systemPrompt = await getSystemPrompt();
+  const snapshotText = formatSnapshotForPrompt(snapshot);
+
+  const formatReminder =
+    format === "MENSAJE"
+      ? "Mantén el formato \"mensaje\" (cercano, en prosa, tal y como se describe en tus instrucciones)."
+      : "Mantén el formato técnico/estadístico (indicadores, bloque de niveles clave, Bias Score) tal y como se describe en tus instrucciones.";
+
+  const message = await anthropic.messages.create({
+    model: ANALYSIS_MODEL,
+    max_tokens: 1500,
+    system: systemPrompt,
+    messages: [
+      {
+        role: "user",
+        content:
+          `Este es el análisis que ya generaste, tal y como está guardado ahora mismo:\n\n"""\n${currentContent}\n"""\n\n` +
+          `Estos son los datos de mercado en los que se basa (para que cualquier cifra o nivel que uses o mantengas ` +
+          `siga saliendo de aquí, nunca inventado):\n\n${snapshotText}\n\n` +
+          `Petición de cambio del usuario: "${instruction}"\n\n` +
+          `Aplica ese cambio y devuelve el análisis COMPLETO ya corregido (no expliques qué cambiaste, no añadas ` +
+          `comentarios sobre la petición — responde únicamente con el texto final del análisis, listo para publicar). ` +
+          formatReminder,
+      },
+    ],
+  });
+
+  return message.content
+    .filter((block) => block.type === "text")
+    .map((block) => (block as { type: "text"; text: string }).text)
+    .join("\n");
 }
