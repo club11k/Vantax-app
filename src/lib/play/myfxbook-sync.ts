@@ -33,11 +33,11 @@ import {
   type MyfxbookHistoryItem,
 } from "@/lib/play/myfxbook";
 
-function currentPeriodKey(now: Date): string {
+export function currentPeriodKey(now: Date): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
-function monthBounds(now: Date): { periodStart: Date; periodEnd: Date } {
+export function monthBounds(now: Date): { periodStart: Date; periodEnd: Date } {
   const periodStart = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
   const periodEnd = new Date(Date.UTC(now.getFullYear(), now.getMonth() + 1, 0));
   return { periodStart, periodEnd };
