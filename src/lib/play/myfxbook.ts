@@ -9,16 +9,30 @@
 // la contraseña investor de MT5 directamente, porque Myfxbook ya hizo esa
 // parte.
 //
-// Portado de club11k/vantax-play-backend (src/services/myfxbookSync.js).
+// IMPORTANTE — por qué esto pasa por el proxy de IP fija: las sesiones de
+// la API de Myfxbook quedan atadas a la IP que hizo el login (lo confirma
+// su propia documentación). Como el hosting no tiene una IP de salida fija
+// por defecto, el login podía salir por una IP y la siguiente llamada por
+// otra distinta, y Myfxbook devolvía "Invalid session" aunque el login
+// hubiera sido correcto — esto es lo que impedía que Myfxbook se conectara
+// en el backend original de Vantax Play. Por eso todas las llamadas de aquí
+// pasan por el mismo proxy Squid del droplet de DigitalOcean que ya se usa
+// para la API de Vantage (ver src/lib/proxy.ts) — login y lectura salen
+// siempre por la misma IP fija (46.101.254.106).
+//
 // Esta primera fase solo incluye las piezas necesarias para el registro
 // (login, listar cuentas, detectar broker/tipo de cuenta): la sincronización
 // periódica de lotes/beneficio y el reparto automático de V-COIN son una
 // fase posterior.
 //
-// No usamos ninguna librería de terceros para hablar con Myfxbook: son
-// llamadas HTTP GET sencillas, así que las hacemos directamente con fetch
-// (nativo en Node 18+) para no añadir una dependencia externa no oficial
-// que maneje credenciales de los jugadores.
+// No usamos ninguna librería de terceros para hablar con Myfxbook en sí
+// (solo https-proxy-agent para el transporte, igual que en vantage-ib.ts):
+// son llamadas HTTP GET sencillas hechas con el módulo nativo `https` de
+// Node, para no depender de una librería externa no oficial que maneje
+// credenciales de los jugadores.
+
+import https from "node:https";
+import { getFixedIpProxyAgent } from "@/lib/proxy";
 
 const MYFXBOOK_BASE = "https://www.myfxbook.com/api";
 
@@ -38,16 +52,47 @@ export type MyfxbookAccount = {
   [key: string]: unknown;
 };
 
-async function myfxbookGet(
-  path: string,
-  cookie?: string | null
-): Promise<{ data: any; cookie: string | null }> {
-  const headers: Record<string, string> = cookie ? { Cookie: cookie } : {};
-  const res = await fetch(`${MYFXBOOK_BASE}/${path}`, { headers });
-  if (!res.ok) throw new Error(`Myfxbook respondió ${res.status} en ${path}`);
-  const data = await res.json();
-  if (data.error) throw new Error(data.message || "Error desconocido de Myfxbook");
-  return { data, cookie: res.headers.get("set-cookie") || cookie || null };
+function myfxbookGet(path: string, cookie?: string | null): Promise<{ data: any; cookie: string | null }> {
+  return new Promise((resolve, reject) => {
+    let agent: ReturnType<typeof getFixedIpProxyAgent>;
+    try {
+      agent = getFixedIpProxyAgent();
+    } catch (err) {
+      reject(err);
+      return;
+    }
+
+    const headers: Record<string, string> = {};
+    if (cookie) headers.Cookie = cookie;
+
+    const req = https.request(
+      `${MYFXBOOK_BASE}/${path}`,
+      { method: "GET", agent, headers, timeout: 20000 },
+      (res) => {
+        let raw = "";
+        res.on("data", (chunk) => (raw += chunk));
+        res.on("end", () => {
+          let data: any;
+          try {
+            data = JSON.parse(raw);
+          } catch {
+            reject(new Error(`Respuesta no válida de Myfxbook (${res.statusCode}): ${raw.slice(0, 300)}`));
+            return;
+          }
+          if (data.error) {
+            reject(new Error(data.message || "Error desconocido de Myfxbook"));
+            return;
+          }
+          const setCookie = res.headers["set-cookie"];
+          const newCookie = Array.isArray(setCookie) ? setCookie.join("; ") : setCookie || cookie || null;
+          resolve({ data, cookie: newCookie ?? null });
+        });
+      }
+    );
+    req.on("timeout", () => req.destroy(new Error("Tiempo de espera agotado llamando a la API de Myfxbook.")));
+    req.on("error", reject);
+    req.end();
+  });
 }
 
 // Devuelve tanto el token de "session" como la cookie que exige Myfxbook por
