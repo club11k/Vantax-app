@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { SettingForm } from "@/components/admin/SettingForm";
 import { AccessGateToggle } from "@/components/admin/AccessGateToggle";
 import { VantageSyncPanel } from "@/components/admin/VantageSyncPanel";
+import { MyfxbookSyncPanel } from "@/components/admin/MyfxbookSyncPanel";
 
 function extractValue(setting: { value: unknown } | null, fallback: string): string {
   if (!setting) return fallback;
@@ -17,6 +18,8 @@ export default async function AdminSettingsPage() {
     "branding.support_email",
     "access.public_signup_locked",
     "vcoin.rate_per_dollar_commission",
+    "play.vcoin_rate_per_lot",
+    "play.cent_factor",
   ];
   const settings = await prisma.setting.findMany({ where: { key: { in: keys } } });
   const byKey = new Map(settings.map((s) => [s.key, s]));
@@ -65,6 +68,26 @@ export default async function AdminSettingsPage() {
         initialValue={extractValue(byKey.get("vcoin.rate_per_dollar_commission") ?? null, "1000")}
       />
       <VantageSyncPanel />
+
+      <div className="panel" style={{ fontSize: 13, color: "var(--text-muted)" }}>
+        <strong>V-COIN — cuentas vía Myfxbook (otros brokers)</strong>
+        <p style={{ margin: "6px 0 0" }}>
+          Para cuentas que no son de Vantage, el V-COIN se calcula por lotaje de XAUUSD operado (a diferencia de
+          Vantage, que se calcula por comisión). "V-COIN por lote" es la tasa para cuentas normales; en cuentas Cent
+          se multiplica por el factor de abajo (ej. 0,01 = 1 lote en Cent equivale a 0,01 lote normal).
+        </p>
+      </div>
+      <SettingForm
+        settingKey="play.vcoin_rate_per_lot"
+        label="V-COIN por lote de XAUUSD (cuenta normal)"
+        initialValue={extractValue(byKey.get("play.vcoin_rate_per_lot") ?? null, "10")}
+      />
+      <SettingForm
+        settingKey="play.cent_factor"
+        label="Factor de conversión para cuentas Cent"
+        initialValue={extractValue(byKey.get("play.cent_factor") ?? null, "0.01")}
+      />
+      <MyfxbookSyncPanel />
     </div>
   );
 }
