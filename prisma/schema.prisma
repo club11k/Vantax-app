@@ -316,6 +316,17 @@ model PlayMt5Account {
   ibActive            Boolean         @default(false) // luz verde/roja (gestión manual del admin)
   balance             Float           @default(0)
   equity              Float           @default(0)
+
+  // Para el sync automático de V-COIN por lotaje (ver
+  // src/lib/play/myfxbook-sync.ts): lastCreditedLots guarda cuántos lotes de
+  // XAUUSD del periodo actual (lastCreditedPeriod, ej. "2026-09") ya se
+  // convirtieron en V-COIN — en cada sync solo se acredita la diferencia
+  // respecto a lastCreditedLots, nunca el total otra vez, para no pagar lo
+  // mismo dos veces. Al empezar un mes nuevo (lastCreditedPeriod distinto
+  // del actual) se vuelve a partir de 0.
+  lastCreditedLots    Float           @default(0)
+  lastCreditedPeriod  String?
+
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
 
