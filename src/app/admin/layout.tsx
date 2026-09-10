@@ -26,6 +26,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <nav className="btn-row" style={{ marginBottom: 24, borderBottom: "1px solid var(--line)", paddingBottom: 14 }}>
         <Link href="/admin" className="btn">Resumen</Link>
         <Link href="/admin/users" className="btn">Usuarios</Link>
+        <Link href="/admin/players" className="btn">Jugadores (Play)</Link>
         <Link href="/admin/plans" className="btn">Planes</Link>
         <Link href="/admin/settings" className="btn">Configuración</Link>
       </nav>
