@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
@@ -8,6 +7,7 @@ import { computeBiasScore } from "@/lib/bias-score";
 import { SessionsClock } from "@/components/market/SessionsClock";
 import { MarketFlowMap } from "@/components/market/MarketFlowMap";
 import { TradingViewWidget } from "@/components/market/TradingViewWidget";
+import { AppNav } from "@/components/AppNav";
 
 export const revalidate = 300; // recachea esta página cada 5 minutos
 
@@ -52,7 +52,9 @@ export default async function MercadoPage() {
                 desde nuestro lado podrás entrar aquí y ver sesiones, gráficos, calendario y todos los datos en
                 vivo.
               </p>
-              <Link href="/dashboard" className="btn">Volver a mi panel</Link>
+              <div className="btn-row">
+                <AppNav isAdmin={isAdmin} active="mercado" />
+              </div>
             </div>
           </div>
         </div>
@@ -187,7 +189,9 @@ export default async function MercadoPage() {
             XAU<span style={{ color: "var(--gold-bright)" }}>/</span>USD · DXY
           </h1>
         </div>
-        <Link href="/dashboard" className="btn">Volver a mi panel</Link>
+        <div className="btn-row">
+          <AppNav isAdmin={isAdmin} active="mercado" />
+        </div>
       </div>
 
       <TradingViewWidget
@@ -433,4 +437,3 @@ export default async function MercadoPage() {
     </div>
   );
 }
-
