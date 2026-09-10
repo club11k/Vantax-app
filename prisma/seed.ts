@@ -48,6 +48,10 @@ async function main() {
     "branding.support_email": {
       value: "vantaxproject@gmail.com",
     },
+    "vcoin.rate_per_dollar_commission": {
+      value: "1000",
+      note: "V-COIN otorgados por cada $1 de comisión nueva que genera una cuenta de Vantage (IB), en cada sincronización manual desde /admin/settings.",
+    },
   };
 
   for (const [key, value] of Object.entries(defaultSettings)) {
