@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { getRemainingQuota } from "@/lib/quota";
 import { SubscribeButton, ManageSubscriptionButton } from "@/components/SubscribeButton";
 import { AnalysisGenerator } from "@/components/AnalysisGenerator";
+import { AppNav } from "@/components/AppNav";
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
@@ -42,13 +43,7 @@ export default async function DashboardPage() {
           <h1 style={{ fontSize: 26, margin: "4px 0 0" }}>Hola, {user?.name || user?.email}</h1>
         </div>
         <div className="btn-row">
-          {user?.role === "ADMIN" && (
-            <Link href="/admin" className="btn">Panel de admin</Link>
-          )}
-          <Link href="/mercado" className="btn">Centro de mercado</Link>
-          <Link href="/journal" className="btn">Journaly</Link>
-          <Link href="/riesgo" className="btn">Calculadora de riesgo</Link>
-          <Link href="/vcoin" className="btn">V-COIN</Link>
+          <AppNav isAdmin={user?.role === "ADMIN"} active="dashboard" />
           {hasActivePlan && <ManageSubscriptionButton />}
         </div>
       </div>
