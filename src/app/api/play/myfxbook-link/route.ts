@@ -14,7 +14,7 @@ import { myfxbookLogin, myfxbookLogout, myfxbookGetMyAccounts, brokerNameFromSer
 // POST "/myfxbook-link" del accounts.js original.
 
 const linkSchema = z.object({
-  email: z.string().trim().email("Ingresá un email válido."),
+  email: z.string().trim().email("Ingresa un email válido."),
   password: z.string().min(1, "La contraseña de Myfxbook es obligatoria."),
 });
 
@@ -37,12 +37,12 @@ export async function POST(req: Request) {
     passwordEnc = encrypt(password);
   } catch (err: any) {
     console.error("Error cifrando la contraseña de Myfxbook:", err.message);
-    return NextResponse.json({ error: "No se pudo cifrar la contraseña. Revisá ENCRYPTION_KEY en el servidor." }, { status: 500 });
+    return NextResponse.json({ error: "No se pudo cifrar la contraseña. Revisa ENCRYPTION_KEY en el servidor." }, { status: 500 });
   }
 
   // Verificamos las credenciales contra Myfxbook ANTES de guardar nada: a
   // diferencia del backend original (que guardaba el enlace igual y
-  // reintentaba el autocompletado en el siguiente sync periódico), acá no
+  // reintentaba el autocompletado en el siguiente sync periódico), aquí no
   // hay todavía un sync periódico — así que si el login falla, no tiene
   // sentido guardar un enlace que nunca se va a poder usar.
   let auth;
@@ -56,13 +56,18 @@ export async function POST(req: Request) {
     const accounts = await myfxbookGetMyAccounts(auth);
     if (!accounts.length) {
       return NextResponse.json(
-        { error: "Esa cuenta de Myfxbook no tiene ninguna cuenta MT5 añadida todavía. Agregala en myfxbook.com y volvé a intentar." },
+        { error: "Esa cuenta de Myfxbook no tiene ninguna cuenta MT5 añadida todavía. Agrégala en myfxbook.com y vuelve a intentar." },
         { status: 400 }
       );
     }
 
     const acc = accounts[0];
-    const server = acc.server || "";
+    // Myfxbook devuelve "server" como un objeto ({"name":"Vantage Markets"}),
+    // no como texto simple — a diferencia de lo que asumía el backend
+    // original de Vantax Play (de ahí venía el error "n.split is not a
+    // function": intentábamos hacer .split() sobre un objeto).
+    const rawServer = acc.server as unknown;
+    const server = typeof rawServer === "string" ? rawServer : (rawServer as { name?: string } | null)?.name || "";
     const brokerName = brokerNameFromServer(server);
     const accountType = detectAccountType(server, acc.name);
     const brokerId = await findOrCreatePlayBroker(brokerName);
