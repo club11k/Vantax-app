@@ -45,8 +45,16 @@ export function MyfxbookSyncPanel() {
           Acreditadas en este sync: {result.accountsCredited} · V-COIN repartidos: {result.totalVCoinAwarded}
           {result.errors.length > 0 && (
             <div style={{ color: "var(--down)", marginTop: 6 }}>
-              {result.errors.length} jugador(es) con error al sincronizar (contraseña cambiada, cuenta bloqueada,
-              etc.) — no bloquea al resto.
+              <div>
+                {result.errors.length} jugador(es) con error al sincronizar — no bloquea al resto:
+              </div>
+              <ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>
+                {result.errors.map((e, i) => (
+                  <li key={i}>
+                    {e.userId}: {e.message}
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
         </div>
@@ -54,3 +62,4 @@ export function MyfxbookSyncPanel() {
     </div>
   );
 }
+
