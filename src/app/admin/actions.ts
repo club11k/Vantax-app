@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { revalidatePath } from "next/cache";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { syncVantageVCoin, type VantageSyncResult } from "@/lib/vantage-ib";
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -177,4 +178,32 @@ export async function updateSetting(key: string, value: string) {
   });
   await logAction(admin.id, "update_setting", { key });
   revalidatePath("/admin/settings");
+}
+
+// --- V-COIN / Vantage IB ---
+
+// Llama a la API de comisión de IB de Vantage (a través del proxy del
+// droplet) y acredita V-COIN a cada usuario según la comisión nueva
+// generada desde la última sincronización. Se ejecuta a mano desde
+// /admin/settings — no hay cron automático todavía.
+export async function syncVantageCommissions(): Promise<VantageSyncResult & { error?: string }> {
+  const admin = await requireAdmin();
+  try {
+    const result = await syncVantageVCoin();
+    await logAction(admin.id, "sync_vantage_vcoin", result as any);
+    revalidatePath("/admin/settings");
+    revalidatePath("/admin/users");
+    return result;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error desconocido al sincronizar con Vantage.";
+    await logAction(admin.id, "sync_vantage_vcoin_error", { error: message });
+    return {
+      totalAccountsFromVantage: 0,
+      matchedAccounts: 0,
+      accountsCredited: 0,
+      totalVCoinAwarded: 0,
+      skippedNoRate: false,
+      error: message,
+    };
+  }
 }
