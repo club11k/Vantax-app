@@ -209,6 +209,16 @@ export async function syncVantageCommissions(): Promise<VantageSyncResult & { er
   }
 }
 
+// Activa/desactiva manualmente una cuenta de Vantax Play (luz verde/roja).
+// Mientras está inactiva, el sync sigue leyendo saldo/equity/lotaje pero no
+// acredita V-COIN — ver src/lib/play/myfxbook-sync.ts.
+export async function toggleIbActive(accountId: string, active: boolean) {
+  const admin = await requireAdmin();
+  await prisma.playMt5Account.update({ where: { id: accountId }, data: { ibActive: active } });
+  await logAction(admin.id, "toggle_play_ib_active", { accountId, active });
+  revalidatePath("/admin/players");
+}
+
 // --- V-COIN / Vantax Play (lotaje vía Myfxbook) ---
 
 // Recorre todos los jugadores con Myfxbook vinculado, lee sus lotes de
