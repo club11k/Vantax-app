@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { AppNav } from "@/components/AppNav";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
@@ -19,8 +20,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <h1 style={{ fontSize: 24, margin: "4px 0 0" }}>Panel de administrador</h1>
         </div>
         <div className="btn-row">
-          <Link href="/mercado" className="btn">Centro de mercado</Link>
-          <Link href="/dashboard" className="btn">Panel de análisis</Link>
+          <AppNav isAdmin active="admin" />
         </div>
       </div>
       <nav className="btn-row" style={{ marginBottom: 24, borderBottom: "1px solid var(--line)", paddingBottom: 14 }}>
