@@ -177,6 +177,19 @@ export async function myfxbookGetMyAccounts(auth: MyfxbookAuth): Promise<Myfxboo
   return data.accounts || [];
 }
 
+export type MyfxbookHistoryItem = {
+  symbol?: string;
+  closeTime?: string; // formato típico de Myfxbook: "DD/MM/YYYY HH:mm"
+  profit?: number;
+  sizing?: { value?: number; type?: string };
+  [key: string]: unknown;
+};
+
+export async function myfxbookGetHistory(auth: MyfxbookAuth, accountId: number | string): Promise<MyfxbookHistoryItem[]> {
+  const { data } = await myfxbookGet(`get-history.json?session=${auth.session}&id=${accountId}`, auth.cookie);
+  return data.history || [];
+}
+
 // Deduce un nombre de broker legible a partir del nombre de servidor MT5
 // que reporta Myfxbook (ej. "VantageInternational-Live 11" -> "VantageInternational").
 export function brokerNameFromServer(server: string | null | undefined): string {
