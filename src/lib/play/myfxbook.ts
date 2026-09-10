@@ -153,16 +153,24 @@ export async function myfxbookLogin(email: string, password: string): Promise<My
   return { session: data.session, cookie };
 }
 
+// TERCER BUG encontrado (el que realmente causaba "Invalid session"): el
+// "session" que devuelve Myfxbook viene YA codificado para URL (trae %2B,
+// %2F, %3D literales — son +, / y = de un valor en base64, típico de un
+// backend que lo generó con algo como urlencode(base64(...))). Volver a
+// pasarlo por encodeURIComponent() lo codifica una segunda vez (%2B pasa a
+// %252B) y lo corrompe, así que Myfxbook nunca reconocía la sesión aunque
+// el login fuera correcto. Confirmado a mano con curl desde el droplet:
+// reenviar auth.session tal cual (sin encodeURIComponent) funciona.
 export async function myfxbookLogout(auth: MyfxbookAuth): Promise<void> {
   try {
-    await myfxbookGet(`logout.json?session=${encodeURIComponent(auth.session)}`, auth.cookie);
+    await myfxbookGet(`logout.json?session=${auth.session}`, auth.cookie);
   } catch {
     // no crítico
   }
 }
 
 export async function myfxbookGetMyAccounts(auth: MyfxbookAuth): Promise<MyfxbookAccount[]> {
-  const { data } = await myfxbookGet(`get-my-accounts.json?session=${encodeURIComponent(auth.session)}`, auth.cookie);
+  const { data } = await myfxbookGet(`get-my-accounts.json?session=${auth.session}`, auth.cookie);
   return data.accounts || [];
 }
 
