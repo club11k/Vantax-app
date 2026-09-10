@@ -54,7 +54,10 @@ export type MyfxbookAccount = {
   accountId?: number;
   login?: number | string;
   name?: string;
-  server?: string;
+  // La API real de Myfxbook devuelve esto como objeto ({"name":"..."}), no
+  // como texto simple — hay que extraer .name antes de usarlo como string
+  // (ver src/app/api/play/myfxbook-link/route.ts).
+  server?: string | { name?: string } | null;
   balance?: number;
   equity?: number;
   [key: string]: unknown;
