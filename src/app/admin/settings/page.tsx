@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { SettingForm } from "@/components/admin/SettingForm";
 import { AccessGateToggle } from "@/components/admin/AccessGateToggle";
+import { VantageSyncPanel } from "@/components/admin/VantageSyncPanel";
 
 function extractValue(setting: { value: unknown } | null, fallback: string): string {
   if (!setting) return fallback;
@@ -10,7 +11,13 @@ function extractValue(setting: { value: unknown } | null, fallback: string): str
 }
 
 export default async function AdminSettingsPage() {
-  const keys = ["analysis.system_prompt", "analysis.refresh_cron", "branding.support_email", "access.public_signup_locked"];
+  const keys = [
+    "analysis.system_prompt",
+    "analysis.refresh_cron",
+    "branding.support_email",
+    "access.public_signup_locked",
+    "vcoin.rate_per_dollar_commission",
+  ];
   const settings = await prisma.setting.findMany({ where: { key: { in: keys } } });
   const byKey = new Map(settings.map((s) => [s.key, s]));
 
@@ -42,6 +49,22 @@ export default async function AdminSettingsPage() {
         label="Email de soporte mostrado a los usuarios"
         initialValue={extractValue(byKey.get("branding.support_email") ?? null, "")}
       />
+
+      <div className="panel" style={{ fontSize: 13, color: "var(--text-muted)" }}>
+        <strong>V-COIN — cuentas de Vantage (IB)</strong>
+        <p style={{ margin: "6px 0 0" }}>
+          La API de Vantage solo da la comisión acumulada por cuenta, no el lotaje de cada operación. Por eso el
+          V-COIN de estas cuentas se calcula a partir de la comisión: cuántos V-COIN se dan por cada $1 de comisión
+          nueva generada. Al ser un ratio en dólares, funciona igual para cuentas normales y cuentas Cent — no hace
+          falta un tramo distinto para cada tipo, la comisión en $ ya refleja la diferencia.
+        </p>
+      </div>
+      <SettingForm
+        settingKey="vcoin.rate_per_dollar_commission"
+        label="V-COIN por cada $1 de comisión nueva generada"
+        initialValue={extractValue(byKey.get("vcoin.rate_per_dollar_commission") ?? null, "1000")}
+      />
+      <VantageSyncPanel />
     </div>
   );
 }
