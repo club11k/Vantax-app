@@ -80,6 +80,12 @@ model User {
 
   journalAccounts   JournalAccount[]
 
+  // Saldo de V-COIN (moneda interna de cashback), acreditado automáticamente
+  // a partir de la comisión que genera como IB de Vantage cada cuenta
+  // vinculada (ver VantageIbAccount). No tiene relación con Journaly.
+  vCoinBalance      Int      @default(0)
+  vantageIbAccounts VantageIbAccount[]
+
   @@index([role])
 }
 
@@ -164,4 +170,30 @@ model JournalEntry {
 
   @@unique([accountId, date])
   @@index([accountId, date])
+}
+
+// Vincula a un usuario con una cuenta de trading suya que está dada de alta
+// bajo el IB de Vantage de Esther. Se usa para repartir V-COIN a partir de
+// la comisión que esa cuenta genera (API de IB de Vantage), no del lotaje
+// directamente (la API de Vantage no expone lotaje por operación, solo
+// comisión agregada por cuenta) — ver src/lib/vantage-ib.ts.
+//
+// lastCommission guarda la comisión acumulada la última vez que se
+// sincronizó: en cada sincronización solo se acredita la diferencia
+// (comisión nueva) desde ese valor, para no volver a pagar lo mismo dos
+// veces (la API de Vantage siempre devuelve el acumulado, no por operación).
+model VantageIbAccount {
+  id             String    @id @default(cuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountNumber  String    @unique // número de cuenta de trading en Vantage, tal como lo escribe el usuario (campo "account" de la API)
+  accountType    String?   // tal como lo devuelve Vantage (ej. "STP"); no distingue Cent de forma fiable, es solo informativo
+  platform       String?   // "MT4" o "MT5", tal como lo devuelve Vantage
+  lastCommission Float     @default(0) // comisión acumulada vista en el último sync
+  vCoinEarned    Int       @default(0) // total de V-COIN acreditados a esta cuenta desde que se vinculó (auditoría)
+  lastSyncedAt   DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([userId])
 }
