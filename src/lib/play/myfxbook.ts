@@ -14,11 +14,19 @@
 // su propia documentación). Como el hosting no tiene una IP de salida fija
 // por defecto, el login podía salir por una IP y la siguiente llamada por
 // otra distinta, y Myfxbook devolvía "Invalid session" aunque el login
-// hubiera sido correcto — esto es lo que impedía que Myfxbook se conectara
-// en el backend original de Vantax Play. Por eso todas las llamadas de aquí
-// pasan por el mismo proxy Squid del droplet de DigitalOcean que ya se usa
-// para la API de Vantage (ver src/lib/proxy.ts) — login y lectura salen
-// siempre por la misma IP fija (46.101.254.106).
+// hubiera sido correcto. Por eso todas las llamadas de aquí pasan por el
+// mismo proxy Squid del droplet de DigitalOcean que ya se usa para la API
+// de Vantage (ver src/lib/proxy.ts) — login y lectura salen siempre por la
+// misma IP fija (46.101.254.106).
+//
+// SEGUNDO BUG encontrado (además del de la IP): la cookie que devuelve
+// Myfxbook en el header Set-Cookie trae pegados atributos como "Path=/" o
+// "HttpOnly" (ej. "MYFXBOOKSESSID=abc123; Path=/; HttpOnly"). Reenviar eso
+// tal cual como header Cookie en la siguiente petición es inválido — el
+// Cookie header solo debe llevar pares "nombre=valor", nunca esos
+// atributos — y el servidor de Myfxbook lo estaba rechazando, devolviendo
+// "Invalid session" aunque el login fuera correcto. parseCookieJar/
+// mergeSetCookies de abajo limpian eso antes de reenviarlo.
 //
 // Esta primera fase solo incluye las piezas necesarias para el registro
 // (login, listar cuentas, detectar broker/tipo de cuenta): la sincronización
@@ -52,6 +60,33 @@ export type MyfxbookAccount = {
   [key: string]: unknown;
 };
 
+// Extrae solo los pares "nombre=valor" de uno o varios headers Set-Cookie
+// (descarta Path/Domain/Expires/HttpOnly/Secure/SameSite), y los combina con
+// los que ya teníamos de una respuesta anterior (login puede fijar una
+// cookie, y a veces el servidor renueva/agrega otra en una llamada
+// posterior) para formar el header Cookie correcto de la siguiente petición.
+function mergeSetCookies(existingCookie: string | null | undefined, setCookieHeader: string | string[] | undefined): string | null {
+  const jar: Record<string, string> = {};
+  for (const part of (existingCookie || "").split(";")) {
+    const eq = part.indexOf("=");
+    if (eq === -1) continue;
+    const name = part.slice(0, eq).trim();
+    const value = part.slice(eq + 1).trim();
+    if (name) jar[name] = value;
+  }
+  const rawCookies = setCookieHeader ? (Array.isArray(setCookieHeader) ? setCookieHeader : [setCookieHeader]) : [];
+  for (const raw of rawCookies) {
+    const pair = raw.split(";")[0];
+    const eq = pair.indexOf("=");
+    if (eq === -1) continue;
+    const name = pair.slice(0, eq).trim();
+    const value = pair.slice(eq + 1).trim();
+    if (name) jar[name] = value;
+  }
+  const entries = Object.entries(jar);
+  return entries.length ? entries.map(([k, v]) => `${k}=${v}`).join("; ") : null;
+}
+
 function myfxbookGet(path: string, cookie?: string | null): Promise<{ data: any; cookie: string | null }> {
   return new Promise((resolve, reject) => {
     let agent: ReturnType<typeof getFixedIpProxyAgent>;
@@ -62,7 +97,11 @@ function myfxbookGet(path: string, cookie?: string | null): Promise<{ data: any;
       return;
     }
 
-    const headers: Record<string, string> = {};
+    // User-Agent explícito: por defecto Node no manda uno "normal", y no
+    // cuesta nada evitar que algún filtro anti-bot lo use como excusa.
+    const headers: Record<string, string> = {
+      "User-Agent": "VantaxPlay/1.0 (+https://club11k.com)",
+    };
     if (cookie) headers.Cookie = cookie;
 
     const req = https.request(
@@ -83,9 +122,8 @@ function myfxbookGet(path: string, cookie?: string | null): Promise<{ data: any;
             reject(new Error(data.message || "Error desconocido de Myfxbook"));
             return;
           }
-          const setCookie = res.headers["set-cookie"];
-          const newCookie = Array.isArray(setCookie) ? setCookie.join("; ") : setCookie || cookie || null;
-          resolve({ data, cookie: newCookie ?? null });
+          const newCookie = mergeSetCookies(cookie, res.headers["set-cookie"]);
+          resolve({ data, cookie: newCookie });
         });
       }
     );
@@ -95,13 +133,23 @@ function myfxbookGet(path: string, cookie?: string | null): Promise<{ data: any;
   });
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 // Devuelve tanto el token de "session" como la cookie que exige Myfxbook por
 // detrás — hace falta reenviar AMBAS cosas en cada petición siguiente, o
 // Myfxbook responde "Invalid session" aunque el token en sí sea correcto.
+//
+// La pequeña espera antes de devolver el resultado es defensiva: en algún
+// hilo de soporte de Myfxbook la sesión tarda un instante en propagarse del
+// lado del servidor y una llamada inmediatamente después del login puede
+// fallar con "Invalid session" aunque el login haya sido correcto.
 export async function myfxbookLogin(email: string, password: string): Promise<MyfxbookAuth> {
   const { data, cookie } = await myfxbookGet(
     `login.json?email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`
   );
+  await sleep(800);
   return { session: data.session, cookie };
 }
 
