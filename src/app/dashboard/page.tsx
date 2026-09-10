@@ -48,6 +48,7 @@ export default async function DashboardPage() {
           <Link href="/mercado" className="btn">Centro de mercado</Link>
           <Link href="/journal" className="btn">Journaly</Link>
           <Link href="/riesgo" className="btn">Calculadora de riesgo</Link>
+          <Link href="/vcoin" className="btn">V-COIN</Link>
           {hasActivePlan && <ManageSubscriptionButton />}
         </div>
       </div>
