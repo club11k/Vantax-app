@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { href: "/journal", label: "Journaly", key: "journal" },
   { href: "/riesgo", label: "Calculadora de riesgo", key: "riesgo" },
   { href: "/vcoin", label: "V-COIN", key: "vcoin" },
+  { href: "/play", label: "Vantax Play", key: "play" },
 ] as const;
 
 export function AppNav({ isAdmin, active }: { isAdmin?: boolean; active?: string }) {
@@ -38,3 +39,4 @@ export function AppNav({ isAdmin, active }: { isAdmin?: boolean; active?: string
     </>
   );
 }
+
