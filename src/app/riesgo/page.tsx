@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { RiskCalculator } from "@/components/riesgo/RiskCalculator";
+import { AppNav } from "@/components/AppNav";
 
 // Igual que Journaly: la Calculadora de Riesgo no depende de marketAccess ni
 // del plan de suscripción — es una herramienta de cálculo, no consume cuota
@@ -13,6 +13,7 @@ export default async function RiesgoPage() {
   if (!session?.user) {
     redirect("/login");
   }
+  const isAdmin = (session.user as any).role === "ADMIN";
 
   return (
     <div className="container" style={{ paddingTop: 40 }}>
@@ -32,9 +33,7 @@ export default async function RiesgoPage() {
           <h1 style={{ fontSize: 26, margin: "4px 0 0" }}>Calculadora de riesgo</h1>
         </div>
         <div className="btn-row">
-          <Link href="/dashboard" className="btn">
-            Volver a mi panel
-          </Link>
+          <AppNav isAdmin={isAdmin} active="riesgo" />
         </div>
       </div>
       <p style={{ color: "var(--text-muted)", fontSize: 13.5, marginBottom: 24, maxWidth: 640 }}>
