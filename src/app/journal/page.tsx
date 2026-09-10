@@ -1,9 +1,9 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { JournalDashboard } from "@/components/journal/JournalDashboard";
+import { AppNav } from "@/components/AppNav";
 
 // Journaly no depende de marketAccess ni de subscriptionStatus/plan: es una
 // herramienta de seguimiento personal disponible para cualquier usuario con
@@ -17,6 +17,7 @@ export default async function JournalPage() {
     redirect("/login");
   }
   const userId = (session.user as any).id as string;
+  const isAdmin = (session.user as any).role === "ADMIN";
 
   const accounts = await prisma.journalAccount.findMany({
     where: { userId },
@@ -44,9 +45,7 @@ export default async function JournalPage() {
           <h1 style={{ fontSize: 26, margin: "4px 0 0" }}>Journaly</h1>
         </div>
         <div className="btn-row">
-          <Link href="/dashboard" className="btn">
-            Volver a mi panel
-          </Link>
+          <AppNav isAdmin={isAdmin} active="journal" />
         </div>
       </div>
       <p style={{ color: "var(--text-muted)", fontSize: 13.5, marginBottom: 24, maxWidth: 640 }}>
