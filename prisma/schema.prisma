@@ -39,6 +39,68 @@ enum JournalEntrySource {
   AI_PHOTO // la cifra vino de una foto leída por IA, confirmada por el usuario antes de guardarse
 }
 
+// ============================================================
+// Vantax Play — sistema de cashback en V-COIN por lotaje operado
+// (cofres, rankings, tienda, torneos). Migrado desde el proyecto
+// separado club11k/vantax-play-backend para centralizarlo todo en
+// un único repo. Los modelos llevan el prefijo "Play" para no
+// chocar con nombres genéricos (Broker, Chest, etc.) y para que
+// quede claro qué pertenece a este subsistema.
+//
+// El wallet de V-COIN es el mismo User.vCoinBalance que ya usa el
+// sistema de comisión de Vantage (VantageIbAccount): un solo saldo,
+// dos formas de ganarlo (comisión de Vantage o lotaje vía Myfxbook
+// de otros brokers). PlayVCoinTransaction es el ledger detallado de
+// la parte de lotaje; los movimientos de Vantage siguen viviendo
+// solo como el delta de VantageIbAccount.lastCommission.
+// ============================================================
+
+enum PlayAccountType {
+  NORMAL
+  CENT
+}
+
+enum PlayTier {
+  BASICO
+  INTERMEDIO
+  EPICO
+  LEGENDARIO
+}
+
+enum PlayVCoinTxType {
+  LOTE          // acreditado automáticamente por el sync de Myfxbook
+  RANKING_BONUS
+  COFRE
+  TORNEO
+  AJUSTE_ADMIN
+}
+
+enum PlayRankingCriterion {
+  PROFIT_PCT
+  LOTS
+}
+
+enum PlayArticleCategory {
+  MERCH
+  MENTORIA
+  CASHBACK
+}
+
+enum PlayGiftRewardType {
+  VCOIN
+  ARTICLE
+}
+
+enum PlayPayoutNetwork {
+  TRC20
+  BEP20
+}
+
+enum PlayPayoutStatus {
+  PENDIENTE
+  PAGADO
+}
+
 model User {
   id                String   @id @default(cuid())
   email             String   @unique
@@ -82,9 +144,32 @@ model User {
 
   // Saldo de V-COIN (moneda interna de cashback), acreditado automáticamente
   // a partir de la comisión que genera como IB de Vantage cada cuenta
-  // vinculada (ver VantageIbAccount). No tiene relación con Journaly.
+  // vinculada (ver VantageIbAccount) o del lotaje operado vía Myfxbook en
+  // otros brokers (ver PlayVCoinTransaction, sistema Vantax Play). No tiene
+  // relación con Journaly.
   vCoinBalance      Int      @default(0)
   vantageIbAccounts VantageIbAccount[]
+
+  // --- Vantax Play (cofres, rankings, tienda, torneos) ---
+  // publicId: ID visible en rankings de Vantax Play, nunca el nombre real.
+  // Nulo hasta que el usuario complete el registro de jugador. Además del
+  // índice único normal, la migración añade uno case-insensitive (no se
+  // puede registrar "Trader1" si ya existe "trader1").
+  publicId              String?             @unique
+  payoutWallet          String?             // wallet USDT por defecto para cobrar V-COIN
+  payoutNetwork         PlayPayoutNetwork?
+  brokerName            String?             // datos de perfil del jugador con su broker (fuera de Vantage)
+  brokerEmail           String?
+  brokerUid             String?
+
+  playMt5Accounts       PlayMt5Account[]
+  playVCoinTransactions PlayVCoinTransaction[]
+  playUserChests        PlayUserChest[]
+  playRankings          PlayRanking[]
+  playPayouts           PlayPayout[]
+  playerProgress        PlayPlayerProgress?
+  playerGifts           PlayPlayerGift[]
+  myfxbookLink          PlayMyfxbookLink?
 
   @@index([role])
 }
@@ -196,4 +281,262 @@ model VantageIbAccount {
   updatedAt      DateTime  @updatedAt
 
   @@index([userId])
+}
+
+// ------------------------------------------------------------
+// Vantax Play — modelos (ver comentario de los enums más arriba)
+// ------------------------------------------------------------
+
+model PlayBroker {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  logoUrl   String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  accounts  PlayMt5Account[]
+}
+
+// Cuenta MT5 vinculada por un jugador en modo observador/investor. Puede
+// registrarse a mano (accountNumber + investor login/password) o quedar
+// resuelta automáticamente al vincular Myfxbook (ver PlayMyfxbookLink).
+model PlayMt5Account {
+  id                  String          @id @default(cuid())
+  userId              String
+  user                User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brokerId            String
+  broker              PlayBroker      @relation(fields: [brokerId], references: [id])
+  accountNumber       String
+  accountType         PlayAccountType // lo indica el usuario al registrarse
+  accountTypeVerified Boolean         @default(false) // true una vez que un sync externo lo confirma/corrige
+  investorLogin       String?
+  investorPasswordEnc String?         @db.Text // cifrado a nivel de aplicación (ver src/lib/play/crypto.ts), nunca en claro
+  mt5Server           String?         // servidor MT5 del broker, ej. "ICMarkets-Live01"
+  metaapiAccountId    String?         // reservado para una futura integración con MetaApi
+  ibActive            Boolean         @default(false) // luz verde/roja (gestión manual del admin)
+  balance             Float           @default(0)
+  equity              Float           @default(0)
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  snapshots           PlayAccountSnapshot[]
+  stats               PlayTradingStats[]
+  vcoinTransactions    PlayVCoinTransaction[]
+  rankings            PlayRanking[]
+
+  @@unique([brokerId, accountNumber])
+  @@index([userId])
+}
+
+// Snapshots periódicos de saldo/equity para graficar evolución.
+model PlayAccountSnapshot {
+  id         String         @id @default(cuid())
+  accountId  String
+  account    PlayMt5Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  balance    Float
+  equity     Float
+  capturedAt DateTime       @default(now())
+
+  @@index([accountId, capturedAt])
+}
+
+// Lotaje/beneficio agregado por periodo (alimentado por el sync de Myfxbook).
+model PlayTradingStats {
+  id           String         @id @default(cuid())
+  accountId    String
+  account      PlayMt5Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  periodStart  DateTime       @db.Date
+  periodEnd    DateTime       @db.Date
+  lotsTraded   Float          @default(0)
+  profitPct    Float          @default(0)
+  profitAmount Float          @default(0)
+
+  @@unique([accountId, periodStart, periodEnd])
+}
+
+// Ledger de V-COIN ganado por lotaje (nunca se borra). Se acredita también
+// contra User.vCoinBalance en el mismo momento — este modelo es el detalle
+// auditable de esos movimientos, igual que VantageIbAccount lo es para la
+// parte de comisión de Vantage.
+model PlayVCoinTransaction {
+  id          String          @id @default(cuid())
+  userId      String
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId   String?
+  account     PlayMt5Account? @relation(fields: [accountId], references: [id])
+  type        PlayVCoinTxType
+  amount      Float           // puede ser negativo (canje en la tienda)
+  description String?
+  createdAt   DateTime        @default(now())
+
+  @@index([userId, createdAt])
+}
+
+// Cofres configurables, uno por tramo.
+model PlayChest {
+  id              String   @id @default(cuid())
+  tier            PlayTier @unique
+  label           String
+  unlockCondition String   @db.Text // descripción legible, ej. "Top 3 ranking mensual"
+  vcoinReward     Float    @default(0)
+  extraReward     String?  // badge, sorpresa, etc.
+  active          Boolean  @default(true)
+
+  userChests      PlayUserChest[]
+  loot            PlayChestLoot[]
+  leagues         PlayLeague[]
+}
+
+// Cofres obtenidos por un jugador.
+model PlayUserChest {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chestId    String
+  chest      PlayChest @relation(fields: [chestId], references: [id])
+  unlockedAt DateTime  @default(now())
+  openedAt   DateTime?
+}
+
+// Rankings calculados por periodo (snapshot, para históricos).
+model PlayRanking {
+  id          String               @id @default(cuid())
+  periodStart DateTime             @db.Date
+  periodEnd   DateTime             @db.Date
+  tier        PlayTier
+  criterion   PlayRankingCriterion
+  userId      String
+  user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId   String
+  account     PlayMt5Account       @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  value       Float
+  position    Int
+
+  @@index([periodStart, periodEnd, tier])
+}
+
+// Torneos configurables.
+model PlayTournament {
+  id         String               @id @default(cuid())
+  name       String
+  criterion  PlayRankingCriterion
+  tierFilter PlayTier?            // null = todos los tramos
+  startsAt   DateTime             @db.Date
+  endsAt     DateTime             @db.Date
+  prize      String
+  createdAt  DateTime             @default(now())
+}
+
+// Pagos manuales en cripto (USDT TRC20 / BEP20) al canjear V-COIN.
+model PlayPayout {
+  id          String            @id @default(cuid())
+  userId      String
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amountVCoin Float
+  network     PlayPayoutNetwork
+  wallet      String
+  status      PlayPayoutStatus  @default(PENDIENTE)
+  txHash      String?
+  requestedAt DateTime          @default(now())
+  paidAt      DateTime?
+}
+
+// Escala de V-COIN por rango de lotes, separada por tipo de cuenta.
+// Nota: igual que en el proyecto original, hoy no está conectada al cálculo
+// automático (src/lib/play/vcoin-engine.ts usa la tasa fija en Setting) —
+// queda como tabla configurable para una futura escala por tramos.
+model PlayVCoinScale {
+  id          String          @id @default(cuid())
+  accountType PlayAccountType
+  minLots     Float
+  maxLots     Float?          // null = sin límite superior
+  ratePerLot  Float
+  sortOrder   Int             @default(0)
+
+  @@unique([accountType, minLots])
+}
+
+// Catálogo de artículos canjeables (tienda y premios de cofres).
+model PlayCatalogArticle {
+  id        String               @id @default(cuid())
+  name      String
+  category  PlayArticleCategory
+  price     Float
+  imageUrl  String?
+  active    Boolean              @default(true)
+  createdAt DateTime             @default(now())
+
+  loot      PlayChestLoot[]
+  gifts     PlayPlayerGift[]
+}
+
+// Probabilidad de cada artículo como premio de un cofre concreto.
+model PlayChestLoot {
+  id          String             @id @default(cuid())
+  chestId     String
+  chest       PlayChest          @relation(fields: [chestId], references: [id], onDelete: Cascade)
+  articleId   String
+  article     PlayCatalogArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  probability Float              @default(0) // % (0-100)
+}
+
+// Metas de progreso (lotes objetivo y días máximo de ciclo) por tramo.
+model PlayTierGoal {
+  tier       PlayTier @id
+  lotsTarget Float
+  daysLimit  Int
+}
+
+// Progreso de ciclo del jugador (barra "Progreso del Trader").
+model PlayPlayerProgress {
+  userId         String   @id
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tierIndex      Int      @default(0)
+  cycleLots      Float    @default(0)
+  cycleDay       Int      @default(0)
+  cycleStartedAt DateTime @default(now()) @db.Date
+}
+
+// Cofres regalados por el admin, pendientes de que el jugador los abra.
+model PlayPlayerGift {
+  id         String              @id @default(cuid())
+  userId     String
+  user       User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tier       PlayTier
+  rewardType PlayGiftRewardType
+  amount     Float?
+  articleId  String?
+  article    PlayCatalogArticle? @relation(fields: [articleId], references: [id])
+  delivered  Boolean             @default(false)
+  createdAt  DateTime            @default(now())
+}
+
+// Vinculación con Myfxbook (alternativa gratuita para leer, en modo
+// observador, el saldo y las operaciones de la cuenta MT5 de un jugador):
+// cada jugador crea su propia cuenta en myfxbook.com, añade ahí su cuenta
+// MT5 (con la contraseña investor), y nos da el email/contraseña de esa
+// cuenta de Myfxbook para poder leer sus datos automáticamente — no
+// necesitamos la contraseña investor de MT5 directamente.
+model PlayMyfxbookLink {
+  id                String    @id @default(cuid())
+  userId            String    @unique
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email             String
+  passwordEnc       String    @db.Text // cifrado a nivel de aplicación, nunca en claro
+  myfxbookAccountId String?   // id de la cuenta dentro de Myfxbook, se resuelve en el primer sync
+  lastSyncedAt      DateTime?
+  createdAt         DateTime  @default(now())
+}
+
+// Ligas del ranking, agrupadas por saldo de cuenta (capital), configurables
+// desde admin. Cada liga puede tener un cofre de premio para repartir
+// manualmente entre los primeros del mes.
+model PlayLeague {
+  id             String    @id @default(cuid())
+  name           String    @unique
+  minBalance     Float
+  maxBalance     Float?    // null = sin límite superior
+  prizeChestTier PlayTier?
+  prizeChest     PlayChest? @relation(fields: [prizeChestTier], references: [tier])
+  sortOrder      Int       @default(0)
 }
