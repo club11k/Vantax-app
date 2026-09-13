@@ -17,7 +17,7 @@ export default async function AdminSettingsPage() {
     "analysis.refresh_cron",
     "branding.support_email",
     "access.public_signup_locked",
-    "vcoin.rate_per_dollar_commission",
+    "vcoin.commission_percent",
     "play.vcoin_rate_per_lot",
     "play.cent_factor",
   ];
@@ -57,15 +57,17 @@ export default async function AdminSettingsPage() {
         <strong>V-COIN — cuentas de Vantage (IB)</strong>
         <p style={{ margin: "6px 0 0" }}>
           La API de Vantage solo da la comisión acumulada por cuenta, no el lotaje de cada operación. Por eso el
-          V-COIN de estas cuentas se calcula a partir de la comisión: cuántos V-COIN se dan por cada $1 de comisión
-          nueva generada. Al ser un ratio en dólares, funciona igual para cuentas normales y cuentas Cent — no hace
-          falta un tramo distinto para cada tipo, la comisión en $ ya refleja la diferencia.
+          V-COIN de estas cuentas se calcula a partir de la comisión, por porcentaje (no por lote): la base es que 1
+          céntimo de comisión nueva generada equivale a 1 V-COIN al 100%, y el campo de abajo decide qué porcentaje
+          de eso se reparte de verdad (ej. con 50%, $10 de comisión nueva dan 500 V-COIN). Al ser un ratio sobre la
+          comisión en $, funciona igual para cuentas normales y cuentas Cent — no hace falta un tramo distinto para
+          cada tipo.
         </p>
       </div>
       <SettingForm
-        settingKey="vcoin.rate_per_dollar_commission"
-        label="V-COIN por cada $1 de comisión nueva generada"
-        initialValue={extractValue(byKey.get("vcoin.rate_per_dollar_commission") ?? null, "1000")}
+        settingKey="vcoin.commission_percent"
+        label="Porcentaje de la comisión nueva que se reparte como V-COIN (0-100)"
+        initialValue={extractValue(byKey.get("vcoin.commission_percent") ?? null, "50")}
       />
       <VantageSyncPanel />
 
