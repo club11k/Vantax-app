@@ -17,13 +17,13 @@ export function SubscribeButton({ planId, label }: { planId: string; label?: str
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.url) {
-        setError(data.error ?? "No se pudo iniciar el pago. Probá de nuevo en un momento.");
+        setError(data.error ?? "No se pudo iniciar el pago. Prueba de nuevo en un momento.");
         setLoading(false);
         return;
       }
       window.location.href = data.url;
     } catch (err) {
-      setError("No se pudo conectar con el servidor. Probá de nuevo.");
+      setError("No se pudo conectar con el servidor. Prueba de nuevo.");
       setLoading(false);
     }
   }
@@ -55,7 +55,7 @@ export function ManageSubscriptionButton() {
       }
       window.location.href = data.url;
     } catch (err) {
-      setError("No se pudo conectar con el servidor. Probá de nuevo.");
+      setError("No se pudo conectar con el servidor. Prueba de nuevo.");
       setLoading(false);
     }
   }
