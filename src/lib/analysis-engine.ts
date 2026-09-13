@@ -168,10 +168,29 @@ export async function getSystemPrompt(): Promise<string> {
   return fallback;
 }
 
+// Política de búsqueda web para la generación de análisis — se añade SIEMPRE
+// después del prompt de sistema (el editable desde /admin/settings), tanto
+// si se usa el que viene por defecto como uno personalizado, para que la
+// regla de "nunca inventar una cifra fuera del snapshot" se mantenga pase lo
+// que pase se escriba en ese campo. Antes el motor no tenía ninguna forma de
+// enterarse de noticias recientes (solo el snapshot de datos macro, que se
+// refresca por cron) — por eso el análisis podía sonar desactualizado ante
+// eventos de última hora aunque los datos numéricos estuvieran al día.
+const WEB_SEARCH_POLICY =
+  "BÚSQUEDA WEB: además del snapshot de datos de abajo, tienes búsqueda web en tiempo real. Antes de escribir " +
+  "el análisis, busca las noticias y eventos más recientes (últimas 24-48 horas) que puedan estar moviendo el " +
+  "oro o el dólar ahora mismo — declaraciones de la Fed o de sus miembros, datos económicos publicados hoy, " +
+  "geopolítica, flujos de refugio, comentarios de bancos centrales — y si encuentras algo relevante, téjelo en " +
+  "el análisis como parte del contexto. REGLA IMPORTANTE, sin excepción: la búsqueda web es solo para contexto " +
+  "de noticias y eventos — el precio del oro, los niveles técnicos (soportes/resistencias), y cualquier cifra " +
+  "macro (tasas, inflación, empleo, etc.) SIEMPRE deben salir del snapshot numérico que se te da a " +
+  "continuación, nunca de un precio o cifra que veas en un resultado de búsqueda. Si algo que encuentras " +
+  "buscando contradice el snapshot en una cifra, manda siempre el snapshot.";
+
 export async function generateAnalysis(format: "MENSAJE" | "TECNICO", images?: AnalysisImageInput[]) {
   const snapshot = await buildMarketSnapshot();
   const snapshotText = formatSnapshotForPrompt(snapshot);
-  const systemPrompt = await getSystemPrompt();
+  const systemPrompt = `${await getSystemPrompt()}\n\n${WEB_SEARCH_POLICY}`;
 
   const validImages = (images ?? []).filter((img) => ALLOWED_IMAGE_TYPES.has(img.mediaType));
 
@@ -224,7 +243,9 @@ export async function generateAnalysis(format: "MENSAJE" | "TECNICO", images?: A
 
   const message = await anthropic.messages.create({
     model: ANALYSIS_MODEL,
-    max_tokens: 1500,
+    // Más que antes (era 1500): las búsquedas web consumen parte del
+    // presupuesto de esta llamada antes de llegar al texto final.
+    max_tokens: 2500,
     system: systemPrompt,
     messages: [
       {
@@ -232,11 +253,18 @@ export async function generateAnalysis(format: "MENSAJE" | "TECNICO", images?: A
         content: userContent,
       },
     ],
-  });
+    // Igual que en el chat de admin (ver src/lib/admin-chat.ts): el SDK
+    // instalado es de antes de esta tool, sus tipos no la conocen, pero la
+    // API sí la soporta — de ahí el `as any` sobre el objeto de parámetros.
+    tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }],
+  } as any);
 
+  // El filtro por type "text" ya ignora los bloques nuevos que trae la
+  // búsqueda web (server_tool_use / web_search_tool_result) sin que haga
+  // falta tocar nada aquí — solo se queda con el texto final del análisis.
   const content = message.content
-    .filter((block) => block.type === "text")
-    .map((block) => (block as { type: "text"; text: string }).text)
+    .filter((block: any) => block.type === "text")
+    .map((block: any) => block.text as string)
     .join("\n");
 
   return { content, snapshot };
