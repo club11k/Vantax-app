@@ -1,9 +1,14 @@
 // Integración con la API de IB de Vantage (documento "Vantage IB Access API"
-// que compartió Esther). Solo se usa el endpoint de comisión (commissionData):
-// la API de Vantage NO expone el lotaje de cada operación individual, solo
-// comisión acumulada por cuenta — por eso el sistema de V-COIN para cuentas
-// de Vantage se basa en comisión generada, no en lotes como en el resto del
-// proyecto Vantax Play (que usa Myfxbook).
+// que compartió Esther). Se usan dos de sus 4 endpoints:
+//  - commissionData: la API de Vantage NO expone el lotaje de cada operación
+//    individual, solo comisión acumulada por cuenta — por eso el sistema de
+//    V-COIN para cuentas de Vantage se basa en comisión generada, no en
+//    lotes como en el resto del proyecto Vantax Play (que usa Myfxbook). De
+//    aquí también sale lastTradeTime, para saber si una cuenta está activa.
+//  - allocationData: historial de entradas ("In") y salidas ("Out") de
+//    clientes de tu IB — la única forma de saber si alguien deja de estar
+//    bajo tu IB (ver syncVantageAllocations).
+// (Los otros dos, leadsData y accountData, no se usan todavía.)
 //
 // Las peticiones salen a través del proxy Squid montado en el droplet de
 // DigitalOcean (46.101.254.106), porque Vantage solo permite llamadas desde
@@ -110,6 +115,37 @@ export async function fetchVantageCommissions(): Promise<VantageCommissionRow[]>
   return res.data ?? [];
 }
 
+export type VantageAllocationRow = {
+  userId: number;
+  account: number | null; // puede venir null (evento a nivel de usuario, no de una cuenta concreta)
+  createTime: number; // epoch ms
+  content: string | null;
+  details: string | null;
+  type: "In" | "Out";
+};
+
+function formatVantageDate(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
+    `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+  );
+}
+
+// Allocation Data API: historial de entradas ("In") y salidas ("Out") de
+// clientes/cuentas de tu IB — es la única de las 4 APIs de Vantage que dice
+// explícitamente cuándo alguien deja de estar en tu IB.
+export async function fetchVantageAllocations(startTime: Date, endTime: Date): Promise<VantageAllocationRow[]> {
+  const res = await callVantageIb<VantageAllocationRow[]>("/api/ibData/allocationData", {
+    startTime: formatVantageDate(startTime),
+    endTime: formatVantageDate(endTime),
+  });
+  if (res.code !== 1) {
+    throw new Error(`Vantage devolvió un error al pedir el historial de asignaciones: ${res.msg}`);
+  }
+  return res.data ?? [];
+}
+
 async function getVCoinRate(): Promise<number> {
   const setting = await prisma.setting.findUnique({ where: { key: "vcoin.rate_per_dollar_commission" } });
   const value = setting?.value as any;
@@ -123,6 +159,11 @@ export type VantageSyncResult = {
   accountsCredited: number;
   totalVCoinAwarded: number;
   skippedNoRate: boolean;
+  // Historial de entradas/salidas del IB (Allocation Data API) — ver
+  // syncVantageAllocations más abajo.
+  allocationEventsFound: number;
+  accountsEntered: number; // pasaron a LINKED en este sync
+  accountsExited: number; // pasaron a UNLINKED en este sync
 };
 
 // Compara la comisión acumulada que devuelve Vantage ahora mismo contra la
@@ -138,6 +179,9 @@ export async function syncVantageVCoin(): Promise<VantageSyncResult> {
       accountsCredited: 0,
       totalVCoinAwarded: 0,
       skippedNoRate: true,
+      allocationEventsFound: 0,
+      accountsEntered: 0,
+      accountsExited: 0,
     };
   }
 
@@ -159,22 +203,25 @@ export async function syncVantageVCoin(): Promise<VantageSyncResult> {
 
     const commission = Number(row.commission) || 0;
     const delta = commission - linked.lastCommission;
+    const lastTradeTime = row.lastTradeTime ? new Date(row.lastTradeTime) : null;
+
+    // Estos campos se refrescan siempre que la cuenta aparece en
+    // commissionData, haya o no comisión nueva — así lastTradeTime (con lo
+    // que se calcula si está "activo este mes") y lastSyncedAt quedan al
+    // día en cada sync, no solo cuando hay V-COIN que repartir.
+    const baseData = {
+      vantageUserId: row.userId,
+      lastTradeTime,
+      accountType: row.accountType ?? linked.accountType,
+      platform: row.platform ?? linked.platform,
+      lastSyncedAt: new Date(),
+    };
 
     if (delta <= 0) {
-      // Sin comisión nueva desde el último sync. Si Vantage devolvió un
-      // valor distinto (p.ej. un ajuste a la baja), igualmente actualizamos
-      // la referencia para no perder el hilo, pero sin acreditar V-COIN.
-      if (commission !== linked.lastCommission) {
-        await prisma.vantageIbAccount.update({
-          where: { id: linked.id },
-          data: {
-            lastCommission: commission,
-            accountType: row.accountType ?? linked.accountType,
-            platform: row.platform ?? linked.platform,
-            lastSyncedAt: new Date(),
-          },
-        });
-      }
+      await prisma.vantageIbAccount.update({
+        where: { id: linked.id },
+        data: { ...baseData, lastCommission: commission },
+      });
       continue;
     }
 
@@ -182,7 +229,7 @@ export async function syncVantageVCoin(): Promise<VantageSyncResult> {
     if (vCoinToAward <= 0) {
       await prisma.vantageIbAccount.update({
         where: { id: linked.id },
-        data: { lastCommission: commission, lastSyncedAt: new Date() },
+        data: { ...baseData, lastCommission: commission },
       });
       continue;
     }
@@ -190,13 +237,7 @@ export async function syncVantageVCoin(): Promise<VantageSyncResult> {
     await prisma.$transaction([
       prisma.vantageIbAccount.update({
         where: { id: linked.id },
-        data: {
-          lastCommission: commission,
-          vCoinEarned: { increment: vCoinToAward },
-          accountType: row.accountType ?? linked.accountType,
-          platform: row.platform ?? linked.platform,
-          lastSyncedAt: new Date(),
-        },
+        data: { ...baseData, lastCommission: commission, vCoinEarned: { increment: vCoinToAward } },
       }),
       prisma.user.update({
         where: { id: linked.userId },
@@ -214,5 +255,117 @@ export async function syncVantageVCoin(): Promise<VantageSyncResult> {
     accountsCredited,
     totalVCoinAwarded,
     skippedNoRate: false,
+    allocationEventsFound: 0,
+    accountsEntered: 0,
+    accountsExited: 0,
   };
+}
+
+async function getAllocationCursor(): Promise<Date> {
+  const setting = await prisma.setting.findUnique({ where: { key: "vantage.allocation_cursor" } });
+  const value = setting?.value as any;
+  const raw = value && typeof value === "object" && "value" in value ? value.value : null;
+  const parsed = raw ? new Date(raw) : null;
+  if (parsed && !Number.isNaN(parsed.getTime())) return parsed;
+  // Primera vez que se corre: arrancamos un año atrás, igual que el tope de
+  // commissionData, para tener algo de histórico desde el principio.
+  const oneYearAgo = new Date();
+  oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+  return oneYearAgo;
+}
+
+async function setAllocationCursor(at: Date): Promise<void> {
+  await prisma.setting.upsert({
+    where: { key: "vantage.allocation_cursor" },
+    update: { value: { value: at.toISOString() } },
+    create: { key: "vantage.allocation_cursor", value: { value: at.toISOString() } },
+  });
+}
+
+// Lee el historial de entradas/salidas desde el último sync (o del último
+// año, la primera vez) y actualiza VantageIbAccount.ibStatus de cada cuenta
+// ya vinculada en VANTAX según su evento más reciente. Las cuentas de
+// Vantage que aún no se vincularon en VANTAX (o eventos sin número de
+// cuenta que no matchean ningún vantageUserId conocido) se guardan igual en
+// el historial crudo, pero no afectan a ningún ibStatus.
+export async function syncVantageAllocations(): Promise<Pick<VantageSyncResult, "allocationEventsFound" | "accountsEntered" | "accountsExited">> {
+  const cursor = await getAllocationCursor();
+  const now = new Date();
+  const rows = await fetchVantageAllocations(cursor, now);
+
+  if (rows.length > 0) {
+    await prisma.vantageAllocationEvent.createMany({
+      data: rows.map((r) => ({
+        vantageUserId: r.userId,
+        accountNumber: r.account != null ? String(r.account) : null,
+        type: r.type,
+        occurredAt: new Date(r.createTime),
+        content: r.content,
+        details: r.details,
+      })),
+      skipDuplicates: true,
+    });
+  }
+
+  const linkedAccounts = await prisma.vantageIbAccount.findMany();
+  const byAccountNumber = new Map(linkedAccounts.map((a) => [a.accountNumber, a]));
+  const byVantageUserId = new Map(linkedAccounts.filter((a) => a.vantageUserId != null).map((a) => [a.vantageUserId as number, a]));
+
+  // Nos quedamos con el evento más reciente por cuenta vinculada, por si el
+  // rango trajo varios (p.ej. salió y volvió a entrar en el mismo periodo).
+  const latestByAccountId = new Map<string, VantageAllocationRow & { occurredAt: Date }>();
+  for (const r of rows) {
+    const linked = (r.account != null ? byAccountNumber.get(String(r.account)) : undefined) ?? byVantageUserId.get(r.userId);
+    if (!linked) continue;
+    const occurredAt = new Date(r.createTime);
+    const prevLatest = latestByAccountId.get(linked.id);
+    if (!prevLatest || occurredAt > prevLatest.occurredAt) {
+      latestByAccountId.set(linked.id, { ...r, occurredAt });
+    }
+  }
+
+  let accountsEntered = 0;
+  let accountsExited = 0;
+
+  for (const [accountId, event] of latestByAccountId) {
+    const linked = linkedAccounts.find((a) => a.id === accountId)!;
+    // Solo aplicamos si este evento es más nuevo que el último que ya
+    // teníamos aplicado, para no retroceder el estado con datos viejos.
+    if (linked.lastAllocationAt && event.occurredAt <= linked.lastAllocationAt) continue;
+
+    const newStatus = event.type === "Out" ? "UNLINKED" : "LINKED";
+    if (newStatus !== linked.ibStatus) {
+      if (newStatus === "LINKED") accountsEntered += 1;
+      else accountsExited += 1;
+    }
+
+    await prisma.vantageIbAccount.update({
+      where: { id: accountId },
+      data: { ibStatus: newStatus, lastAllocationAt: event.occurredAt, lastAllocationType: event.type },
+    });
+  }
+
+  await setAllocationCursor(now);
+
+  return { allocationEventsFound: rows.length, accountsEntered, accountsExited };
+}
+
+// Sync completo de Vantage (un solo botón en /admin/settings): comisión →
+// V-COIN por lotaje de comisión, más el historial de entradas/salidas del
+// IB. Se combinan en un único resultado para no tener dos botones separados.
+export async function syncVantageFull(): Promise<VantageSyncResult> {
+  const commissionResult = await syncVantageVCoin();
+  if (commissionResult.skippedNoRate) return commissionResult;
+
+  try {
+    const allocationResult = await syncVantageAllocations();
+    return { ...commissionResult, ...allocationResult };
+  } catch (err) {
+    // Si falla el historial de allocations (p.ej. la API no responde), no
+    // queremos perder el resultado de la comisión que sí funcionó — se
+    // informa como si no hubiera habido movimientos de entrada/salida esta
+    // vez, y se puede reintentar en el próximo sync.
+    console.error("Error sincronizando el historial de entradas/salidas de Vantage:", err);
+    return commissionResult;
+  }
 }
