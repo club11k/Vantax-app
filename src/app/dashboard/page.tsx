@@ -7,6 +7,7 @@ import { getRemainingQuota } from "@/lib/quota";
 import { SubscribeButton, ManageSubscriptionButton } from "@/components/SubscribeButton";
 import { AnalysisGenerator } from "@/components/AnalysisGenerator";
 import { AppNav } from "@/components/AppNav";
+import { AdminChatPanel } from "@/components/admin/AdminChatPanel";
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
@@ -117,6 +118,15 @@ export default async function DashboardPage() {
             chatAccess={!!hasActivePlan && !!user?.analysisChatAccess}
           />
         </>
+      )}
+
+      {user?.role === "ADMIN" && (
+        <div style={{ marginTop: 32 }}>
+          <div style={{ marginBottom: 10, fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.1em", color: "var(--text-dim)", textTransform: "uppercase" }}>
+            Chat IA (solo tú lo ves)
+          </div>
+          <AdminChatPanel />
+        </div>
       )}
 
       <div style={{ marginTop: 32, marginBottom: 10, fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.1em", color: "var(--text-dim)", textTransform: "uppercase" }}>
