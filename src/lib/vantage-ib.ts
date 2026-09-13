@@ -146,11 +146,18 @@ export async function fetchVantageAllocations(startTime: Date, endTime: Date): P
   return res.data ?? [];
 }
 
-async function getVCoinRate(): Promise<number> {
-  const setting = await prisma.setting.findUnique({ where: { key: "vcoin.rate_per_dollar_commission" } });
+// Porcentaje (0-100) de la comisión nueva generada que se reparte como
+// V-COIN, editable desde /admin/settings. La base de conversión es fija:
+// 1 céntimo de comisión = 1 V-COIN al 100% — así que a un delta de comisión
+// de $12.50 (1250 céntimos) con un 50% configurado le corresponden 625
+// V-COIN. Se recorta a [0, 100] por seguridad: un valor mal tecleado (ej.
+// "1000" en vez de "50") no debe multiplicar los pagos por 10.
+async function getVCoinPercent(): Promise<number> {
+  const setting = await prisma.setting.findUnique({ where: { key: "vcoin.commission_percent" } });
   const value = setting?.value as any;
-  const rate = Number(value && typeof value === "object" && "value" in value ? value.value : value);
-  return Number.isFinite(rate) ? rate : 0;
+  const raw = Number(value && typeof value === "object" && "value" in value ? value.value : value);
+  if (!Number.isFinite(raw)) return 0;
+  return Math.min(100, Math.max(0, raw));
 }
 
 export type VantageSyncResult = {
@@ -171,8 +178,8 @@ export type VantageSyncResult = {
 // V-COIN por la diferencia — así una misma comisión nunca se paga dos veces
 // aunque se ejecute la sincronización varias veces.
 export async function syncVantageVCoin(): Promise<VantageSyncResult> {
-  const rate = await getVCoinRate();
-  if (!rate || rate <= 0) {
+  const percent = await getVCoinPercent();
+  if (!percent || percent <= 0) {
     return {
       totalAccountsFromVantage: 0,
       matchedAccounts: 0,
@@ -225,7 +232,11 @@ export async function syncVantageVCoin(): Promise<VantageSyncResult> {
       continue;
     }
 
-    const vCoinToAward = Math.floor(delta * rate);
+    // percent está en [0,100]; a 100% cada céntimo de comisión nueva (delta
+    // en dólares × 100) se convierte en 1 V-COIN, así que multiplicar delta
+    // directamente por percent da el resultado (ej. delta=$12.50, percent=50
+    // → 625 V-COIN).
+    const vCoinToAward = Math.floor(delta * percent);
     if (vCoinToAward <= 0) {
       await prisma.vantageIbAccount.update({
         where: { id: linked.id },
