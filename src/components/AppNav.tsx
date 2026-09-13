@@ -10,7 +10,7 @@ import Link from "next/link";
 // dentro de la misma fila.
 
 const NAV_ITEMS = [
-  { href: "/dashboard", label: "Mi panel", key: "dashboard" },
+  { href: "/dashboard", label: "Análisis", key: "dashboard" },
   { href: "/mercado", label: "Centro de mercado", key: "mercado" },
   { href: "/journal", label: "Journaly", key: "journal" },
   { href: "/riesgo", label: "Calculadora de riesgo", key: "riesgo" },
