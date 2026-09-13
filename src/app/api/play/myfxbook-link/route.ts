@@ -16,6 +16,14 @@ import { myfxbookLogin, myfxbookLogout, myfxbookGetMyAccounts, brokerNameFromSer
 const linkSchema = z.object({
   email: z.string().trim().email("Ingresa un email válido."),
   password: z.string().min(1, "La contraseña de Myfxbook es obligatoria."),
+  // Id de la cuenta MT5 dentro de Myfxbook (acc.id, tal cual lo devuelve
+  // get-my-accounts.json) a vincular. Opcional: si el login de Myfxbook solo
+  // tiene una cuenta MT5 añadida, se usa esa directamente. Si tiene varias y
+  // no se manda accountId, respondemos con needsSelection para que el
+  // jugador elija — antes esto siempre cogía la primera (accounts[0]), lo
+  // que impedía vincular una cuenta distinta a la que se detectó la primera
+  // vez si el login de Myfxbook tenía más de una cuenta MT5 añadida.
+  accountId: z.string().trim().optional(),
 });
 
 export async function POST(req: Request) {
@@ -30,7 +38,7 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Datos inválidos." }, { status: 400 });
   }
-  const { email, password } = parsed.data;
+  const { email, password, accountId } = parsed.data;
 
   let passwordEnc: string | null;
   try {
@@ -61,7 +69,27 @@ export async function POST(req: Request) {
       );
     }
 
-    const acc = accounts[0];
+    // Si el login de Myfxbook tiene más de una cuenta MT5 añadida y no nos
+    // dijeron cuál (accountId), no adivinamos — se lo preguntamos al
+    // jugador. Con una sola cuenta, se sigue autocompletando sola como
+    // siempre.
+    if (accounts.length > 1 && !accountId) {
+      const options = accounts.map((a) => {
+        const rawServer = a.server as unknown;
+        const server = typeof rawServer === "string" ? rawServer : (rawServer as { name?: string } | null)?.name || "";
+        return {
+          id: String(a.id),
+          login: String(a.login || a.accountId || a.id),
+          server,
+          brokerName: brokerNameFromServer(server),
+          accountType: detectAccountType(server, a.name),
+          balance: Number(a.balance) || 0,
+        };
+      });
+      return NextResponse.json({ needsSelection: true, accounts: options });
+    }
+
+    const acc = (accountId ? accounts.find((a) => String(a.id) === accountId) : accounts[0]) || accounts[0];
     // Myfxbook devuelve "server" como un objeto ({"name":"Vantage Markets"}),
     // no como texto simple — a diferencia de lo que asumía el backend
     // original de Vantax Play (de ahí venía el error "n.split is not a
@@ -116,3 +144,4 @@ export async function POST(req: Request) {
     await myfxbookLogout(auth);
   }
 }
+
