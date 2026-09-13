@@ -277,10 +277,47 @@ model VantageIbAccount {
   lastCommission Float     @default(0) // comisión acumulada vista en el último sync
   vCoinEarned    Int       @default(0) // total de V-COIN acreditados a esta cuenta desde que se vinculó (auditoría)
   lastSyncedAt   DateTime?
+
+  // userId interno de Vantage (no confundir con userId de VANTAX de arriba)
+  // — se guarda para poder cruzar los eventos de allocationData que vienen
+  // sin número de cuenta (account: null), que pasa en algunos "Out".
+  vantageUserId    Int?
+  // Última vez que operó, tal como lo devuelve commissionData
+  // (lastTradeTime) — de ahí se calcula si está "activo" (operó en los
+  // últimos 30 días) sin necesidad de otra llamada a la API.
+  lastTradeTime    DateTime?
+
+  // Estado de vinculación al IB según el histórico de allocationData (ver
+  // VantageAllocationEvent): LINKED mientras el último evento visto para
+  // esta cuenta/usuario sea "In" (o si todavía no hay ningún evento — se
+  // asume vinculado desde que apareció en commissionData/accountData),
+  // UNLINKED si el último evento es "Out" (se desvinculó de este IB).
+  ibStatus         String    @default("LINKED")
+  lastAllocationAt DateTime?
+  lastAllocationType String? // "In" o "Out", el del evento más reciente aplicado
+
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
   @@index([userId])
+}
+
+// Historial crudo de entradas/salidas del IB que devuelve la Allocation Data
+// API de Vantage (/api/ibData/allocationData) — se guarda cada evento tal
+// cual llega (nunca se borra, es auditoría), y en cada sync se usa el más
+// reciente por cuenta/usuario para actualizar VantageIbAccount.ibStatus.
+model VantageAllocationEvent {
+  id            String   @id @default(cuid())
+  vantageUserId Int // userId de Vantage del cliente afectado (siempre viene, a diferencia de account)
+  accountNumber String? // puede venir null (evento a nivel de usuario, no de una cuenta concreta)
+  type          String // "In" o "Out"
+  occurredAt    DateTime // createTime que manda Vantage
+  content       String?
+  details       String?
+  createdAt     DateTime @default(now())
+
+  @@unique([vantageUserId, occurredAt, type])
+  @@index([accountNumber])
 }
 
 // ------------------------------------------------------------
