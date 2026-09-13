@@ -4,7 +4,7 @@ import { getServerSession } from "next-auth";
 import { revalidatePath } from "next/cache";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { syncVantageVCoin, type VantageSyncResult } from "@/lib/vantage-ib";
+import { syncVantageFull, type VantageSyncResult } from "@/lib/vantage-ib";
 import { syncAllMyfxbookAccounts, type MyfxbookSyncResult } from "@/lib/play/myfxbook-sync";
 
 async function requireAdmin() {
@@ -190,10 +190,11 @@ export async function updateSetting(key: string, value: string) {
 export async function syncVantageCommissions(): Promise<VantageSyncResult & { error?: string }> {
   const admin = await requireAdmin();
   try {
-    const result = await syncVantageVCoin();
+    const result = await syncVantageFull();
     await logAction(admin.id, "sync_vantage_vcoin", result as any);
     revalidatePath("/admin/settings");
     revalidatePath("/admin/users");
+    revalidatePath("/admin/vantage-clients");
     return result;
   } catch (err) {
     const message = err instanceof Error ? err.message : "Error desconocido al sincronizar con Vantage.";
@@ -204,6 +205,9 @@ export async function syncVantageCommissions(): Promise<VantageSyncResult & { er
       accountsCredited: 0,
       totalVCoinAwarded: 0,
       skippedNoRate: false,
+      allocationEventsFound: 0,
+      accountsEntered: 0,
+      accountsExited: 0,
       error: message,
     };
   }
