@@ -30,6 +30,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <Link href="/admin/players" className="btn">Jugadores (Play)</Link>
         <Link href="/admin/plans" className="btn">Planes</Link>
         <Link href="/admin/settings" className="btn">Configuración</Link>
+        <Link href="/admin/chat" className="btn">Chat IA</Link>
       </nav>
       {children}
     </div>
