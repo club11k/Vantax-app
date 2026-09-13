@@ -105,10 +105,34 @@ function callVantageIb<T>(path: string, extraParams: Record<string, unknown> = {
   });
 }
 
+function formatVantageDate(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
+    `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+  );
+}
+
+// Vantage exige startTime/endTime en TODAS las llamadas con rango de fechas
+// (incluida commissionData, aunque su documentación no lo menciona) y no
+// deja pedir más de 3 meses de golpe — "The start and end times are
+// mandatory and must not exceed three months." Usamos 89 días para quedar
+// siempre por debajo del límite exacto.
+const MAX_VANTAGE_WINDOW_MS = 89 * 24 * 60 * 60 * 1000;
+
 // La API de comisión de Vantage no admite llamadas entre las 00:00 y las
-// 06:00 (hora del servidor de Vantage) y solo devuelve datos del último año.
+// 06:00 (hora del servidor de Vantage). Pedimos siempre los últimos ~3
+// meses: para "commission" (comisión acumulada de toda la vida de la
+// cuenta) el rango solo importa para decidir qué cuentas incluye, no para
+// recortar el total — si una cuenta lleva más de 3 meses sin operar y deja
+// de aparecer aquí, su inactividad ya se ve igualmente por lastTradeTime.
 export async function fetchVantageCommissions(): Promise<VantageCommissionRow[]> {
-  const res = await callVantageIb<VantageCommissionRow[]>("/api/ibData/commissionData");
+  const endTime = new Date();
+  const startTime = new Date(endTime.getTime() - MAX_VANTAGE_WINDOW_MS);
+  const res = await callVantageIb<VantageCommissionRow[]>("/api/ibData/commissionData", {
+    startTime: formatVantageDate(startTime),
+    endTime: formatVantageDate(endTime),
+  });
   if (res.code !== 1) {
     throw new Error(`Vantage devolvió un error al pedir comisiones: ${res.msg}`);
   }
@@ -124,17 +148,11 @@ export type VantageAllocationRow = {
   type: "In" | "Out";
 };
 
-function formatVantageDate(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return (
-    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
-    `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
-  );
-}
-
 // Allocation Data API: historial de entradas ("In") y salidas ("Out") de
 // clientes/cuentas de tu IB — es la única de las 4 APIs de Vantage que dice
-// explícitamente cuándo alguien deja de estar en tu IB.
+// explícitamente cuándo alguien deja de estar en tu IB. Un solo llamado no
+// puede pedir más de ~3 meses (ver MAX_VANTAGE_WINDOW_MS) — trocear rangos
+// más largos es responsabilidad de quien llama (ver syncVantageAllocations).
 export async function fetchVantageAllocations(startTime: Date, endTime: Date): Promise<VantageAllocationRow[]> {
   const res = await callVantageIb<VantageAllocationRow[]>("/api/ibData/allocationData", {
     startTime: formatVantageDate(startTime),
@@ -302,7 +320,19 @@ async function setAllocationCursor(at: Date): Promise<void> {
 export async function syncVantageAllocations(): Promise<Pick<VantageSyncResult, "allocationEventsFound" | "accountsEntered" | "accountsExited">> {
   const cursor = await getAllocationCursor();
   const now = new Date();
-  const rows = await fetchVantageAllocations(cursor, now);
+
+  // Vantage no deja pedir más de ~3 meses por llamada (ver
+  // MAX_VANTAGE_WINDOW_MS) — si el cursor viene de más atrás (típicamente
+  // solo la primera vez, que arranca un año atrás), troceamos en varias
+  // llamadas hasta llegar a "now".
+  const rows: VantageAllocationRow[] = [];
+  let windowStart = cursor;
+  while (windowStart < now) {
+    const windowEnd = new Date(Math.min(windowStart.getTime() + MAX_VANTAGE_WINDOW_MS, now.getTime()));
+    const chunk = await fetchVantageAllocations(windowStart, windowEnd);
+    rows.push(...chunk);
+    windowStart = windowEnd;
+  }
 
   if (rows.length > 0) {
     await prisma.vantageAllocationEvent.createMany({
