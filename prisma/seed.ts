@@ -48,9 +48,9 @@ async function main() {
     "branding.support_email": {
       value: "vantaxproject@gmail.com",
     },
-    "vcoin.rate_per_dollar_commission": {
-      value: "1000",
-      note: "V-COIN otorgados por cada $1 de comisión nueva que genera una cuenta de Vantage (IB), en cada sincronización manual desde /admin/settings.",
+    "vcoin.commission_percent": {
+      value: "50",
+      note: "Porcentaje (0-100) de la comisión nueva de Vantage (IB) que se reparte como V-COIN, en cada sincronización manual desde /admin/settings. Base: 1 céntimo de comisión = 1 V-COIN al 100%.",
     },
     // --- Vantax Play (cashback por lotaje vía Myfxbook, brokers != Vantage) ---
     "play.vcoin_rate_per_lot": { value: "10", note: "V-COIN por lote XAUUSD en cuenta normal (Vantax Play)." },
