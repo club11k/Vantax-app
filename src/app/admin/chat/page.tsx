@@ -1,15 +1,9 @@
-import { AdminChatPanel } from "@/components/admin/AdminChatPanel";
+import { redirect } from "next/navigation";
 
+// El Chat IA se movió a /dashboard (dentro de Análisis, junto al
+// generador) para que viva en el mismo sitio donde se usa de verdad —
+// esta ruta se deja como redirect por si alguien la tenía guardada.
 export default function AdminChatPage() {
-  return (
-    <div className="panel" style={{ marginBottom: 16 }}>
-      <h2 style={{ marginTop: 0, fontSize: 16 }}>Chat IA</h2>
-      <p style={{ fontSize: 12.5, color: "var(--text-muted)", marginTop: -6, marginBottom: 16 }}>
-        Este chat es independiente del generador de análisis de /dashboard — no consume cuota de ningún plan y no
-        guarda nada en el historial de análisis de los usuarios. Es solo para ti, como herramienta de trabajo.
-      </p>
-      <AdminChatPanel />
-    </div>
-  );
+  redirect("/dashboard");
 }
 
