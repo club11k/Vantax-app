@@ -176,7 +176,7 @@ export async function getSystemPrompt(): Promise<string> {
 // enterarse de noticias recientes (solo el snapshot de datos macro, que se
 // refresca por cron) — por eso el análisis podía sonar desactualizado ante
 // eventos de última hora aunque los datos numéricos estuvieran al día.
-const WEB_SEARCH_POLICY =
+export const WEB_SEARCH_POLICY =
   "BÚSQUEDA WEB: además del snapshot de datos de abajo, tienes búsqueda web en tiempo real. Antes de escribir " +
   "el análisis, busca las noticias y eventos más recientes (últimas 24-48 horas) que puedan estar moviendo el " +
   "oro o el dólar ahora mismo — declaraciones de la Fed o de sus miembros, datos económicos publicados hoy, " +
