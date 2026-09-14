@@ -123,7 +123,7 @@ export default async function DashboardPage() {
       {user?.role === "ADMIN" && (
         <div style={{ marginTop: 32 }}>
           <div style={{ marginBottom: 10, fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.1em", color: "var(--text-dim)", textTransform: "uppercase" }}>
-            Chat IA (solo tú lo ves)
+            Solo tú lo ves
           </div>
           <AdminChatPanel />
         </div>
