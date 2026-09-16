@@ -1,11 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { PlayersTable } from "@/components/admin/PlayersTable";
 import { monthBounds } from "@/lib/play/myfxbook-sync";
+import { TIER_ORDER } from "@/lib/play/progress-engine";
 
 export default async function AdminPlayersPage() {
   const { periodStart, periodEnd } = monthBounds(new Date());
 
-  const [accounts, links, stats] = await Promise.all([
+  const [accounts, links, stats, progressRows, tierGoals, articles] = await Promise.all([
     prisma.playMt5Account.findMany({
       include: {
         user: { select: { id: true, email: true, name: true, vCoinBalance: true } },
@@ -15,16 +16,24 @@ export default async function AdminPlayersPage() {
     }),
     prisma.playMyfxbookLink.findMany(),
     prisma.playTradingStats.findMany({ where: { periodStart, periodEnd } }),
+    prisma.playPlayerProgress.findMany(),
+    prisma.playTierGoal.findMany(),
+    prisma.playCatalogArticle.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
   ]);
 
   const linkByUserId = new Map(links.map((l) => [l.userId, l]));
   const statsByAccountId = new Map(stats.map((s) => [s.accountId, s]));
+  const progressByUserId = new Map(progressRows.map((p) => [p.userId, p]));
+  const goalByTier = new Map(tierGoals.map((g) => [g.tier, g.lotsTarget]));
 
   const rows = accounts.map((a) => {
     const link = linkByUserId.get(a.userId) ?? null;
     const stat = statsByAccountId.get(a.id) ?? null;
+    const progress = progressByUserId.get(a.userId) ?? null;
+    const tier = progress ? TIER_ORDER[Math.min(progress.tierIndex, TIER_ORDER.length - 1)] : null;
     return {
       id: a.id,
+      userId: a.userId,
       userEmail: a.user.email,
       userName: a.user.name,
       vCoinBalance: a.user.vCoinBalance,
@@ -39,8 +48,13 @@ export default async function AdminPlayersPage() {
       lastSyncedAt: link?.lastSyncedAt ? link.lastSyncedAt.toISOString() : null,
       lotsThisMonth: stat?.lotsTraded ?? 0,
       profitPctThisMonth: stat?.profitPct ?? 0,
+      progressTier: tier,
+      progressCycleLots: progress?.cycleLots ?? null,
+      progressTierTarget: tier ? goalByTier.get(tier) ?? null : null,
     };
   });
+
+  const articleOptions = articles.map((art) => ({ id: art.id, name: art.name }));
 
   return (
     <div className="panel">
@@ -49,7 +63,7 @@ export default async function AdminPlayersPage() {
         Activa una cuenta para que empiece a acreditar V-COIN en el próximo sync. Mientras está inactiva se sigue
         actualizando su saldo y lotaje, pero no se le da V-COIN.
       </p>
-      <PlayersTable rows={rows} />
+      <PlayersTable rows={rows} articles={articleOptions} />
     </div>
   );
 }
