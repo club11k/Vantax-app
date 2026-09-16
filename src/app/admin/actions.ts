@@ -223,6 +223,29 @@ export async function toggleIbActive(accountId: string, active: boolean) {
   revalidatePath("/admin/players");
 }
 
+// Regala un cofre a un jugador concreto, sin que tenga que ganarlo con la
+// barra de Progreso del Trader. El premio se define aquí (V-COIN suelto, o
+// un artículo del catálogo) y queda pendiente hasta que el jugador lo abra
+// desde /play — ver src/app/api/play/chests/open/route.ts.
+export async function giftChest(
+  userId: string,
+  tier: "BASICO" | "INTERMEDIO" | "EPICO" | "LEGENDARIO",
+  reward: { type: "VCOIN"; amount: number } | { type: "ARTICLE"; articleId: string }
+) {
+  const admin = await requireAdmin();
+  await prisma.playPlayerGift.create({
+    data: {
+      userId,
+      tier,
+      rewardType: reward.type,
+      amount: reward.type === "VCOIN" ? reward.amount : null,
+      articleId: reward.type === "ARTICLE" ? reward.articleId : null,
+    },
+  });
+  await logAction(admin.id, "gift_play_chest", { userId, tier, reward });
+  revalidatePath("/admin/players");
+}
+
 // --- V-COIN / Vantax Play (lotaje vía Myfxbook) ---
 
 // Recorre todos los jugadores con Myfxbook vinculado, lee sus lotes de
