@@ -1,0 +1,387 @@
+/* Vantax Play — piel "arcade", calcada del mockup vcoin.html que ya tenía
+   Esther (fuentes Press Start 2P / VT323, paleta void/lila/gold/teal, cofres
+   dibujados en CSS, tabs con glow, HUD de stats). Todo va con CSS Modules
+   (nombres de clase se generan con hash automáticamente) así que no puede
+   chocar con las clases globales .btn/.card/.tag que usa el resto de VANTAX
+   fuera de Vantax Play. */
+
+@import url("https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap");
+
+.root {
+  --void: #0a0a12;
+  --panel: #14121f;
+  --panel2: #1c1930;
+  --line: #2c2544;
+  --lila: #a855f7;
+  --lilaGlow: #c084fc;
+  --lilaDim: #5b3f8a;
+  --gold: #facc15;
+  --green: #39d97a;
+  --teal: #2dd4bf;
+  --red: #ff5c6c;
+  --text: #e9e4ff;
+  --textDim: #8a82ad;
+
+  background:
+    radial-gradient(circle at 15% 10%, #1c1330 0%, transparent 40%),
+    radial-gradient(circle at 85% 90%, #150f28 0%, transparent 40%),
+    var(--void);
+  color: var(--text);
+  font-family: "VT323", monospace;
+  font-size: 19px;
+  border-radius: 8px;
+  padding: 20px;
+}
+.root :global(a) {
+  color: var(--lilaGlow);
+}
+
+.pix {
+  font-family: "Press Start 2P", monospace;
+  letter-spacing: 0.5px;
+}
+
+/* ---- tabs ---- */
+.tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.tabBtn {
+  font-family: "Press Start 2P", monospace;
+  font-size: 10px;
+  background: var(--panel);
+  color: var(--textDim);
+  border: 2px solid var(--line);
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: 0.15s;
+}
+.tabBtn:hover:not(:disabled) {
+  color: var(--lilaGlow);
+  border-color: var(--lilaDim);
+}
+.tabBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.tabBtn.active {
+  background: var(--lila);
+  color: #0a0616;
+  border-color: var(--lilaGlow);
+  box-shadow: 0 0 12px var(--lila);
+}
+
+/* ---- panel/card ---- */
+.card {
+  background: var(--panel);
+  border: 2px solid var(--line);
+  padding: 18px;
+  position: relative;
+  margin-bottom: 16px;
+}
+.grid {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.cols4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+.cols3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+@media (max-width: 720px) {
+  .cols4,
+  .cols3 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+.sectionTitle {
+  font-size: 12px;
+  color: var(--lilaGlow);
+  margin: 0 0 14px;
+  border-left: 4px solid var(--lila);
+  padding-left: 10px;
+  font-family: "Press Start 2P", monospace;
+}
+
+/* ---- hud stat ---- */
+.stat {
+  background: var(--panel2);
+  border: 2px solid var(--line);
+  padding: 14px;
+  text-align: center;
+}
+.statVal {
+  font-family: "Press Start 2P", monospace;
+  font-size: 18px;
+  color: var(--gold);
+  text-shadow: 0 0 8px #facc1580;
+}
+.statLab {
+  font-size: 14px;
+  color: var(--textDim);
+  margin-top: 6px;
+}
+
+/* ---- tier badge ---- */
+.tier {
+  font-family: "Press Start 2P", monospace;
+  font-size: 10px;
+  padding: 6px 10px;
+  display: inline-block;
+  border: 2px solid;
+  text-transform: uppercase;
+}
+.tier.basico {
+  color: #9ab0ff;
+  border-color: #9ab0ff;
+}
+.tier.intermedio {
+  color: var(--teal);
+  border-color: var(--teal);
+}
+.tier.epico {
+  color: var(--lilaGlow);
+  border-color: var(--lilaGlow);
+  box-shadow: 0 0 8px #a855f780;
+}
+.tier.legendario {
+  color: var(--gold);
+  border-color: var(--gold);
+  box-shadow: 0 0 10px #facc1590;
+  animation: pulse 1.6s infinite;
+}
+@keyframes pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 6px #facc1560;
+  }
+  50% {
+    box-shadow: 0 0 16px #facc15;
+  }
+}
+
+/* ---- account row ---- */
+.accRow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--panel2);
+  border: 2px solid var(--line);
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.led {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex: none;
+}
+.led.on {
+  background: var(--green);
+  box-shadow: 0 0 8px var(--green);
+}
+.led.off {
+  background: var(--red);
+  box-shadow: 0 0 8px var(--red);
+}
+.accMeta {
+  flex: 1;
+  min-width: 160px;
+}
+.accMeta b {
+  color: var(--text);
+}
+.accMeta small {
+  color: var(--textDim);
+  display: block;
+}
+.tag {
+  font-size: 13px;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  color: var(--textDim);
+}
+.tag.cent {
+  border-color: var(--lilaDim);
+  color: var(--lilaGlow);
+}
+
+/* ---- chest (dibujado en CSS, sin imágenes — igual que el mockup) ---- */
+.chest {
+  background: var(--panel2);
+  border: 2px solid var(--line);
+  padding: 16px;
+  text-align: center;
+  transition: 0.15s;
+}
+.chestClickable {
+  cursor: pointer;
+}
+.chestClickable:hover {
+  transform: translateY(-3px);
+  border-color: var(--lilaGlow);
+}
+.chestPending {
+  border-color: var(--gold);
+  animation: chestGlow 1.6s ease-in-out infinite;
+}
+@keyframes chestGlow {
+  0%,
+  100% {
+    box-shadow: 0 0 6px #facc1560;
+  }
+  50% {
+    box-shadow: 0 0 16px #facc15aa;
+  }
+}
+.chestBox {
+  width: 56px;
+  height: 44px;
+  margin: 0 auto 10px;
+  position: relative;
+}
+.chestBox .lid {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 16px;
+}
+.chestBox .body {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 28px;
+}
+.chest.basico .lid,
+.chest.basico .body {
+  background: #5a6b8c;
+}
+.chest.intermedio .lid,
+.chest.intermedio .body {
+  background: #2f8f5b;
+}
+.chest.epico .lid,
+.chest.epico .body {
+  background: var(--lilaDim);
+}
+.chest.legendario .lid,
+.chest.legendario .body {
+  background: #8a6d1a;
+}
+.chestLock {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 12px;
+  height: 12px;
+  background: var(--gold);
+}
+.chest h4 {
+  font-size: 11px;
+  margin: 4px 0;
+  font-family: "Press Start 2P", monospace;
+}
+.chest small {
+  color: var(--textDim);
+}
+
+/* ---- buttons ---- */
+.btn {
+  font-family: "Press Start 2P", monospace;
+  font-size: 10px;
+  cursor: pointer;
+  background: var(--lila);
+  color: #0a0616;
+  border: 2px solid var(--lilaGlow);
+  padding: 9px 12px;
+  margin-top: 8px;
+}
+.btn:hover:not(:disabled) {
+  background: var(--lilaGlow);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.btnGhost {
+  background: transparent;
+  color: var(--lilaGlow);
+  border-color: var(--lilaDim);
+}
+.btnDanger {
+  background: var(--red);
+  border-color: #ff8a94;
+  color: #160305;
+}
+
+/* ---- table ---- */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 17px;
+}
+.table th,
+.table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+}
+.table th {
+  color: var(--textDim);
+  font-size: 13px;
+  text-transform: uppercase;
+}
+.table tr.me {
+  background: #a855f71a;
+}
+.pos {
+  color: var(--gold);
+  font-family: "Press Start 2P", monospace;
+  font-size: 11px;
+}
+
+/* ---- form ---- */
+.label {
+  display: block;
+  font-size: 14px;
+  color: var(--textDim);
+  margin: 10px 0 4px;
+}
+.input {
+  width: 100%;
+  background: var(--void);
+  border: 2px solid var(--line);
+  color: var(--text);
+  padding: 8px 10px;
+  font-family: "VT323", monospace;
+  font-size: 17px;
+}
+.input:focus {
+  outline: none;
+  border-color: var(--lila);
+}
+.errorMsg {
+  color: var(--red);
+  font-size: 14px;
+}
+
+/* ---- modal ---- */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 3, 10, 0.88);
+  backdrop-filter: blur(3px);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
