@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type Currency = "EUR" | "USD" | "CENT";
-type Source = "MANUAL" | "AI_PHOTO";
+type Source = "MANUAL" | "AI_PHOTO" | "MT5_SYNC";
 type ChartPeriod = "day" | "week" | "month";
 type FormMode = "create" | "edit" | null;
 
@@ -21,6 +21,12 @@ type AccountData = {
   currency: Currency;
   initialBalance: number;
   entries: Entry[];
+  // Conexión MT5 opcional (ver mt5-orchestrator/): investorLogin y mt5Server
+  // no son secretos y se pueden mostrar; la contraseña nunca vuelve del
+  // servidor, solo este flag de si hay una guardada.
+  mt5Connected?: boolean;
+  investorLogin?: string | null;
+  mt5Server?: string | null;
 };
 
 type ChartPoint = { key: string; label: string; value: number };
@@ -191,11 +197,20 @@ export function JournalDashboard({ initialAccounts }: { initialAccounts: Account
   const [setupBalance, setSetupBalance] = useState("");
   const [setupLoading, setSetupLoading] = useState(false);
   const [setupError, setSetupError] = useState<string | null>(null);
+  // Conexión MT5 opcional. La contraseña nunca se rellena al editar (el
+  // servidor no la devuelve) — dejarla en blanco al editar significa "no
+  // cambiar la que ya hay guardada".
+  const [setupInvestorLogin, setSetupInvestorLogin] = useState("");
+  const [setupInvestorPassword, setSetupInvestorPassword] = useState("");
+  const [setupMt5Server, setSetupMt5Server] = useState("");
 
   function openCreateForm() {
     setSetupUid("");
     setSetupCurrency("USD");
     setSetupBalance("");
+    setSetupInvestorLogin("");
+    setSetupInvestorPassword("");
+    setSetupMt5Server("");
     setSetupError(null);
     setFormMode("create");
   }
@@ -205,8 +220,48 @@ export function JournalDashboard({ initialAccounts }: { initialAccounts: Account
     setSetupUid(account.accountUid);
     setSetupCurrency(account.currency);
     setSetupBalance(String(account.initialBalance));
+    setSetupInvestorLogin(account.investorLogin ?? "");
+    setSetupInvestorPassword("");
+    setSetupMt5Server(account.mt5Server ?? "");
     setSetupError(null);
     setFormMode("edit");
+  }
+
+  async function disconnectMt5() {
+    if (!account) return;
+    const confirmed =
+      typeof window !== "undefined" &&
+      window.confirm("¿Desconectar esta cuenta de MT5? Dejará de rellenarse sola y tendrás que seguir metiendo el resultado a mano o por foto.");
+    if (!confirmed) return;
+    setSetupLoading(true);
+    setSetupError(null);
+    try {
+      const res = await fetch(`/api/journal/account/${account.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          accountUid: account.accountUid,
+          currency: account.currency,
+          initialBalance: account.initialBalance,
+          clearMt5: true,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      setSetupLoading(false);
+      if (!res.ok) {
+        setSetupError(data.error ?? "No se pudo desconectar MT5.");
+        return;
+      }
+      setAccounts((prev) =>
+        prev.map((a) => (a.id === account.id ? { ...a, mt5Connected: false, investorLogin: null, mt5Server: null } : a))
+      );
+      setSetupInvestorLogin("");
+      setSetupMt5Server("");
+      setSetupInvestorPassword("");
+    } catch {
+      setSetupLoading(false);
+      setSetupError("No se pudo desconectar MT5. Inténtalo de nuevo.");
+    }
   }
 
   async function submitSetup() {
@@ -226,7 +281,14 @@ export function JournalDashboard({ initialAccounts }: { initialAccounts: Account
         const res = await fetch("/api/journal/account", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ accountUid: setupUid.trim(), currency: setupCurrency, initialBalance: balanceNum }),
+          body: JSON.stringify({
+            accountUid: setupUid.trim(),
+            currency: setupCurrency,
+            initialBalance: balanceNum,
+            investorLogin: setupInvestorLogin.trim(),
+            investorPassword: setupInvestorPassword,
+            mt5Server: setupMt5Server.trim(),
+          }),
         });
         const data = await res.json().catch(() => ({}));
         setSetupLoading(false);
@@ -240,6 +302,9 @@ export function JournalDashboard({ initialAccounts }: { initialAccounts: Account
           currency: data.account.currency,
           initialBalance: data.account.initialBalance,
           entries: [],
+          mt5Connected: data.account.mt5Connected,
+          investorLogin: data.account.investorLogin,
+          mt5Server: data.account.mt5Server,
         };
         setAccounts((prev) => [...prev, newAccount]);
         setActiveId(newAccount.id);
@@ -248,7 +313,14 @@ export function JournalDashboard({ initialAccounts }: { initialAccounts: Account
         const res = await fetch(`/api/journal/account/${account.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ accountUid: setupUid.trim(), currency: setupCurrency, initialBalance: balanceNum }),
+          body: JSON.stringify({
+            accountUid: setupUid.trim(),
+            currency: setupCurrency,
+            initialBalance: balanceNum,
+            investorLogin: setupInvestorLogin.trim(),
+            investorPassword: setupInvestorPassword,
+            mt5Server: setupMt5Server.trim(),
+          }),
         });
         const data = await res.json().catch(() => ({}));
         setSetupLoading(false);
@@ -259,7 +331,15 @@ export function JournalDashboard({ initialAccounts }: { initialAccounts: Account
         setAccounts((prev) =>
           prev.map((a) =>
             a.id === account.id
-              ? { ...a, accountUid: data.account.accountUid, currency: data.account.currency, initialBalance: data.account.initialBalance }
+              ? {
+                  ...a,
+                  accountUid: data.account.accountUid,
+                  currency: data.account.currency,
+                  initialBalance: data.account.initialBalance,
+                  mt5Connected: data.account.mt5Connected,
+                  investorLogin: data.account.investorLogin,
+                  mt5Server: data.account.mt5Server,
+                }
               : a
           )
         );
@@ -574,6 +654,49 @@ export function JournalDashboard({ initialAccounts }: { initialAccounts: Account
               style={{ ...inputStyle, width: "100%" }}
             />
           </div>
+
+          <div style={{ borderTop: "1px solid var(--line)", paddingTop: 12, marginTop: 4 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>Conectar con MT5 (opcional)</div>
+            <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>
+              Si rellenas esto, el resultado del día se puede rellenar solo a partir de tu cuenta real en MT5, sin
+              tener que escribirlo a mano ni subir una foto. Usa siempre la contraseña de <strong>investor</strong>{" "}
+              (solo lectura), nunca la de trading.
+              {formMode === "edit" && account?.mt5Connected ? " Ya tienes una contraseña guardada — déjala en blanco si no quieres cambiarla." : ""}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div>
+                <label style={{ display: "block", fontSize: 12.5, marginBottom: 4 }}>Login investor</label>
+                <input
+                  type="text"
+                  value={setupInvestorLogin}
+                  onChange={(e) => setSetupInvestorLogin(e.target.value)}
+                  placeholder="Ej: 51234567"
+                  style={{ ...inputStyle, width: "100%" }}
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: 12.5, marginBottom: 4 }}>Contraseña investor</label>
+                <input
+                  type="password"
+                  value={setupInvestorPassword}
+                  onChange={(e) => setSetupInvestorPassword(e.target.value)}
+                  placeholder={formMode === "edit" && account?.mt5Connected ? "•••••••• (sin cambios)" : "Contraseña de solo lectura"}
+                  style={{ ...inputStyle, width: "100%" }}
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: 12.5, marginBottom: 4 }}>Servidor MT5</label>
+                <input
+                  type="text"
+                  value={setupMt5Server}
+                  onChange={(e) => setSetupMt5Server(e.target.value)}
+                  placeholder="Ej: ICMarketsSC-Demo"
+                  style={{ ...inputStyle, width: "100%" }}
+                />
+              </div>
+            </div>
+          </div>
+
           {setupError && <div className="error-msg">{setupError}</div>}
           <div className="btn-row">
             <button className="btn btn-primary" onClick={submitSetup} disabled={setupLoading}>
@@ -582,6 +705,11 @@ export function JournalDashboard({ initialAccounts }: { initialAccounts: Account
             {accounts.length > 0 && (
               <button className="btn" onClick={() => setFormMode(null)} disabled={setupLoading}>
                 Cancelar
+              </button>
+            )}
+            {formMode === "edit" && account?.mt5Connected && (
+              <button className="btn" onClick={disconnectMt5} disabled={setupLoading}>
+                Desconectar MT5
               </button>
             )}
             {formMode === "edit" && (
