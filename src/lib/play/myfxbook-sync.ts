@@ -22,6 +22,7 @@ import { prisma } from "@/lib/prisma";
 import { decrypt } from "@/lib/play/crypto";
 import { findOrCreatePlayBroker } from "@/lib/play/brokers";
 import { getPlayConfig, vcoinsForLots, type PlayAccountTypeValue } from "@/lib/play/vcoin-engine";
+import { applyProgressLots } from "@/lib/play/progress-engine";
 import {
   myfxbookLogin,
   myfxbookLogout,
@@ -98,7 +99,14 @@ export async function syncAllMyfxbookAccounts(): Promise<MyfxbookSyncResult> {
     errors: [],
   };
 
-  if (result.skippedNoRate) return result;
+  // OJO: antes esto cortaba aquí mismo si la tasa de V-COIN por lote estaba
+  // a 0, y con eso también se saltaba el Progreso del Trader (la barra y los
+  // cofres) sin querer — se sigue calculando skippedNoRate arriba (útil para
+  // el aviso en /admin/settings), pero ya no corta la sincronización: el
+  // progreso y las estadísticas de lotaje deben seguir funcionando aunque el
+  // V-COIN por lote esté puesto a 0. Si de verdad la tasa es 0, vcoinsForLots
+  // más abajo simplemente devuelve 0 y no se acredita nada — el efecto de
+  // antes se mantiene para el V-COIN, solo cambia para el progreso/cofres.
 
   const links = await prisma.playMyfxbookLink.findMany();
   result.totalLinkedPlayers = links.length;
@@ -179,6 +187,12 @@ export async function syncAllMyfxbookAccounts(): Promise<MyfxbookSyncResult> {
         });
         continue;
       }
+
+      // Progreso del Trader (barra + cofres): se alimenta del mismo delta de
+      // lotes nuevos que el V-COIN, así nunca se cuenta un lote dos veces.
+      // Va aparte del V-COIN a propósito — puede desbloquear cofre aunque el
+      // % configurado esté a 0 (ver skippedNoRate más abajo).
+      await applyProgressLots(link.userId, deltaLots);
 
       const vCoinToAward = vcoinsForLots({ lots: deltaLots, accountType: detectedType as PlayAccountTypeValue, config });
       const vCoinToAwardInt = Math.round(vCoinToAward);
