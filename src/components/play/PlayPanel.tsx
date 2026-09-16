@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { TraderProgressBar, type PlayProgress } from "@/components/play/TraderProgressBar";
+import { ChestCabinet } from "@/components/play/ChestCabinet";
 
-// Panel funcional (sin pulir visualmente todavía) para la Fase 1 de la
-// migración de Vantax Play: registro de jugador (publicId + wallet de cobro)
-// y vinculación de cuentas de trading (a mano o vía Myfxbook). Los cofres,
-// rankings, tienda y torneos llegan en fases posteriores.
+// Vantax Play, organizado en pestañas internas (como el juego original):
+// Progreso (barra + cofres), Perfil (registro + cuentas vinculadas), V-COIN
+// y Tienda. Antes todo esto iba en una sola pantalla larga — separarlo evita
+// que el registro/vinculación de cuentas (algo que se hace una vez) se mezcle
+// visualmente con el progreso del día a día (algo que se mira a menudo).
 
 type PlayAccount = {
   id: string;
@@ -31,10 +34,20 @@ type Profile = {
   progress: PlayProgress | null;
 };
 
+type Tab = "progreso" | "perfil" | "vcoin" | "tienda";
+
+const TAB_LABEL: Record<Tab, string> = {
+  progreso: "Progreso",
+  perfil: "Perfil y cuentas",
+  vcoin: "V-COIN",
+  tienda: "Tienda",
+};
+
 export function PlayPanel() {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>("progreso");
 
   // Registro de jugador
   const [publicId, setPublicId] = useState("");
@@ -206,6 +219,11 @@ export function PlayPanel() {
   }
   if (!profile) return null;
 
+  // Sin registro todavía no hay nada que mostrar en Progreso/V-COIN/Tienda
+  // (el progreso y el ranking dependen del ID público) — se fuerza la
+  // pestaña de Perfil hasta que lo complete.
+  const effectiveTab: Tab = profile.registered ? tab : "perfil";
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div className="panel" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
@@ -222,231 +240,289 @@ export function PlayPanel() {
         </div>
       </div>
 
-      {profile.registered && profile.progress && (
-        <TraderProgressBar progress={profile.progress} onChanged={load} />
-      )}
-
-      <div className="panel" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <h2 style={{ marginTop: 0, fontSize: 16 }}>
-          {profile.registered ? "Tu perfil de jugador" : "Completa tu registro de jugador"}
-        </h2>
-        {!profile.registered && (
-          <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: 0 }}>
-            Elige un ID público (es lo que se va a ver en los rankings de Vantax Play, nunca tu nombre real) y, si
-            quieres, tus datos para cobrar V-COIN en cripto. Puedes completar la wallet más adelante.
-          </p>
-        )}
-        <form onSubmit={handleProfileSubmit} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <label>
-            ID público
-            <input
-              type="text"
-              placeholder="Ej: trader_esther"
-              value={publicId}
-              onChange={(e) => setPublicId(e.target.value)}
-              disabled={savingProfile}
-            />
-          </label>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <label style={{ flex: 1, minWidth: 200 }}>
-              Wallet de cobro (USDT)
-              <input
-                type="text"
-                placeholder="Opcional"
-                value={payoutWallet}
-                onChange={(e) => setPayoutWallet(e.target.value)}
-                disabled={savingProfile}
-              />
-            </label>
-            <label>
-              Red
-              <select value={payoutNetwork} onChange={(e) => setPayoutNetwork(e.target.value as "TRC20" | "BEP20")} disabled={savingProfile}>
-                <option value="TRC20">TRC20</option>
-                <option value="BEP20">BEP20</option>
-              </select>
-            </label>
-          </div>
-          <div>
-            <button className="btn btn-primary" type="submit" disabled={savingProfile || !publicId.trim()}>
-              {savingProfile ? "Guardando…" : "Guardar perfil"}
-            </button>
-          </div>
-        </form>
-        {profileError && <div className="error-msg">{profileError}</div>}
-      </div>
-
-      <div className="panel" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <h2 style={{ marginTop: 0, fontSize: 16 }}>Vincular cuenta vía Myfxbook (recomendado)</h2>
-        <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: 0 }}>
-          Crea una cuenta gratis en myfxbook.com, añade ahí tu cuenta MT5 con la contraseña investor, y pega aquí el
-          email/contraseña de esa cuenta de Myfxbook (no de tu MT5). Detectamos el broker, el tipo de cuenta y el
-          saldo automáticamente.
-        </p>
-        {profile.myfxbookLink && (
-          <p style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <span>
-              Myfxbook vinculado: <strong>{profile.myfxbookLink.email}</strong>
-              {profile.myfxbookLink.lastSyncedAt
-                ? ` · última sincronización: ${new Date(profile.myfxbookLink.lastSyncedAt).toLocaleString("es-ES")}`
-                : " · todavía sin sincronizar"}
-            </span>
-            {!showMyfxForm && (
-              <button
-                className="btn"
-                type="button"
-                onClick={() => {
-                  setMyfxAccountOptions(null);
-                  setMyfxError(null);
-                  setShowMyxForm(true);
-                }}
-              >
-                Vincular otra cuenta de esta Myfxbook
-              </button>
-            )}
-          </p>
-        )}
-        {(!profile.myfxbookLink || showMyfxForm) && !myfxAccountOptions && (
-          <form onSubmit={handleMyfxSubmit} style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <input
-              type="email"
-              placeholder="Email de Myfxbook"
-              value={myfxEmail}
-              onChange={(e) => setMyfxEmail(e.target.value)}
-              style={{ flex: 1, minWidth: 180 }}
-              disabled={savingMyfx}
-            />
-            <input
-              type="password"
-              placeholder="Contraseña de Myfxbook"
-              value={myfxPassword}
-              onChange={(e) => setMyfxPassword(e.target.value)}
-              style={{ flex: 1, minWidth: 180 }}
-              disabled={savingMyfx}
-            />
-            <button className="btn btn-primary" type="submit" disabled={savingMyfx || !myfxEmail.trim() || !myfxPassword}>
-              {savingMyfx ? "Vinculando…" : "Vincular"}
-            </button>
-            {profile.myfxbookLink && (
-              <button className="btn" type="button" onClick={() => setShowMyxForm(false)} disabled={savingMyfx}>
-                Cancelar
-              </button>
-            )}
-          </form>
-        )}
-        {myfxAccountOptions && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: 0 }}>
-              Esa cuenta de Myfxbook tiene varias cuentas MT5 añadidas. Elige cuál quieres vincular:
-            </p>
-            {myfxAccountOptions.map((opt) => (
-              <button
-                key={opt.id}
-                type="button"
-                className="btn"
-                disabled={savingMyfx}
-                onClick={() => handleMyfxAccountPick(opt.id)}
-                style={{ justifyContent: "flex-start", textAlign: "left" }}
-              >
-                {opt.brokerName} · {opt.login} · {opt.accountType === "CENT" ? "Cent" : "Normal"} · saldo {opt.balance.toFixed(2)}
-              </button>
-            ))}
-            <button
-              type="button"
-              className="btn"
-              disabled={savingMyfx}
-              onClick={() => setMyfxAccountOptions(null)}
-              style={{ alignSelf: "flex-start" }}
-            >
-              Cancelar
-            </button>
-          </div>
-        )}
-        {myfxError && <div className="error-msg">{myfxError}</div>}
-      </div>
-
-      <div className="panel" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <h2 style={{ marginTop: 0, fontSize: 16 }}>O vincular una cuenta MT5 a mano</h2>
-        <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: 0 }}>
-          Usa esto solo si no quieres usar Myfxbook. La contraseña investor es opcional por ahora (todavía no hay
-          sincronización automática para cuentas vinculadas a mano).
-        </p>
-        <form onSubmit={handleAccountSubmit} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <input
-              type="text"
-              placeholder="Broker (ej: Vantage)"
-              value={brokerName}
-              onChange={(e) => setBrokerName(e.target.value)}
-              style={{ flex: 1, minWidth: 150 }}
-              disabled={savingAccount}
-            />
-            <input
-              type="text"
-              placeholder="Número de cuenta"
-              value={accountNumber}
-              onChange={(e) => setAccountNumber(e.target.value)}
-              style={{ flex: 1, minWidth: 150 }}
-              disabled={savingAccount}
-            />
-            <select value={accountType} onChange={(e) => setAccountType(e.target.value as "NORMAL" | "CENT")} disabled={savingAccount}>
-              <option value="NORMAL">Normal</option>
-              <option value="CENT">Cent</option>
-            </select>
-          </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <input
-              type="text"
-              placeholder="Servidor MT5 (opcional)"
-              value={mt5Server}
-              onChange={(e) => setMt5Server(e.target.value)}
-              style={{ flex: 1, minWidth: 150 }}
-              disabled={savingAccount}
-            />
-            <input
-              type="text"
-              placeholder="Login investor (opcional)"
-              value={investorLogin}
-              onChange={(e) => setInvestorLogin(e.target.value)}
-              style={{ flex: 1, minWidth: 150 }}
-              disabled={savingAccount}
-            />
-            <input
-              type="password"
-              placeholder="Contraseña investor (opcional)"
-              value={investorPassword}
-              onChange={(e) => setInvestorPassword(e.target.value)}
-              style={{ flex: 1, minWidth: 150 }}
-              disabled={savingAccount}
-            />
-          </div>
-          <div>
-            <button className="btn btn-primary" type="submit" disabled={savingAccount || !brokerName.trim() || !accountNumber.trim()}>
-              {savingAccount ? "Vinculando…" : "Vincular cuenta"}
-            </button>
-          </div>
-        </form>
-        {accountError && <div className="error-msg">{accountError}</div>}
-      </div>
-
-      <div className="panel">
-        <h2 style={{ marginTop: 0, fontSize: 16 }}>Tus cuentas vinculadas</h2>
-        {profile.accounts.length === 0 && (
-          <p style={{ color: "var(--text-muted)", fontSize: 13.5 }}>Todavía no vinculaste ninguna cuenta.</p>
-        )}
-        {profile.accounts.map((a) => (
-          <div key={a.id} style={{ borderBottom: "1px solid var(--line)", padding: "10px 0", fontSize: 13.5 }}>
-            <div>
-              {a.broker.name} · <span style={{ fontFamily: "var(--font-mono)" }}>{a.accountNumber}</span>{" "}
-              <span className="tag neu" style={{ marginLeft: 4 }}>{a.accountType === "CENT" ? "Cent" : "Normal"}</span>
-              {!a.ibActive && <span className="tag neu" style={{ marginLeft: 4 }}>Pendiente de activar</span>}
-            </div>
-            <div style={{ color: "var(--text-dim)", fontSize: 12, marginTop: 4 }}>
-              Saldo: {a.balance.toFixed(2)} · Equity: {a.equity.toFixed(2)}
-              {a.mt5Server ? ` · Servidor: ${a.mt5Server}` : ""}
-            </div>
-          </div>
+      <div className="btn-row" style={{ flexWrap: "wrap" }}>
+        {(Object.keys(TAB_LABEL) as Tab[]).map((t) => (
+          <button
+            key={t}
+            className="btn"
+            disabled={t !== "perfil" && !profile.registered}
+            onClick={() => setTab(t)}
+            style={effectiveTab === t ? { borderColor: "var(--violet)" } : undefined}
+          >
+            {TAB_LABEL[t]}
+          </button>
         ))}
       </div>
+      {!profile.registered && (
+        <p style={{ fontSize: 12, color: "var(--text-dim)", margin: 0 }}>
+          Completa tu registro en "Perfil y cuentas" para desbloquear Progreso, V-COIN y Tienda.
+        </p>
+      )}
+
+      {effectiveTab === "progreso" && profile.progress && (
+        <>
+          <TraderProgressBar progress={profile.progress} />
+          <ChestCabinet progress={profile.progress} onChanged={load} />
+        </>
+      )}
+
+      {effectiveTab === "vcoin" && (
+        <div className="panel" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <h2 style={{ marginTop: 0, fontSize: 16 }}>V-COIN</h2>
+          <div style={{ fontSize: 26, fontFamily: "var(--font-mono)", color: "var(--gold-bright)" }}>
+            {profile.vCoinBalance} V-COIN
+          </div>
+          <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: 0 }}>
+            Es un saldo único: lo ganas tanto por la comisión que generas operando con tu cuenta de Vantage vinculada
+            al IB, como por el lotaje en XAUUSD que operas en cualquier otro broker vía Myfxbook. Aquí en Vantax Play
+            se usa para los cofres; la vinculación de tu cuenta de Vantage se gestiona en la pantalla de V-COIN.
+          </p>
+          <div>
+            <Link href="/vcoin" className="btn btn-primary">
+              Ir a V-COIN (vincular cuenta de Vantage)
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {effectiveTab === "tienda" && (
+        <div className="panel" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <h2 style={{ marginTop: 0, fontSize: 16 }}>Tienda</h2>
+          <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: 0 }}>
+            Muy pronto vas a poder canjear tu V-COIN por artículos del catálogo directamente aquí. De momento, los
+            artículos solo se consiguen como premio extra al abrir un cofre.
+          </p>
+          <span className="tag neu" style={{ alignSelf: "flex-start" }}>
+            Próximamente
+          </span>
+        </div>
+      )}
+
+      {effectiveTab === "perfil" && (
+        <>
+          <div className="panel" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <h2 style={{ marginTop: 0, fontSize: 16 }}>
+              {profile.registered ? "Tu perfil de jugador" : "Completa tu registro de jugador"}
+            </h2>
+            {!profile.registered && (
+              <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: 0 }}>
+                Elige un ID público (es lo que se va a ver en los rankings de Vantax Play, nunca tu nombre real) y, si
+                quieres, tus datos para cobrar V-COIN en cripto. Puedes completar la wallet más adelante.
+              </p>
+            )}
+            <form onSubmit={handleProfileSubmit} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <label>
+                ID público
+                <input
+                  type="text"
+                  placeholder="Ej: trader_esther"
+                  value={publicId}
+                  onChange={(e) => setPublicId(e.target.value)}
+                  disabled={savingProfile}
+                />
+              </label>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <label style={{ flex: 1, minWidth: 200 }}>
+                  Wallet de cobro (USDT)
+                  <input
+                    type="text"
+                    placeholder="Opcional"
+                    value={payoutWallet}
+                    onChange={(e) => setPayoutWallet(e.target.value)}
+                    disabled={savingProfile}
+                  />
+                </label>
+                <label>
+                  Red
+                  <select value={payoutNetwork} onChange={(e) => setPayoutNetwork(e.target.value as "TRC20" | "BEP20")} disabled={savingProfile}>
+                    <option value="TRC20">TRC20</option>
+                    <option value="BEP20">BEP20</option>
+                  </select>
+                </label>
+              </div>
+              <div>
+                <button className="btn btn-primary" type="submit" disabled={savingProfile || !publicId.trim()}>
+                  {savingProfile ? "Guardando…" : "Guardar perfil"}
+                </button>
+              </div>
+            </form>
+            {profileError && <div className="error-msg">{profileError}</div>}
+          </div>
+
+          <div className="panel" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <h2 style={{ marginTop: 0, fontSize: 16 }}>Vincular cuenta vía Myfxbook (recomendado)</h2>
+            <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: 0 }}>
+              Crea una cuenta gratis en myfxbook.com, añade ahí tu cuenta MT5 con la contraseña investor, y pega aquí el
+              email/contraseña de esa cuenta de Myfxbook (no de tu MT5). Detectamos el broker, el tipo de cuenta y el
+              saldo automáticamente.
+            </p>
+            {profile.myfxbookLink && (
+              <p style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <span>
+                  Myfxbook vinculado: <strong>{profile.myfxbookLink.email}</strong>
+                  {profile.myfxbookLink.lastSyncedAt
+                    ? ` · última sincronización: ${new Date(profile.myfxbookLink.lastSyncedAt).toLocaleString("es-ES")}`
+                    : " · todavía sin sincronizar"}
+                </span>
+                {!showMyfxForm && (
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={() => {
+                      setMyfxAccountOptions(null);
+                      setMyfxError(null);
+                      setShowMyxForm(true);
+                    }}
+                  >
+                    Vincular otra cuenta de esta Myfxbook
+                  </button>
+                )}
+              </p>
+            )}
+            {(!profile.myfxbookLink || showMyfxForm) && !myfxAccountOptions && (
+              <form onSubmit={handleMyfxSubmit} style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <input
+                  type="email"
+                  placeholder="Email de Myfxbook"
+                  value={myfxEmail}
+                  onChange={(e) => setMyfxEmail(e.target.value)}
+                  style={{ flex: 1, minWidth: 180 }}
+                  disabled={savingMyfx}
+                />
+                <input
+                  type="password"
+                  placeholder="Contraseña de Myfxbook"
+                  value={myfxPassword}
+                  onChange={(e) => setMyfxPassword(e.target.value)}
+                  style={{ flex: 1, minWidth: 180 }}
+                  disabled={savingMyfx}
+                />
+                <button className="btn btn-primary" type="submit" disabled={savingMyfx || !myfxEmail.trim() || !myfxPassword}>
+                  {savingMyfx ? "Vinculando…" : "Vincular"}
+                </button>
+                {profile.myfxbookLink && (
+                  <button className="btn" type="button" onClick={() => setShowMyxForm(false)} disabled={savingMyfx}>
+                    Cancelar
+                  </button>
+                )}
+              </form>
+            )}
+            {myfxAccountOptions && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: 0 }}>
+                  Esa cuenta de Myfxbook tiene varias cuentas MT5 añadidas. Elige cuál quieres vincular:
+                </p>
+                {myfxAccountOptions.map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    className="btn"
+                    disabled={savingMyfx}
+                    onClick={() => handleMyfxAccountPick(opt.id)}
+                    style={{ justifyContent: "flex-start", textAlign: "left" }}
+                  >
+                    {opt.brokerName} · {opt.login} · {opt.accountType === "CENT" ? "Cent" : "Normal"} · saldo {opt.balance.toFixed(2)}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={savingMyfx}
+                  onClick={() => setMyfxAccountOptions(null)}
+                  style={{ alignSelf: "flex-start" }}
+                >
+                  Cancelar
+                </button>
+              </div>
+            )}
+            {myfxError && <div className="error-msg">{myfxError}</div>}
+          </div>
+
+          <div className="panel" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <h2 style={{ marginTop: 0, fontSize: 16 }}>O vincular una cuenta MT5 a mano</h2>
+            <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: 0 }}>
+              Usa esto solo si no quieres usar Myfxbook. La contraseña investor es opcional por ahora (todavía no hay
+              sincronización automática para cuentas vinculadas a mano).
+            </p>
+            <form onSubmit={handleAccountSubmit} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <input
+                  type="text"
+                  placeholder="Broker (ej: Vantage)"
+                  value={brokerName}
+                  onChange={(e) => setBrokerName(e.target.value)}
+                  style={{ flex: 1, minWidth: 150 }}
+                  disabled={savingAccount}
+                />
+                <input
+                  type="text"
+                  placeholder="Número de cuenta"
+                  value={accountNumber}
+                  onChange={(e) => setAccountNumber(e.target.value)}
+                  style={{ flex: 1, minWidth: 150 }}
+                  disabled={savingAccount}
+                />
+                <select value={accountType} onChange={(e) => setAccountType(e.target.value as "NORMAL" | "CENT")} disabled={savingAccount}>
+                  <option value="NORMAL">Normal</option>
+                  <option value="CENT">Cent</option>
+                </select>
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <input
+                  type="text"
+                  placeholder="Servidor MT5 (opcional)"
+                  value={mt5Server}
+                  onChange={(e) => setMt5Server(e.target.value)}
+                  style={{ flex: 1, minWidth: 150 }}
+                  disabled={savingAccount}
+                />
+                <input
+                  type="text"
+                  placeholder="Login investor (opcional)"
+                  value={investorLogin}
+                  onChange={(e) => setInvestorLogin(e.target.value)}
+                  style={{ flex: 1, minWidth: 150 }}
+                  disabled={savingAccount}
+                />
+                <input
+                  type="password"
+                  placeholder="Contraseña investor (opcional)"
+                  value={investorPassword}
+                  onChange={(e) => setInvestorPassword(e.target.value)}
+                  style={{ flex: 1, minWidth: 150 }}
+                  disabled={savingAccount}
+                />
+              </div>
+              <div>
+                <button className="btn btn-primary" type="submit" disabled={savingAccount || !brokerName.trim() || !accountNumber.trim()}>
+                  {savingAccount ? "Vinculando…" : "Vincular cuenta"}
+                </button>
+              </div>
+            </form>
+            {accountError && <div className="error-msg">{accountError}</div>}
+          </div>
+
+          <div className="panel">
+            <h2 style={{ marginTop: 0, fontSize: 16 }}>Tus cuentas vinculadas</h2>
+            {profile.accounts.length === 0 && (
+              <p style={{ color: "var(--text-muted)", fontSize: 13.5 }}>Todavía no vinculaste ninguna cuenta.</p>
+            )}
+            {profile.accounts.map((a) => (
+              <div key={a.id} style={{ borderBottom: "1px solid var(--line)", padding: "10px 0", fontSize: 13.5 }}>
+                <div>
+                  {a.broker.name} · <span style={{ fontFamily: "var(--font-mono)" }}>{a.accountNumber}</span>{" "}
+                  <span className="tag neu" style={{ marginLeft: 4 }}>{a.accountType === "CENT" ? "Cent" : "Normal"}</span>
+                  {!a.ibActive && <span className="tag neu" style={{ marginLeft: 4 }}>Pendiente de activar</span>}
+                </div>
+                <div style={{ color: "var(--text-dim)", fontSize: 12, marginTop: 4 }}>
+                  Saldo: {a.balance.toFixed(2)} · Equity: {a.equity.toFixed(2)}
+                  {a.mt5Server ? ` · Servidor: ${a.mt5Server}` : ""}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
