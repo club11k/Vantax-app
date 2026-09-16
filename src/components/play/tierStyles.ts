@@ -25,3 +25,19 @@ export const TIER_LABEL: Record<PlayTierValue, string> = {
 // Color del cofre decorativo / icono genérico: distinto a los 4 de arriba,
 // para que siempre destaque sea cual sea el tramo actual.
 export const CHEST_ACCENT_COLOR = "#C15A82";
+
+// Clave en minúscula que usan las clases del módulo CSS arcade.module.css
+// (.tier.basico, .chest.legendario, etc.) — el enum de Prisma/la API va en
+// mayúsculas, así que se traduce aquí en un único sitio.
+export function tierClassKey(tier: PlayTierValue): "basico" | "intermedio" | "epico" | "legendario" {
+  switch (tier) {
+    case "BASICO":
+      return "basico";
+    case "INTERMEDIO":
+      return "intermedio";
+    case "EPICO":
+      return "epico";
+    case "LEGENDARIO":
+      return "legendario";
+  }
+}
