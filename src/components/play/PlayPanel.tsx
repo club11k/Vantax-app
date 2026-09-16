@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { TraderProgressBar, type PlayProgress } from "@/components/play/TraderProgressBar";
 
 // Panel funcional (sin pulir visualmente todavía) para la Fase 1 de la
 // migración de Vantax Play: registro de jugador (publicId + wallet de cobro)
@@ -27,6 +28,7 @@ type Profile = {
   vCoinBalance: number;
   myfxbookLink: { email: string; lastSyncedAt: string | null } | null;
   accounts: PlayAccount[];
+  progress: PlayProgress | null;
 };
 
 export function PlayPanel() {
@@ -219,6 +221,10 @@ export function PlayPanel() {
           </div>
         </div>
       </div>
+
+      {profile.registered && profile.progress && (
+        <TraderProgressBar progress={profile.progress} onChanged={load} />
+      )}
 
       <div className="panel" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <h2 style={{ marginTop: 0, fontSize: 16 }}>
