@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import styles from "@/components/play/arcade.module.css";
+import { tierClassKey, type PlayTierValue } from "@/components/play/tierStyles";
 
-// Pantalla de apertura de cofre: overlay a pantalla completa, el jugador
-// pulsa para abrir, se llama a POST /api/play/chests/open y se revela el
-// premio (V-COIN garantizado + posible artículo extra). Sirve tanto para
-// cofres propios (ganados con la barra de Progreso del Trader) como para
-// regalos de un admin — la diferencia la lleva "kind".
+// Pantalla de apertura de cofre, estilo arcade (cofre CSS abriéndose +
+// destello dorado), igual que el resto de Vantax Play. No existe un archivo
+// de sonido/música original que migrar (revisamos el mockup de referencia y
+// no traía ninguno) — el "clunk" y el brillo de monedas al abrir se generan
+// aquí mismo con el Web Audio API, sin depender de ningún archivo externo.
 
 type Prize = {
   tier: string;
@@ -17,22 +19,49 @@ type Prize = {
 
 type Step = "idle" | "opening" | "revealed";
 
+function playChime() {
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const notes = [523.25, 659.25, 783.99, 1046.5]; // do-mi-sol-do, arpegio de moneda
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "square";
+      osc.frequency.value = freq;
+      const t0 = ctx.currentTime + i * 0.09;
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.12, t0 + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.25);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.3);
+    });
+    setTimeout(() => ctx.close().catch(() => {}), 900);
+  } catch {
+    // Sin Web Audio disponible (navegador raro / bloqueado) — se abre igual, sin sonido.
+  }
+}
+
 export function ChestOpenModal({
   kind,
   id,
-  tierColor,
+  tier,
   label,
   onClose,
 }: {
   kind: "self" | "gift";
   id: string;
-  tierColor: string;
+  tier: PlayTierValue;
   label: string;
   onClose: (didOpen: boolean) => void;
 }) {
   const [step, setStep] = useState<Step>("idle");
   const [prize, setPrize] = useState<Prize | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const tierKey = tierClassKey(tier);
+  const playedSound = useRef(false);
 
   async function handleOpen() {
     setStep("opening");
@@ -51,6 +80,10 @@ export function ChestOpenModal({
       }
       setPrize(data);
       setStep("revealed");
+      if (!playedSound.current) {
+        playedSound.current = true;
+        playChime();
+      }
     } catch {
       setError("No se pudo abrir el cofre. Prueba de nuevo.");
       setStep("idle");
@@ -59,67 +92,50 @@ export function ChestOpenModal({
 
   return (
     <div
+      className={styles.overlay}
       role="dialog"
       aria-modal="true"
       onClick={() => {
-        // Cerrar tocando fuera solo tiene sentido antes de abrir o después
-        // de ver el premio — no a mitad de la animación de apertura.
         if (step !== "opening") onClose(step === "revealed");
-      }}
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(5, 3, 10, 0.88)",
-        backdropFilter: "blur(3px)",
-        zIndex: 200,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 20,
       }}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="panel"
+        className={styles.card}
         style={{
           width: "100%",
-          maxWidth: 380,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: 18,
+          maxWidth: 340,
           textAlign: "center",
-          padding: "32px 24px",
-          border: `1px solid ${tierColor}55`,
-          boxShadow: `0 0 40px ${tierColor}33`,
+          borderColor: "var(--lilaGlow)",
+          boxShadow: "0 0 40px #a855f755",
         }}
       >
-        <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.1em", color: "var(--text-dim)", textTransform: "uppercase" }}>
+        <h3 className={styles.sectionTitle} style={{ borderLeft: "none", paddingLeft: 0, textAlign: "center" }}>
           {label}
-        </div>
+        </h3>
 
         {step !== "revealed" && (
           <>
             <div
-              style={{
-                fontSize: 72,
-                lineHeight: 1,
-                filter: `drop-shadow(0 0 22px ${tierColor}aa)`,
-                animation: step === "opening" ? "chest-shake 0.35s ease-in-out infinite" : "chest-bob 2.2s ease-in-out infinite",
-              }}
+              className={`${styles.chest} ${styles[tierKey]}`}
+              style={{ background: "transparent", border: "none", padding: 0, margin: "18px auto", width: "fit-content" }}
             >
-              🎁
+              <div
+                className={styles.chestBox}
+                style={{ transform: step === "opening" ? "scale(1.08)" : undefined, transition: "transform 0.3s ease" }}
+              >
+                <div className={styles.lid} />
+                <div className={styles.body} />
+              </div>
             </div>
-            <p style={{ margin: 0, fontSize: 13, color: "var(--text-dim)" }}>
-              {step === "opening" ? "Abriendo…" : "Toca abrir cuando quieras."}
-            </p>
-            {error && <div className="error-msg">{error}</div>}
-            <div style={{ display: "flex", gap: 10 }}>
-              <button className="btn btn-primary" onClick={handleOpen} disabled={step === "opening"} style={{ borderColor: tierColor }}>
-                {step === "opening" ? "Abriendo…" : "Abrir cofre"}
+            <p style={{ fontSize: 15, color: "var(--textDim)" }}>{step === "opening" ? "Abriendo…" : "Toca abrir cuando quieras."}</p>
+            {error && <div className={styles.errorMsg}>{error}</div>}
+            <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 6 }}>
+              <button className={styles.btn} onClick={handleOpen} disabled={step === "opening"}>
+                {step === "opening" ? "ABRIENDO…" : "ABRIR COFRE"}
               </button>
-              <button className="btn" onClick={() => onClose(false)} disabled={step === "opening"}>
-                Cerrar
+              <button className={`${styles.btn} ${styles.btnGhost}`} onClick={() => onClose(false)} disabled={step === "opening"}>
+                CERRAR
               </button>
             </div>
           </>
@@ -127,45 +143,28 @@ export function ChestOpenModal({
 
         {step === "revealed" && prize && (
           <>
-            <div style={{ fontSize: 64, lineHeight: 1, animation: "chest-pop 0.5s ease-out" }}>✨</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {prize.vcoinAmount > 0 && (
-                <div style={{ fontSize: 22, fontFamily: "var(--font-mono)", color: "var(--gold-bright)" }}>
-                  +{prize.vcoinAmount} V-COIN
-                </div>
-              )}
-              {prize.article && (
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, marginTop: 4 }}>
-                  <span className="tag neu">Premio extra</span>
-                  <div style={{ fontSize: 14.5, color: "var(--text-primary)" }}>{prize.article.name}</div>
-                </div>
-              )}
-              {prize.vcoinAmount <= 0 && !prize.article && (
-                <p style={{ margin: 0, fontSize: 13, color: "var(--text-dim)" }}>Cofre abierto.</p>
-              )}
+            <div style={{ fontSize: 44, margin: "10px 0" }}>✨</div>
+            {prize.vcoinAmount > 0 && (
+              <div className={styles.pix} style={{ fontSize: 22, color: "var(--gold)", textShadow: "0 0 8px #facc1580" }}>
+                +{prize.vcoinAmount} V-COIN
+              </div>
+            )}
+            {prize.article && (
+              <div style={{ marginTop: 10 }}>
+                <span className={styles.tag}>Premio extra</span>
+                <div style={{ fontSize: 16, marginTop: 6 }}>{prize.article.name}</div>
+              </div>
+            )}
+            {prize.vcoinAmount <= 0 && !prize.article && <p style={{ color: "var(--textDim)" }}>Cofre abierto.</p>}
+            <div style={{ marginTop: 14 }}>
+              <button className={styles.btn} onClick={() => onClose(true)}>
+                GENIAL
+              </button>
             </div>
-            <button className="btn btn-primary" onClick={() => onClose(true)}>
-              Genial
-            </button>
           </>
         )}
       </div>
-
-      <style>{`
-        @keyframes chest-bob {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-6px); }
-        }
-        @keyframes chest-shake {
-          0%, 100% { transform: rotate(-6deg); }
-          50% { transform: rotate(6deg); }
-        }
-        @keyframes chest-pop {
-          0% { transform: scale(0.4); opacity: 0; }
-          70% { transform: scale(1.15); opacity: 1; }
-          100% { transform: scale(1); }
-        }
-      `}</style>
     </div>
   );
 }
+
