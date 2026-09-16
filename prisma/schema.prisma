@@ -37,6 +37,7 @@ enum JournalCurrency {
 enum JournalEntrySource {
   MANUAL   // el usuario escribió la cifra a mano
   AI_PHOTO // la cifra vino de una foto leída por IA, confirmada por el usuario antes de guardarse
+  MT5_SYNC // la cifra la calculó el orquestador MT5 propio a partir del historial real de la cuenta
 }
 
 // ============================================================
@@ -236,6 +237,16 @@ model JournalAccount {
   initialBalance Float
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+
+  // Credenciales investor opcionales para que el orquestador MT5 propio
+  // (ver mt5-orchestrator/ en la raíz del repo) rellene el resultado del
+  // día solo, sin que el usuario tenga que escribirlo a mano ni subir una
+  // foto. Cifrado con el mismo esquema que Vantax Play (src/lib/play/crypto.ts).
+  // Sin estos tres campos, la cuenta sigue funcionando exactamente igual
+  // que hasta ahora (entradas manuales o por foto).
+  investorLogin       String?
+  investorPasswordEnc String? @db.Text
+  mt5Server           String?
 
   entries        JournalEntry[]
 
