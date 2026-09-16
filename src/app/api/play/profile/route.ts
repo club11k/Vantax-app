@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { z } from "zod";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getProgressForDisplay } from "@/lib/play/progress-engine";
 
 // Perfil de jugador de Vantax Play: el publicId (el nombre que se ve en
 // rankings, nunca el nombre real) y los datos de cobro en cripto. No hay un
@@ -54,6 +55,11 @@ export async function GET() {
     return NextResponse.json({ error: "Usuario no encontrado." }, { status: 404 });
   }
 
+  // El Progreso del Trader (barra + cofres) solo tiene sentido una vez el
+  // jugador está registrado (tiene publicId) — antes de eso no hay fila de
+  // progreso que crear todavía.
+  const progress = user.publicId ? await getProgressForDisplay(userId) : null;
+
   return NextResponse.json({
     registered: Boolean(user.publicId),
     publicId: user.publicId,
@@ -62,6 +68,7 @@ export async function GET() {
     vCoinBalance: user.vCoinBalance,
     myfxbookLink: user.myfxbookLink,
     accounts: user.playMt5Accounts,
+    progress,
   });
 }
 
