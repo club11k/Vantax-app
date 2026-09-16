@@ -59,11 +59,16 @@ export default async function JournalPage() {
           accountUid: account.accountUid,
           currency: account.currency as "EUR" | "USD" | "CENT",
           initialBalance: account.initialBalance,
+          // investorPasswordEnc NUNCA se manda al cliente — solo si hay una
+          // guardada (mt5Connected) y los dos campos que no son secretos.
+          mt5Connected: Boolean(account.investorPasswordEnc),
+          investorLogin: account.investorLogin,
+          mt5Server: account.mt5Server,
           entries: entriesByAccount[i].map((e) => ({
             id: e.id,
             date: e.date.toISOString().slice(0, 10),
             resultAmount: e.resultAmount,
-            source: e.source as "MANUAL" | "AI_PHOTO",
+            source: e.source as "MANUAL" | "AI_PHOTO" | "MT5_SYNC",
             imageNote: e.imageNote,
           })),
         }))}
