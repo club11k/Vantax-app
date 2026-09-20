@@ -17,6 +17,8 @@ type PlayAccount = {
   accountNumber: string;
   accountType: string;
   mt5Server: string | null;
+  investorLogin: string | null;
+  mt5Connected: boolean;
   ibActive: boolean;
   balance: number;
   equity: number;
@@ -66,6 +68,15 @@ export function PlayPanel() {
   const [mt5Server, setMt5Server] = useState("");
   const [savingAccount, setSavingAccount] = useState(false);
   const [accountError, setAccountError] = useState<string | null>(null);
+
+  // Edición del login/contraseña investor de una cuenta ya vinculada (para
+  // corregir datos mal metidos, ej. un email en vez del número de login).
+  const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
+  const [editInvestorLogin, setEditInvestorLogin] = useState("");
+  const [editInvestorPassword, setEditInvestorPassword] = useState("");
+  const [editMt5Server, setEditMt5Server] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   // Vinculación vía Myfxbook
   const [myfxEmail, setMyfxEmail] = useState("");
@@ -165,6 +176,47 @@ export function PlayPanel() {
       setAccountError("No se pudo vincular la cuenta. Prueba de nuevo.");
     } finally {
       setSavingAccount(false);
+    }
+  }
+
+  function startEditAccount(a: PlayAccount) {
+    setEditingAccountId(a.id);
+    setEditInvestorLogin(a.investorLogin ?? "");
+    setEditInvestorPassword("");
+    setEditMt5Server(a.mt5Server ?? "");
+    setEditError(null);
+  }
+
+  function cancelEditAccount() {
+    setEditingAccountId(null);
+    setEditError(null);
+  }
+
+  async function saveEditAccount(accountId: string) {
+    setSavingEdit(true);
+    setEditError(null);
+    try {
+      const res = await fetch(`/api/play/accounts/${accountId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          investorLogin: editInvestorLogin.trim(),
+          investorPassword: editInvestorPassword,
+          mt5Server: editMt5Server.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setEditError(data.error ?? "No se pudo guardar el cambio.");
+        return;
+      }
+      setEditingAccountId(null);
+      setEditInvestorPassword("");
+      await load();
+    } catch {
+      setEditError("No se pudo guardar el cambio. Prueba de nuevo.");
+    } finally {
+      setSavingEdit(false);
     }
   }
 
@@ -493,19 +545,79 @@ export function PlayPanel() {
             <h3 className={styles.sectionTitle}>TUS CUENTAS VINCULADAS</h3>
             {profile.accounts.length === 0 && <p style={{ color: "var(--textDim)" }}>Todavía no vinculaste ninguna cuenta.</p>}
             {profile.accounts.map((a) => (
-              <div key={a.id} className={styles.accRow}>
-                <div className={`${styles.led} ${a.ibActive ? styles.on : styles.off}`} />
-                <div className={styles.accMeta}>
-                  <b>
-                    {a.broker.name} · {a.accountNumber}
-                  </b>
-                  <small>
-                    Saldo: {a.balance.toFixed(2)} · Equity: {a.equity.toFixed(2)}
-                    {a.mt5Server ? ` · Servidor: ${a.mt5Server}` : ""}
-                  </small>
+              <div key={a.id} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <div className={styles.accRow}>
+                  <div className={`${styles.led} ${a.ibActive ? styles.on : styles.off}`} />
+                  <div className={styles.accMeta}>
+                    <b>
+                      {a.broker.name} · {a.accountNumber}
+                    </b>
+                    <small>
+                      Saldo: {a.balance.toFixed(2)} · Equity: {a.equity.toFixed(2)}
+                      {a.mt5Server ? ` · Servidor: ${a.mt5Server}` : ""}
+                      {a.mt5Connected ? " · MT5 conectado" : ""}
+                    </small>
+                  </div>
+                  <span className={`${styles.tag} ${a.accountType === "CENT" ? styles.cent : ""}`}>{a.accountType === "CENT" ? "CENT" : "NORMAL"}</span>
+                  {!a.ibActive && <span className={styles.tag}>Pendiente</span>}
+                  <button
+                    type="button"
+                    className={styles.btn}
+                    style={{ padding: "4px 10px", fontSize: 12 }}
+                    onClick={() => (editingAccountId === a.id ? cancelEditAccount() : startEditAccount(a))}
+                  >
+                    {editingAccountId === a.id ? "CANCELAR" : "EDITAR MT5"}
+                  </button>
                 </div>
-                <span className={`${styles.tag} ${a.accountType === "CENT" ? styles.cent : ""}`}>{a.accountType === "CENT" ? "CENT" : "NORMAL"}</span>
-                {!a.ibActive && <span className={styles.tag}>Pendiente</span>}
+                {editingAccountId === a.id && (
+                  <div className={styles.card} style={{ marginLeft: 24 }}>
+                    <p style={{ fontSize: 13, color: "var(--textDim)" }}>
+                      Login investor: el número de login investor de MT5 (no un email). Contraseña investor: déjala en
+                      blanco si no la quieres cambiar.
+                    </p>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <div style={{ flex: 1, minWidth: 150 }}>
+                        <label className={styles.label}>Servidor MT5</label>
+                        <input
+                          className={styles.input}
+                          type="text"
+                          value={editMt5Server}
+                          onChange={(e) => setEditMt5Server(e.target.value)}
+                          disabled={savingEdit}
+                        />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 150 }}>
+                        <label className={styles.label}>Login investor</label>
+                        <input
+                          className={styles.input}
+                          type="text"
+                          value={editInvestorLogin}
+                          onChange={(e) => setEditInvestorLogin(e.target.value)}
+                          disabled={savingEdit}
+                        />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 150 }}>
+                        <label className={styles.label}>Contraseña investor (nueva)</label>
+                        <input
+                          className={styles.input}
+                          type="password"
+                          value={editInvestorPassword}
+                          onChange={(e) => setEditInvestorPassword(e.target.value)}
+                          disabled={savingEdit}
+                        />
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className={styles.btn}
+                      disabled={savingEdit}
+                      onClick={() => saveEditAccount(a.id)}
+                    >
+                      {savingEdit ? "GUARDANDO…" : "GUARDAR"}
+                    </button>
+                    {editError && <div className={styles.errorMsg}>{editError}</div>}
+                  </div>
+                )}
               </div>
             ))}
           </div>
