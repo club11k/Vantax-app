@@ -47,6 +47,8 @@ export async function GET() {
       accountType: a.accountType,
       brokerName: a.broker.name,
       mt5Server: a.mt5Server,
+      investorLogin: a.investorLogin,
+      mt5Connected: Boolean(a.investorPasswordEnc),
       ibActive: a.ibActive,
       balance: a.balance,
       equity: a.equity,
@@ -92,7 +94,7 @@ export async function POST(req: Request) {
     investorPasswordEnc = investorPassword ? encrypt(investorPassword) : null;
   } catch (err: any) {
     console.error("Error cifrando la contraseña investor:", err.message);
-    return NextResponse.json({ error: "No se pudo cifrar la contraseña investor. Revisá ENCRYPTION_KEY en el servidor." }, { status: 500 });
+    return NextResponse.json({ error: "No se pudo cifrar la contraseña investor. Revisa ENCRYPTION_KEY en el servidor." }, { status: 500 });
   }
 
   try {
