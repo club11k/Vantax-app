@@ -36,6 +36,11 @@ const reportSchema = z.discriminatedUnion("kind", [
     accountId: z.string().min(1),
     resultAmount: z.number(),
     date: z.string().optional(),
+    // Saldo actual de la cuenta — opcional para no romper con un
+    // orquestador viejo que todavía no lo mande; se usa como saldo inicial
+    // solo la primera vez que se sincroniza esta cuenta (ver
+    // src/lib/journal/mt5-sync.ts).
+    balance: z.number().optional(),
   }),
 ]);
 
