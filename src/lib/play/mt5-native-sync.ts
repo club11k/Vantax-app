@@ -3,18 +3,14 @@
 // mt5-orchestrator/ en la raíz del repo para el lado Python que llama a
 // estos endpoints.
 //
-// Comparte exactamente la misma lógica de "solo se acredita la diferencia
-// de lotes desde el último sync" que ya usa src/lib/play/myfxbook-sync.ts
-// (currentPeriodKey/monthBounds reutilizados de ahí), así que las dos
-// fuentes de datos pueden convivir sin pagar dos veces el mismo lote: cada
-// PlayMt5Account solo tiene UNA fuente activa a la vez en la práctica (o
-// Myfxbook, o el lector MT5 propio), pero el mecanismo de delta es el mismo
-// por si algún día hiciera falta.
+// Es la única fuente de datos de Vantax Play (Myfxbook ya no forma parte
+// del proyecto): "solo se acredita la diferencia de lotes desde el último
+// sync", usando currentPeriodKey/monthBounds de src/lib/play/period-utils.ts.
 
 import { prisma } from "@/lib/prisma";
 import { getPlayConfig, vcoinsForLots, type PlayAccountTypeValue } from "@/lib/play/vcoin-engine";
 import { applyProgressLots } from "@/lib/play/progress-engine";
-import { currentPeriodKey, monthBounds } from "@/lib/play/myfxbook-sync";
+import { currentPeriodKey, monthBounds } from "@/lib/play/period-utils";
 
 export type Mt5SyncReport = {
   accountId: string;
@@ -50,7 +46,7 @@ export async function applyMt5SyncResult(report: Mt5SyncReport): Promise<Mt5Sync
   });
 
   if (!account.ibActive) {
-    await prisma.playMt5Account.update({ where: { id: account.id }, data: { balance, equity } });
+    await prisma.playMt5Account.update({ where: { id: account.id }, data: { balance, equity, lastSyncedAt: now } });
     return { ok: true, credited: false, vCoinAwarded: 0 };
   }
 
@@ -60,7 +56,7 @@ export async function applyMt5SyncResult(report: Mt5SyncReport): Promise<Mt5Sync
   if (deltaLots <= 0) {
     await prisma.playMt5Account.update({
       where: { id: account.id },
-      data: { balance, equity, lastCreditedLots: lotsThisMonth, lastCreditedPeriod: period },
+      data: { balance, equity, lastCreditedLots: lotsThisMonth, lastCreditedPeriod: period, lastSyncedAt: now },
     });
     return { ok: true, credited: false, vCoinAwarded: 0 };
   }
@@ -76,7 +72,7 @@ export async function applyMt5SyncResult(report: Mt5SyncReport): Promise<Mt5Sync
   if (vCoinToAwardInt <= 0) {
     await prisma.playMt5Account.update({
       where: { id: account.id },
-      data: { balance, equity, lastCreditedLots: lotsThisMonth, lastCreditedPeriod: period },
+      data: { balance, equity, lastCreditedLots: lotsThisMonth, lastCreditedPeriod: period, lastSyncedAt: now },
     });
     return { ok: true, credited: false, vCoinAwarded: 0 };
   }
@@ -84,7 +80,7 @@ export async function applyMt5SyncResult(report: Mt5SyncReport): Promise<Mt5Sync
   await prisma.$transaction([
     prisma.playMt5Account.update({
       where: { id: account.id },
-      data: { balance, equity, lastCreditedLots: lotsThisMonth, lastCreditedPeriod: period },
+      data: { balance, equity, lastCreditedLots: lotsThisMonth, lastCreditedPeriod: period, lastSyncedAt: now },
     }),
     prisma.playVCoinTransaction.create({
       data: {
