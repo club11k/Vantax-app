@@ -38,6 +38,12 @@ export async function applyJournalMt5Result(report: Mt5JournalSyncReport): Promi
     return { ok: false, reason: "Cuenta de Journaly no encontrada." };
   }
 
+  // Se llegó hasta aquí porque el orquestador ya leyó bien la cuenta en
+  // MT5 — se registra como "última sincronización" tanto si el resultado
+  // se aplica como si se descarta más abajo por haber ya una entrada
+  // manual/foto ese día (en ambos casos la lectura en sí fue un éxito).
+  await prisma.journalAccount.update({ where: { id: account.id }, data: { lastSyncedAt: new Date() } }).catch(() => {});
+
   let date: Date;
   if (report.date) {
     if (!DATE_RE.test(report.date)) {
