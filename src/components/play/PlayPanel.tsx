@@ -19,6 +19,7 @@ type PlayAccount = {
   mt5Server: string | null;
   investorLogin: string | null;
   mt5Connected: boolean;
+  lastSyncedAt: string | null;
   ibActive: boolean;
   balance: number;
   equity: number;
@@ -32,10 +33,24 @@ type Profile = {
   payoutWallet: string | null;
   payoutNetwork: string | null;
   vCoinBalance: number;
-  myfxbookLink: { email: string; lastSyncedAt: string | null } | null;
   accounts: PlayAccount[];
   progress: PlayProgress | null;
 };
+
+// Última sincronización de la cuenta, en formato relativo corto — la
+// sincroniza sola el orquestador MT5 propio (mt5-orchestrator/) cada ~15
+// minutos en cuanto la cuenta tiene login/contraseña investor y servidor.
+function formatLastSync(iso: string | null): string {
+  if (!iso) return "Todavía sin sincronizar";
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const diffMin = Math.round(diffMs / 60000);
+  if (diffMin < 1) return "Sincronizada hace un momento";
+  if (diffMin < 60) return `Sincronizada hace ${diffMin} min`;
+  const diffH = Math.round(diffMin / 60);
+  if (diffH < 24) return `Sincronizada hace ${diffH} h`;
+  const diffD = Math.round(diffH / 24);
+  return `Sincronizada hace ${diffD} d`;
+}
 
 type Tab = "progreso" | "perfil" | "vcoin" | "tienda";
 
@@ -77,22 +92,6 @@ export function PlayPanel() {
   const [editMt5Server, setEditMt5Server] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
-
-  // Vinculación vía Myfxbook
-  const [myfxEmail, setMyfxEmail] = useState("");
-  const [myfxPassword, setMyfxPassword] = useState("");
-  const [savingMyfx, setSavingMyfx] = useState(false);
-  const [myfxError, setMyfxError] = useState<string | null>(null);
-  const [showMyfxForm, setShowMyxForm] = useState(false);
-  type MyfxAccountOption = {
-    id: string;
-    login: string;
-    server: string;
-    brokerName: string;
-    accountType: string;
-    balance: number;
-  };
-  const [myfxAccountOptions, setMyfxAccountOptions] = useState<MyfxAccountOption[] | null>(null);
 
   async function load() {
     setLoading(true);
@@ -243,45 +242,6 @@ export function PlayPanel() {
     }
   }
 
-  async function submitMyfx(accountId?: string) {
-    setSavingMyfx(true);
-    setMyfxError(null);
-    try {
-      const res = await fetch("/api/play/myfxbook-link", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: myfxEmail.trim(), password: myfxPassword, accountId }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setMyfxError(data.error ?? "No se pudo vincular Myfxbook.");
-        return;
-      }
-      if (data.needsSelection) {
-        setMyfxAccountOptions(data.accounts);
-        return;
-      }
-      setMyfxAccountOptions(null);
-      setMyfxPassword("");
-      setShowMyxForm(false);
-      await load();
-    } catch {
-      setMyfxError("No se pudo vincular Myfxbook. Prueba de nuevo.");
-    } finally {
-      setSavingMyfx(false);
-    }
-  }
-
-  async function handleMyfxSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!myfxEmail.trim() || !myfxPassword) return;
-    await submitMyfx();
-  }
-
-  async function handleMyfxAccountPick(accountId: string) {
-    await submitMyfx(accountId);
-  }
-
   if (loading) {
     return (
       <div className={styles.root}>
@@ -356,8 +316,9 @@ export function PlayPanel() {
           </div>
           <p style={{ fontSize: 15, color: "var(--textDim)", marginTop: 10 }}>
             Es un saldo único: lo ganas tanto por la comisión que generas operando con tu cuenta de Vantage vinculada
-            al IB, como por el lotaje en XAUUSD que operas en cualquier otro broker vía Myfxbook. Aquí en Vantax Play
-            se usa para los cofres; la vinculación de tu cuenta de Vantage se gestiona en la pantalla de V-COIN.
+            al IB, como por el lotaje en XAUUSD que operas en cualquier otro broker, sincronizado solo desde tu
+            cuenta MT5. Aquí en Vantax Play se usa para los cofres; la vinculación de tu cuenta de Vantage se
+            gestiona en la pantalla de V-COIN.
           </p>
           <Link href="/vcoin" className={styles.btn} style={{ display: "inline-block", textDecoration: "none" }}>
             IR A V-COIN
@@ -431,99 +392,11 @@ export function PlayPanel() {
           </div>
 
           <div className={styles.card}>
-            <h3 className={styles.sectionTitle}>VINCULAR CUENTA VÍA MYFXBOOK (RECOMENDADO)</h3>
+            <h3 className={styles.sectionTitle}>VINCULAR CUENTA MT5</h3>
             <p style={{ fontSize: 15, color: "var(--textDim)" }}>
-              Crea una cuenta gratis en myfxbook.com, añade ahí tu cuenta MT5 con la contraseña investor, y pega aquí el
-              email/contraseña de esa cuenta de Myfxbook (no de tu MT5). Detectamos el broker, el tipo de cuenta y el
-              saldo automáticamente.
-            </p>
-            {profile.myfxbookLink && (
-              <div className={styles.accRow}>
-                <div className={styles.accMeta}>
-                  <b>Myfxbook vinculado: {profile.myfxbookLink.email}</b>
-                  <small>
-                    {profile.myfxbookLink.lastSyncedAt
-                      ? `Última sincronización: ${new Date(profile.myfxbookLink.lastSyncedAt).toLocaleString("es-ES")}`
-                      : "Todavía sin sincronizar"}
-                  </small>
-                </div>
-                {!showMyfxForm && (
-                  <button
-                    className={`${styles.btn} ${styles.btnGhost}`}
-                    type="button"
-                    onClick={() => {
-                      setMyfxAccountOptions(null);
-                      setMyfxError(null);
-                      setShowMyxForm(true);
-                    }}
-                  >
-                    VINCULAR OTRA
-                  </button>
-                )}
-              </div>
-            )}
-            {(!profile.myfxbookLink || showMyfxForm) && !myfxAccountOptions && (
-              <form onSubmit={handleMyfxSubmit} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
-                <div style={{ flex: 1, minWidth: 180 }}>
-                  <label className={styles.label}>Email de Myfxbook</label>
-                  <input
-                    className={styles.input}
-                    type="email"
-                    value={myfxEmail}
-                    onChange={(e) => setMyfxEmail(e.target.value)}
-                    disabled={savingMyfx}
-                  />
-                </div>
-                <div style={{ flex: 1, minWidth: 180 }}>
-                  <label className={styles.label}>Contraseña de Myfxbook</label>
-                  <input
-                    className={styles.input}
-                    type="password"
-                    value={myfxPassword}
-                    onChange={(e) => setMyfxPassword(e.target.value)}
-                    disabled={savingMyfx}
-                  />
-                </div>
-                <button className={styles.btn} type="submit" disabled={savingMyfx || !myfxEmail.trim() || !myfxPassword}>
-                  {savingMyfx ? "VINCULANDO…" : "VINCULAR"}
-                </button>
-                {profile.myfxbookLink && (
-                  <button className={`${styles.btn} ${styles.btnGhost}`} type="button" onClick={() => setShowMyxForm(false)} disabled={savingMyfx}>
-                    CANCELAR
-                  </button>
-                )}
-              </form>
-            )}
-            {myfxAccountOptions && (
-              <div>
-                <p style={{ fontSize: 15, color: "var(--textDim)" }}>
-                  Esa cuenta de Myfxbook tiene varias cuentas MT5 añadidas. Elige cuál quieres vincular:
-                </p>
-                {myfxAccountOptions.map((opt) => (
-                  <div key={opt.id} className={styles.accRow} style={{ cursor: "pointer" }} onClick={() => !savingMyfx && handleMyfxAccountPick(opt.id)}>
-                    <div className={styles.accMeta}>
-                      <b>
-                        {opt.brokerName} · {opt.login}
-                      </b>
-                      <small>
-                        {opt.accountType === "CENT" ? "Cent" : "Normal"} · saldo {opt.balance.toFixed(2)}
-                      </small>
-                    </div>
-                  </div>
-                ))}
-                <button className={`${styles.btn} ${styles.btnGhost}`} type="button" disabled={savingMyfx} onClick={() => setMyfxAccountOptions(null)}>
-                  CANCELAR
-                </button>
-              </div>
-            )}
-            {myfxError && <div className={styles.errorMsg}>{myfxError}</div>}
-          </div>
-
-          <div className={styles.card}>
-            <h3 className={styles.sectionTitle}>O VINCULAR UNA CUENTA MT5 A MANO</h3>
-            <p style={{ fontSize: 15, color: "var(--textDim)" }}>
-              Usa esto solo si no quieres usar Myfxbook. La contraseña investor es opcional por ahora (todavía no hay
-              sincronización automática para cuentas vinculadas a mano).
+              Indica el broker y el número de cuenta, y si añades el servidor MT5 y la contraseña <b>investor</b> (solo
+              lectura, nunca la de trading), tu saldo y el lotaje de XAUUSD se sincronizan solos cada 15 minutos, sin
+              que tengas que hacer nada más.
             </p>
             <form onSubmit={handleAccountSubmit}>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -578,7 +451,7 @@ export function PlayPanel() {
                     <small>
                       Saldo: {a.balance.toFixed(2)} · Equity: {a.equity.toFixed(2)}
                       {a.mt5Server ? ` · Servidor: ${a.mt5Server}` : ""}
-                      {a.mt5Connected ? " · MT5 conectado" : ""}
+                      {a.mt5Connected ? ` · ${formatLastSync(a.lastSyncedAt)}` : ""}
                     </small>
                   </div>
                   <span className={`${styles.tag} ${a.accountType === "CENT" ? styles.cent : ""}`}>{a.accountType === "CENT" ? "CENT" : "NORMAL"}</span>
