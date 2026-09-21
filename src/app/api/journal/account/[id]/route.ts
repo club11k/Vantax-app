@@ -19,6 +19,12 @@ const accountSchema = z.object({
   investorPassword: z.string().trim().max(255).optional().or(z.literal("")),
   mt5Server: z.string().trim().max(100).optional().or(z.literal("")),
   clearMt5: z.boolean().optional(),
+  // Vuelve a poner el saldo inicial a null (vacío) para que el próximo sync
+  // de MT5 lo capture de nuevo como si fuera la primera vez (ver la regla en
+  // src/lib/journal/mt5-sync.ts: solo se rellena solo si estaba vacío). Es
+  // para cuentas que ya tenían un saldo puesto a mano de antes de este
+  // cambio y quieren pasarse al saldo real en vivo.
+  resetInitialBalance: z.boolean().optional(),
 });
 
 // Edita o borra una cuenta de Journaly concreta. Siempre se verifica que la
@@ -73,6 +79,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         accountUid: parsed.data.accountUid,
         currency: parsed.data.currency,
         ...mt5Data,
+        ...(parsed.data.resetInitialBalance ? { initialBalance: null } : {}),
       },
     });
     const { investorPasswordEnc, ...safeAccount } = account;
