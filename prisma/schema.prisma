@@ -234,16 +234,20 @@ model JournalAccount {
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   accountUid     String   // UID/número de cuenta de trading, tal como lo escribe el usuario
   currency       JournalCurrency @default(USD)
-  initialBalance Float
+  // Ya no se pide a mano al crear la cuenta: se rellena sola con el saldo
+  // real que lee el orquestador MT5 en su primer sync tras conectar la
+  // cuenta (ver src/lib/journal/mt5-sync.ts) — null mientras tanto.
+  initialBalance Float?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  // Credenciales investor opcionales para que el orquestador MT5 propio
-  // (ver mt5-orchestrator/ en la raíz del repo) rellene el resultado del
-  // día solo, sin que el usuario tenga que escribirlo a mano ni subir una
-  // foto. Cifrado con el mismo esquema que Vantax Play (src/lib/play/crypto.ts).
-  // Sin estos tres campos, la cuenta sigue funcionando exactamente igual
-  // que hasta ahora (entradas manuales o por foto).
+  // Credenciales investor para que el orquestador MT5 propio (ver
+  // mt5-orchestrator/ en la raíz del repo) rellene el resultado del día
+  // solo, sin que el usuario tenga que escribirlo a mano ni subir una foto.
+  // Cifrado con el mismo esquema que Vantax Play (src/lib/play/crypto.ts).
+  // Obligatorias al crear una cuenta nueva (ver /api/journal/account) — sin
+  // MT5 no hay saldo real del que partir. Las cuentas creadas antes de este
+  // cambio pueden seguir sin ellas (entradas manuales o por foto).
   investorLogin       String?
   investorPasswordEnc String? @db.Text
   mt5Server           String?
