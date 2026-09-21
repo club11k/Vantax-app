@@ -220,6 +220,29 @@ export function PlayPanel() {
     }
   }
 
+  async function disconnectMt5Account(accountId: string) {
+    setSavingEdit(true);
+    setEditError(null);
+    try {
+      const res = await fetch(`/api/play/accounts/${accountId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clearMt5: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setEditError(data.error ?? "No se pudo desconectar MT5.");
+        return;
+      }
+      setEditingAccountId(null);
+      await load();
+    } catch {
+      setEditError("No se pudo desconectar MT5. Prueba de nuevo.");
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
   async function submitMyfx(accountId?: string) {
     setSavingMyfx(true);
     setMyfxError(null);
@@ -607,14 +630,30 @@ export function PlayPanel() {
                         />
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      className={styles.btn}
-                      disabled={savingEdit}
-                      onClick={() => saveEditAccount(a.id)}
-                    >
-                      {savingEdit ? "GUARDANDO…" : "GUARDAR"}
-                    </button>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <button
+                        type="button"
+                        className={styles.btn}
+                        disabled={savingEdit}
+                        onClick={() => saveEditAccount(a.id)}
+                      >
+                        {savingEdit ? "GUARDANDO…" : "GUARDAR"}
+                      </button>
+                      {a.mt5Connected && (
+                        <button
+                          type="button"
+                          className={styles.btn}
+                          disabled={savingEdit}
+                          onClick={() => {
+                            if (confirm("¿Quitar la conexión MT5 de esta cuenta? Dejará de sincronizarse automáticamente.")) {
+                              disconnectMt5Account(a.id);
+                            }
+                          }}
+                        >
+                          QUITAR MT5
+                        </button>
+                      )}
+                    </div>
                     {editError && <div className={styles.errorMsg}>{editError}</div>}
                   </div>
                 )}
