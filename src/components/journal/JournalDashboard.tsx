@@ -278,6 +278,41 @@ export function JournalDashboard({ initialAccounts }: { initialAccounts: Account
     }
   }
 
+  async function resetInitialBalance() {
+    if (!account) return;
+    const confirmed =
+      typeof window !== "undefined" &&
+      window.confirm(
+        `¿Recalcular el saldo inicial de "${account.accountUid}" desde MT5? Se borrará el saldo actual (${
+          account.initialBalance != null ? account.initialBalance : "—"
+        }) y en el próximo sync se rellenará solo con el saldo real que lea MT5.`
+      );
+    if (!confirmed) return;
+    setSetupLoading(true);
+    setSetupError(null);
+    try {
+      const res = await fetch(`/api/journal/account/${account.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          accountUid: account.accountUid,
+          currency: account.currency,
+          resetInitialBalance: true,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      setSetupLoading(false);
+      if (!res.ok) {
+        setSetupError(data.error ?? "No se pudo recalcular el saldo inicial.");
+        return;
+      }
+      setAccounts((prev) => prev.map((a) => (a.id === account.id ? { ...a, initialBalance: null } : a)));
+    } catch {
+      setSetupLoading(false);
+      setSetupError("No se pudo recalcular el saldo inicial. Inténtalo de nuevo.");
+    }
+  }
+
   async function submitSetup() {
     setSetupError(null);
     if (!setupUid.trim()) {
@@ -715,6 +750,11 @@ export function JournalDashboard({ initialAccounts }: { initialAccounts: Account
             {formMode === "edit" && account?.mt5Connected && (
               <button className="btn" onClick={disconnectMt5} disabled={setupLoading}>
                 Desconectar MT5
+              </button>
+            )}
+            {formMode === "edit" && account?.mt5Connected && account?.initialBalance != null && (
+              <button className="btn" onClick={resetInitialBalance} disabled={setupLoading}>
+                Recalcular saldo inicial desde MT5
               </button>
             )}
             {formMode === "edit" && (
