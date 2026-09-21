@@ -8,8 +8,9 @@ import { encrypt } from "@/lib/play/crypto";
 const accountSchema = z.object({
   accountUid: z.string().trim().min(1, "El UID de la cuenta es obligatorio.").max(100),
   currency: z.enum(["EUR", "USD", "CENT"]),
-  initialBalance: z.number().finite("El saldo inicial no es un número válido."),
-  // Todo lo de MT5 es opcional. investorPassword en blanco significa "no
+  // El saldo inicial ya no se edita a mano — lo fija solo el primer sync de
+  // MT5 (ver src/lib/journal/mt5-sync.ts), así que no forma parte de este
+  // esquema. Todo lo de MT5 es opcional aquí. investorPassword en blanco significa "no
   // cambiar la contraseña guardada" (el formulario nunca la vuelve a
   // mostrar, así que mandarla vacía no puede significar "bórrala"). Para
   // desconectar MT5 del todo se manda clearMt5: true, que ignora el resto
@@ -71,7 +72,6 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       data: {
         accountUid: parsed.data.accountUid,
         currency: parsed.data.currency,
-        initialBalance: parsed.data.initialBalance,
         ...mt5Data,
       },
     });
