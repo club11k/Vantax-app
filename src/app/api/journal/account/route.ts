@@ -14,18 +14,18 @@ import { encrypt } from "@/lib/play/crypto";
 // usuario y crea cuentas nuevas; para editar o borrar una cuenta concreta,
 // ver /api/journal/account/[id].
 //
-// investorLogin/investorPassword/mt5Server son opcionales: si se rellenan,
-// el orquestador MT5 propio (ver mt5-orchestrator/ en la raíz del repo)
-// puede rellenar el resultado del día solo, sin entrada manual ni foto. Sin
-// ellos, la cuenta sigue funcionando exactamente igual que hasta ahora.
+// investorLogin/investorPassword/mt5Server son obligatorios al crear una
+// cuenta: el orquestador MT5 propio (ver mt5-orchestrator/ en la raíz del
+// repo) rellena solo el resultado del día, sin entrada manual ni foto, y
+// además su primer sync es lo que fija el saldo inicial de la cuenta (ya no
+// se pide a mano — ver src/lib/journal/mt5-sync.ts).
 
 const accountSchema = z.object({
   accountUid: z.string().trim().min(1, "El UID de la cuenta es obligatorio.").max(100),
   currency: z.enum(["EUR", "USD", "CENT"]),
-  initialBalance: z.number().finite("El saldo inicial no es un número válido."),
-  investorLogin: z.string().trim().max(50).optional().or(z.literal("")),
-  investorPassword: z.string().trim().max(255).optional().or(z.literal("")),
-  mt5Server: z.string().trim().max(100).optional().or(z.literal("")),
+  investorLogin: z.string().trim().min(1, "El login investor es obligatorio.").max(50),
+  investorPassword: z.string().trim().min(1, "La contraseña investor es obligatoria.").max(255),
+  mt5Server: z.string().trim().min(1, "El servidor MT5 es obligatorio.").max(100),
 });
 
 export async function GET() {
@@ -59,12 +59,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Datos inválidos." }, { status: 400 });
   }
 
-  let investorPasswordEnc: string | null = null;
+  let investorPasswordEnc: string | null;
   try {
-    investorPasswordEnc = parsed.data.investorPassword ? encrypt(parsed.data.investorPassword) : null;
+    // parsed.data.investorPassword ya viene validado como no-vacío (zod
+    // min(1)), así que encrypt() no debería devolver null aquí — el chequeo
+    // es solo por si acaso, para no guardar una cuenta sin contraseña cifrada.
+    investorPasswordEnc = encrypt(parsed.data.investorPassword);
   } catch (err: any) {
     console.error("Error cifrando la contraseña investor:", err.message);
     return NextResponse.json({ error: "No se pudo cifrar la contraseña investor. Revisa ENCRYPTION_KEY en el servidor." }, { status: 500 });
+  }
+  if (!investorPasswordEnc) {
+    return NextResponse.json({ error: "No se pudo cifrar la contraseña investor." }, { status: 500 });
   }
 
   try {
@@ -73,10 +79,11 @@ export async function POST(req: Request) {
         userId,
         accountUid: parsed.data.accountUid,
         currency: parsed.data.currency,
-        initialBalance: parsed.data.initialBalance,
-        investorLogin: parsed.data.investorLogin || null,
+        // Sin saldo inicial todavía — lo fija solo el primer sync de MT5
+        // (ver src/lib/journal/mt5-sync.ts).
+        investorLogin: parsed.data.investorLogin,
         investorPasswordEnc,
-        mt5Server: parsed.data.mt5Server || null,
+        mt5Server: parsed.data.mt5Server,
       },
     });
     const { investorPasswordEnc: _omit, ...safeAccount } = account;
