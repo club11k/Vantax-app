@@ -2,7 +2,6 @@ import { prisma } from "@/lib/prisma";
 import { SettingForm } from "@/components/admin/SettingForm";
 import { AccessGateToggle } from "@/components/admin/AccessGateToggle";
 import { VantageSyncPanel } from "@/components/admin/VantageSyncPanel";
-import { MyfxbookSyncPanel } from "@/components/admin/MyfxbookSyncPanel";
 
 function extractValue(setting: { value: unknown } | null, fallback: string): string {
   if (!setting) return fallback;
@@ -72,11 +71,12 @@ export default async function AdminSettingsPage() {
       <VantageSyncPanel />
 
       <div className="panel" style={{ fontSize: 13, color: "var(--text-muted)" }}>
-        <strong>V-COIN — cuentas vía Myfxbook (otros brokers)</strong>
+        <strong>V-COIN — cuentas MT5 propias (otros brokers)</strong>
         <p style={{ margin: "6px 0 0" }}>
           Para cuentas que no son de Vantage, el V-COIN se calcula por lotaje de XAUUSD operado (a diferencia de
           Vantage, que se calcula por comisión). "V-COIN por lote" es la tasa para cuentas normales; en cuentas Cent
-          se multiplica por el factor de abajo (ej. 0,01 = 1 lote en Cent equivale a 0,01 lote normal).
+          se multiplica por el factor de abajo (ej. 0,01 = 1 lote en Cent equivale a 0,01 lote normal). El lotaje se
+          sincroniza solo cada ciclo desde el orquestador MT5 propio en la VPS — no hace falta lanzarlo a mano.
         </p>
       </div>
       <SettingForm
@@ -89,7 +89,6 @@ export default async function AdminSettingsPage() {
         label="Factor de conversión para cuentas Cent"
         initialValue={extractValue(byKey.get("play.cent_factor") ?? null, "0.01")}
       />
-      <MyfxbookSyncPanel />
     </div>
   );
 }
