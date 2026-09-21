@@ -5,7 +5,6 @@ import { revalidatePath } from "next/cache";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { syncVantageFull, type VantageSyncResult } from "@/lib/vantage-ib";
-import { syncAllMyfxbookAccounts, type MyfxbookSyncResult } from "@/lib/play/myfxbook-sync";
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -215,7 +214,7 @@ export async function syncVantageCommissions(): Promise<VantageSyncResult & { er
 
 // Activa/desactiva manualmente una cuenta de Vantax Play (luz verde/roja).
 // Mientras está inactiva, el sync sigue leyendo saldo/equity/lotaje pero no
-// acredita V-COIN — ver src/lib/play/myfxbook-sync.ts.
+// acredita V-COIN — ver src/lib/play/mt5-native-sync.ts.
 export async function toggleIbActive(accountId: string, active: boolean) {
   const admin = await requireAdmin();
   await prisma.playMt5Account.update({ where: { id: accountId }, data: { ibActive: active } });
@@ -246,31 +245,9 @@ export async function giftChest(
   revalidatePath("/admin/players");
 }
 
-// --- V-COIN / Vantax Play (lotaje vía Myfxbook) ---
-
-// Recorre todos los jugadores con Myfxbook vinculado, lee sus lotes de
-// XAUUSD operados este mes, y acredita V-COIN solo por los lotes nuevos
-// desde la última sincronización (nunca dos veces lo mismo). Se ejecuta a
-// mano desde /admin/settings — no hay cron automático todavía.
-export async function syncMyfxbookAccounts(): Promise<MyfxbookSyncResult & { error?: string }> {
-  const admin = await requireAdmin();
-  try {
-    const result = await syncAllMyfxbookAccounts();
-    await logAction(admin.id, "sync_myfxbook_vcoin", result as any);
-    revalidatePath("/admin/settings");
-    revalidatePath("/admin/users");
-    return result;
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Error desconocido al sincronizar con Myfxbook.";
-    await logAction(admin.id, "sync_myfxbook_vcoin_error", { error: message });
-    return {
-      totalLinkedPlayers: 0,
-      accountsSynced: 0,
-      accountsCredited: 0,
-      totalVCoinAwarded: 0,
-      skippedNoRate: false,
-      errors: [],
-      error: message,
-    };
-  }
-}
+// --- V-COIN / Vantax Play (lotaje vía MT5 propio) ---
+//
+// El lotaje de XAUUSD de cada cuenta se sincroniza solo, cada ciclo, desde
+// el orquestador MT5 propio en la VPS (mt5-orchestrator/) — ya no hace
+// falta un botón de "sincronizar ahora" a mano, ver
+// src/lib/play/mt5-native-sync.ts.
