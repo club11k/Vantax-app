@@ -19,7 +19,10 @@ type AccountData = {
   id: string;
   accountUid: string;
   currency: Currency;
-  initialBalance: number;
+  // Ya no se pide a mano al crear la cuenta: null hasta que el orquestador
+  // MT5 hace su primer sync y lo fija con el saldo real (ver
+  // src/lib/journal/mt5-sync.ts).
+  initialBalance: number | null;
   entries: Entry[];
   // Conexión MT5 opcional (ver mt5-orchestrator/): investorLogin y mt5Server
   // no son secretos y se pueden mostrar; la contraseña nunca vuelve del
@@ -209,7 +212,6 @@ export function JournalDashboard({ initialAccounts }: { initialAccounts: Account
   // --- Formulario de cuenta: crear una nueva o editar la activa ---
   const [setupUid, setSetupUid] = useState("");
   const [setupCurrency, setSetupCurrency] = useState<Currency>("USD");
-  const [setupBalance, setSetupBalance] = useState("");
   const [setupLoading, setSetupLoading] = useState(false);
   const [setupError, setSetupError] = useState<string | null>(null);
   // Conexión MT5 opcional. La contraseña nunca se rellena al editar (el
@@ -222,7 +224,6 @@ export function JournalDashboard({ initialAccounts }: { initialAccounts: Account
   function openCreateForm() {
     setSetupUid("");
     setSetupCurrency("USD");
-    setSetupBalance("");
     setSetupInvestorLogin("");
     setSetupInvestorPassword("");
     setSetupMt5Server("");
@@ -234,7 +235,6 @@ export function JournalDashboard({ initialAccounts }: { initialAccounts: Account
     if (!account) return;
     setSetupUid(account.accountUid);
     setSetupCurrency(account.currency);
-    setSetupBalance(String(account.initialBalance));
     setSetupInvestorLogin(account.investorLogin ?? "");
     setSetupInvestorPassword("");
     setSetupMt5Server(account.mt5Server ?? "");
@@ -257,7 +257,6 @@ export function JournalDashboard({ initialAccounts }: { initialAccounts: Account
         body: JSON.stringify({
           accountUid: account.accountUid,
           currency: account.currency,
-          initialBalance: account.initialBalance,
           clearMt5: true,
         }),
       });
@@ -281,13 +280,12 @@ export function JournalDashboard({ initialAccounts }: { initialAccounts: Account
 
   async function submitSetup() {
     setSetupError(null);
-    const balanceNum = parseFloat(setupBalance.replace(",", "."));
     if (!setupUid.trim()) {
       setSetupError("El UID de la cuenta es obligatorio.");
       return;
     }
-    if (!Number.isFinite(balanceNum)) {
-      setSetupError("El saldo inicial no es un número válido.");
+    if (formMode === "create" && (!setupInvestorLogin.trim() || !setupInvestorPassword || !setupMt5Server.trim())) {
+      setSetupError("Para crear la cuenta hace falta conectar MT5: login investor, contraseña y servidor.");
       return;
     }
     setSetupLoading(true);
@@ -299,7 +297,6 @@ export function JournalDashboard({ initialAccounts }: { initialAccounts: Account
           body: JSON.stringify({
             accountUid: setupUid.trim(),
             currency: setupCurrency,
-            initialBalance: balanceNum,
             investorLogin: setupInvestorLogin.trim(),
             investorPassword: setupInvestorPassword,
             mt5Server: setupMt5Server.trim(),
@@ -331,7 +328,6 @@ export function JournalDashboard({ initialAccounts }: { initialAccounts: Account
           body: JSON.stringify({
             accountUid: setupUid.trim(),
             currency: setupCurrency,
-            initialBalance: balanceNum,
             investorLogin: setupInvestorLogin.trim(),
             investorPassword: setupInvestorPassword,
             mt5Server: setupMt5Server.trim(),
@@ -535,9 +531,12 @@ export function JournalDashboard({ initialAccounts }: { initialAccounts: Account
   );
   const entriesByDate = useMemo(() => new Map(sortedEntries.map((e) => [e.date, e])), [sortedEntries]);
   const totalResult = useMemo(() => sortedEntries.reduce((sum, e) => sum + e.resultAmount, 0), [sortedEntries]);
-  const currentBalance = (account?.initialBalance ?? 0) + totalResult;
+  const hasInitialBalance = account?.initialBalance != null;
+  const currentBalance = hasInitialBalance ? (account!.initialBalance as number) + totalResult : null;
   const pctChange =
-    account && account.initialBalance !== 0 ? (totalResult / Math.abs(account.initialBalance)) * 100 : null;
+    account && hasInitialBalance && account.initialBalance !== 0
+      ? (totalResult / Math.abs(account.initialBalance as number)) * 100
+      : null;
 
   // --- Gráfico interactivo (días / semanas / meses) ---
   const [chartPeriod, setChartPeriod] = useState<ChartPeriod>("day");
@@ -548,7 +547,7 @@ export function JournalDashboard({ initialAccounts }: { initialAccounts: Account
   }, [activeId]);
 
   const chartPoints = useMemo(
-    () => (account ? buildPeriodSeries(sortedEntries, account.initialBalance, chartPeriod) : []),
+    () => (account ? buildPeriodSeries(sortedEntries, account.initialBalance ?? 0, chartPeriod) : []),
     [account, sortedEntries, chartPeriod]
   );
   const chartWidth = 600;
@@ -658,24 +657,15 @@ export function JournalDashboard({ initialAccounts }: { initialAccounts: Account
               ))}
             </select>
           </div>
-          <div>
-            <label style={{ display: "block", fontSize: 12.5, marginBottom: 4 }}>Saldo inicial</label>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={setupBalance}
-              onChange={(e) => setSetupBalance(e.target.value)}
-              placeholder="Ej: 1000"
-              style={{ ...inputStyle, width: "100%" }}
-            />
-          </div>
-
           <div style={{ borderTop: "1px solid var(--line)", paddingTop: 12, marginTop: 4 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>Conectar con MT5 (opcional)</div>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>
+              {formMode === "create" ? "Conectar con MT5 (obligatorio)" : "Conexión con MT5"}
+            </div>
             <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>
-              Si rellenas esto, el resultado del día se puede rellenar solo a partir de tu cuenta real en MT5, sin
-              tener que escribirlo a mano ni subir una foto. Usa siempre la contraseña de <strong>investor</strong>{" "}
-              (solo lectura), nunca la de trading.
+              {formMode === "create"
+                ? "El resultado del día se rellena solo a partir de tu cuenta real en MT5, sin escribirlo a mano ni subir foto — y el primer saldo que se lea se guarda como saldo inicial, también solo. Usa siempre la contraseña de "
+                : "El resultado del día se puede rellenar solo a partir de tu cuenta real en MT5. Usa siempre la contraseña de "}
+              <strong>investor</strong> (solo lectura), nunca la de trading.
               {formMode === "edit" && account?.mt5Connected ? " Ya tienes una contraseña guardada — déjala en blanco si no quieres cambiarla." : ""}
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -762,19 +752,27 @@ export function JournalDashboard({ initialAccounts }: { initialAccounts: Account
             </div>
           )}
           <div style={{ fontSize: 24, fontFamily: "var(--font-mono)", marginTop: 4 }}>
-            {formatMoney(currentBalance, account.currency)}
+            {currentBalance !== null ? formatMoney(currentBalance, account.currency) : "—"}
           </div>
-          <div style={{ fontSize: 12.5, color: totalResult >= 0 ? "var(--up)" : "var(--down)", marginTop: 2 }}>
-            {totalResult >= 0 ? "+" : ""}
-            {formatMoney(totalResult, account.currency)}
-            {pctChange !== null && ` (${pctChange >= 0 ? "+" : ""}${pctChange.toFixed(1)}%)`} desde el saldo inicial
-          </div>
+          {currentBalance !== null ? (
+            <div style={{ fontSize: 12.5, color: totalResult >= 0 ? "var(--up)" : "var(--down)", marginTop: 2 }}>
+              {totalResult >= 0 ? "+" : ""}
+              {formatMoney(totalResult, account.currency)}
+              {pctChange !== null && ` (${pctChange >= 0 ? "+" : ""}${pctChange.toFixed(1)}%)`} desde el saldo inicial
+            </div>
+          ) : (
+            <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginTop: 2 }}>
+              Esperando el primer saldo real de MT5 (puede tardar hasta 15 min desde que conectaste la cuenta)
+            </div>
+          )}
         </div>
         <div>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-dim)", textTransform: "uppercase" }}>
             Saldo inicial
           </div>
-          <div style={{ fontSize: 16, marginTop: 4 }}>{formatMoney(account.initialBalance, account.currency)}</div>
+          <div style={{ fontSize: 16, marginTop: 4 }}>
+            {account.initialBalance != null ? formatMoney(account.initialBalance, account.currency) : "Pendiente"}
+          </div>
         </div>
         <button className="btn" style={{ alignSelf: "center", fontSize: 12.5 }} onClick={openEditForm}>
           Editar esta cuenta
