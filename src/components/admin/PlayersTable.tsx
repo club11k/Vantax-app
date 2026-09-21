@@ -18,7 +18,7 @@ type PlayerRow = {
   balance: number;
   equity: number;
   ibActive: boolean;
-  myfxbookEmail: string | null;
+  mt5Connected: boolean;
   lastSyncedAt: string | null;
   lotsThisMonth: number;
   profitPctThisMonth: number;
@@ -209,13 +209,13 @@ function PlayerRowItem({ row, articles }: { row: PlayerRow; articles: ArticleOpt
         )}
       </td>
       <td>
-        {row.myfxbookEmail ? (
+        {row.mt5Connected ? (
           <>
-            <div>{row.myfxbookEmail}</div>
-            <div style={{ color: "var(--text-dim)", fontSize: 11 }}>Última sync: {fmtDate(row.lastSyncedAt)}</div>
+            <span className="tag pos">MT5 conectado</span>
+            <div style={{ color: "var(--text-dim)", fontSize: 11, marginTop: 2 }}>Última sync: {fmtDate(row.lastSyncedAt)}</div>
           </>
         ) : (
-          <span className="tag neu">Sin vincular</span>
+          <span className="tag neu">Sin conectar</span>
         )}
       </td>
       <td style={{ fontFamily: "var(--font-mono)" }}>
@@ -275,7 +275,7 @@ export function PlayersTable({ rows, articles }: { rows: PlayerRow[]; articles: 
     const q = query.trim().toLowerCase();
     if (!q) return rows;
     return rows.filter((r) =>
-      [r.userEmail, r.userName ?? "", r.accountNumber, r.brokerName, r.myfxbookEmail ?? ""]
+      [r.userEmail, r.userName ?? "", r.accountNumber, r.brokerName]
         .join(" ")
         .toLowerCase()
         .includes(q)
@@ -298,7 +298,7 @@ export function PlayersTable({ rows, articles }: { rows: PlayerRow[]; articles: 
               <th>Jugador</th>
               <th>Broker / Cuenta</th>
               <th>Tipo</th>
-              <th>Myfxbook</th>
+              <th>Sync MT5</th>
               <th>Saldo / Equity</th>
               <th>Lotaje XAUUSD (mes)</th>
               <th>V-COIN total</th>
