@@ -247,6 +247,10 @@ model JournalAccount {
   investorLogin       String?
   investorPasswordEnc String? @db.Text
   mt5Server           String?
+  // Última vez que el orquestador MT5 propio leyó esta cuenta con éxito
+  // (se guarda tanto si el resultado se aplicó como si se descartó por
+  // haber ya una entrada manual/foto ese día) — ver src/lib/journal/mt5-sync.ts.
+  lastSyncedAt        DateTime?
 
   entries        JournalEntry[]
 
@@ -374,6 +378,11 @@ model PlayMt5Account {
   // del actual) se vuelve a partir de 0.
   lastCreditedLots    Float           @default(0)
   lastCreditedPeriod  String?
+
+  // Última vez que el orquestador MT5 propio (mt5-orchestrator/) leyó esta
+  // cuenta con éxito, se haya acreditado V-COIN nuevo o no — ver
+  // src/lib/play/mt5-native-sync.ts.
+  lastSyncedAt        DateTime?
 
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
