@@ -5,7 +5,7 @@
 // fijo por ahora (ver nota más abajo).
 //
 // Se alimenta con el MISMO delta de lotes que ya usa el sync de V-COIN por
-// lotaje (src/lib/play/myfxbook-sync.ts) — así nunca se cuenta un lote dos
+// lotaje (src/lib/play/mt5-native-sync.ts) — así nunca se cuenta un lote dos
 // veces ni se necesita un contador aparte.
 //
 // NOTA sobre "días de ciclo" (tierGoals.daysLimit): el sistema viejo tenía
