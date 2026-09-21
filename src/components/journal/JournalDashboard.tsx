@@ -27,7 +27,22 @@ type AccountData = {
   mt5Connected?: boolean;
   investorLogin?: string | null;
   mt5Server?: string | null;
+  lastSyncedAt?: string | null;
 };
+
+// Última sincronización, en formato relativo corto — la hace sola el
+// orquestador MT5 propio (mt5-orchestrator/) cada ~15 minutos.
+function formatLastSync(iso: string | null | undefined): string {
+  if (!iso) return "Todavía sin sincronizar";
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const diffMin = Math.round(diffMs / 60000);
+  if (diffMin < 1) return "hace un momento";
+  if (diffMin < 60) return `hace ${diffMin} min`;
+  const diffH = Math.round(diffMin / 60);
+  if (diffH < 24) return `hace ${diffH} h`;
+  const diffD = Math.round(diffH / 24);
+  return `hace ${diffD} d`;
+}
 
 type ChartPoint = { key: string; label: string; value: number };
 
@@ -741,6 +756,11 @@ export function JournalDashboard({ initialAccounts }: { initialAccounts: Account
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-dim)", textTransform: "uppercase" }}>
             Cuenta {account.accountUid}
           </div>
+          {account.mt5Connected && (
+            <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 2 }}>
+              MT5 conectado · Sincronizada {formatLastSync(account.lastSyncedAt)}
+            </div>
+          )}
           <div style={{ fontSize: 24, fontFamily: "var(--font-mono)", marginTop: 4 }}>
             {formatMoney(currentBalance, account.currency)}
           </div>
