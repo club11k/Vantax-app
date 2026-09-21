@@ -40,6 +40,8 @@ export async function GET() {
     orderBy: { createdAt: "asc" },
   });
   // investorPasswordEnc nunca sale de esta ruta — solo si está conectada o no.
+  // (lastSyncedAt viaja dentro de "a" sin hacer falta seleccionarlo aparte,
+  // porque este findMany no usa "select" y trae todas las columnas.)
   const withFlag = accounts.map(({ investorPasswordEnc, ...a }) => ({ ...a, mt5Connected: Boolean(investorPasswordEnc) }));
   return NextResponse.json({ accounts: withFlag });
 }
