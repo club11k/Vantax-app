@@ -1,12 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { PlayersTable } from "@/components/admin/PlayersTable";
-import { monthBounds } from "@/lib/play/myfxbook-sync";
+import { monthBounds } from "@/lib/play/period-utils";
 import { TIER_ORDER } from "@/lib/play/progress-engine";
 
 export default async function AdminPlayersPage() {
   const { periodStart, periodEnd } = monthBounds(new Date());
 
-  const [accounts, links, stats, progressRows, tierGoals, articles] = await Promise.all([
+  const [accounts, stats, progressRows, tierGoals, articles] = await Promise.all([
     prisma.playMt5Account.findMany({
       include: {
         user: { select: { id: true, email: true, name: true, vCoinBalance: true } },
@@ -14,20 +14,17 @@ export default async function AdminPlayersPage() {
       },
       orderBy: { createdAt: "desc" },
     }),
-    prisma.playMyfxbookLink.findMany(),
     prisma.playTradingStats.findMany({ where: { periodStart, periodEnd } }),
     prisma.playPlayerProgress.findMany(),
     prisma.playTierGoal.findMany(),
     prisma.playCatalogArticle.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
   ]);
 
-  const linkByUserId = new Map(links.map((l) => [l.userId, l]));
   const statsByAccountId = new Map(stats.map((s) => [s.accountId, s]));
   const progressByUserId = new Map(progressRows.map((p) => [p.userId, p]));
   const goalByTier = new Map(tierGoals.map((g) => [g.tier, g.lotsTarget]));
 
   const rows = accounts.map((a) => {
-    const link = linkByUserId.get(a.userId) ?? null;
     const stat = statsByAccountId.get(a.id) ?? null;
     const progress = progressByUserId.get(a.userId) ?? null;
     const tier = progress ? TIER_ORDER[Math.min(progress.tierIndex, TIER_ORDER.length - 1)] : null;
@@ -44,8 +41,8 @@ export default async function AdminPlayersPage() {
       balance: a.balance,
       equity: a.equity,
       ibActive: a.ibActive,
-      myfxbookEmail: link?.email ?? null,
-      lastSyncedAt: link?.lastSyncedAt ? link.lastSyncedAt.toISOString() : null,
+      mt5Connected: Boolean(a.investorPasswordEnc),
+      lastSyncedAt: a.lastSyncedAt ? a.lastSyncedAt.toISOString() : null,
       lotsThisMonth: stat?.lotsTraded ?? 0,
       profitPctThisMonth: stat?.profitPct ?? 0,
       progressTier: tier,
