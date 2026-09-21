@@ -64,6 +64,7 @@ export default async function JournalPage() {
           mt5Connected: Boolean(account.investorPasswordEnc),
           investorLogin: account.investorLogin,
           mt5Server: account.mt5Server,
+          lastSyncedAt: account.lastSyncedAt ? account.lastSyncedAt.toISOString() : null,
           entries: entriesByAccount[i].map((e) => ({
             id: e.id,
             date: e.date.toISOString().slice(0, 10),
