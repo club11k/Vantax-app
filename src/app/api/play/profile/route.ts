@@ -42,6 +42,8 @@ export async function GET() {
           accountNumber: true,
           accountType: true,
           mt5Server: true,
+          investorLogin: true,
+          investorPasswordEnc: true,
           ibActive: true,
           balance: true,
           equity: true,
@@ -67,7 +69,12 @@ export async function GET() {
     payoutNetwork: user.payoutNetwork,
     vCoinBalance: user.vCoinBalance,
     myfxbookLink: user.myfxbookLink,
-    accounts: user.playMt5Accounts,
+    // investorPasswordEnc NUNCA se manda al cliente - solo si hay una
+    // guardada (mt5Connected), igual que en /api/play/accounts y en Journaly.
+    accounts: user.playMt5Accounts.map(({ investorPasswordEnc, ...a }) => ({
+      ...a,
+      mt5Connected: Boolean(investorPasswordEnc),
+    })),
     progress,
   });
 }
