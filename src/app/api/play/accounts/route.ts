@@ -7,9 +7,10 @@ import { encrypt } from "@/lib/play/crypto";
 import { findOrCreatePlayBroker } from "@/lib/play/brokers";
 import { getPlayConfig, vcoinsForLots, tierForBalance } from "@/lib/play/vcoin-engine";
 
-// Vincular una cuenta MT5 a mano (modo observador/investor), igual que el
-// POST "/" de accounts.js en el backend original de Vantax Play. Para
-// vincular vía Myfxbook (autocompletado) ver /api/play/myfxbook-link.
+// Vincular una cuenta MT5 (modo observador/investor). El saldo, equity y
+// lotaje se sincronizan solos cada ciclo vía el orquestador MT5 propio
+// (mt5-orchestrator/) en cuanto la cuenta tiene login/contraseña investor
+// y servidor guardados — ver src/lib/play/mt5-native-sync.ts.
 
 const linkSchema = z.object({
   brokerName: z.string().trim().min(1, "El broker es obligatorio.").max(100),
@@ -49,6 +50,7 @@ export async function GET() {
       mt5Server: a.mt5Server,
       investorLogin: a.investorLogin,
       mt5Connected: Boolean(a.investorPasswordEnc),
+      lastSyncedAt: a.lastSyncedAt,
       ibActive: a.ibActive,
       balance: a.balance,
       equity: a.equity,
