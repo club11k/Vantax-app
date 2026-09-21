@@ -18,6 +18,13 @@ export type Mt5JournalSyncReport = {
   // de hoy (UTC) — el orquestador normalmente reporta el resultado del día
   // en curso en cada ciclo de sincronización.
   date?: string;
+  // Saldo actual de la cuenta. Solo se usa para UNA cosa: si esta cuenta
+  // todavía no tiene saldo inicial (JournalAccount.initialBalance === null,
+  // el caso normal para una cuenta nueva, que ahora obliga a conectar MT5
+  // en vez de pedirlo a mano), este es el primer saldo real que se lee y se
+  // guarda como saldo inicial. En syncs siguientes, con el saldo ya puesto,
+  // se ignora.
+  balance?: number;
 };
 
 export type Mt5JournalSyncOutcome =
@@ -42,7 +49,20 @@ export async function applyJournalMt5Result(report: Mt5JournalSyncReport): Promi
   // MT5 — se registra como "última sincronización" tanto si el resultado
   // se aplica como si se descarta más abajo por haber ya una entrada
   // manual/foto ese día (en ambos casos la lectura en sí fue un éxito).
-  await prisma.journalAccount.update({ where: { id: account.id }, data: { lastSyncedAt: new Date() } }).catch(() => {});
+  // Y si es la PRIMERA vez que se sincroniza esta cuenta (initialBalance
+  // todavía sin capturar), este saldo se guarda como saldo inicial — es el
+  // único momento en que se toca ese campo.
+  await prisma.journalAccount
+    .update({
+      where: { id: account.id },
+      data: {
+        lastSyncedAt: new Date(),
+        ...(account.initialBalance === null && typeof report.balance === "number"
+          ? { initialBalance: report.balance }
+          : {}),
+      },
+    })
+    .catch(() => {});
 
   let date: Date;
   if (report.date) {
