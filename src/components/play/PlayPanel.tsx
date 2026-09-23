@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import styles from "@/components/play/arcade.module.css";
 import { TraderProgressBar, type PlayProgress } from "@/components/play/TraderProgressBar";
 import { ChestCabinet } from "@/components/play/ChestCabinet";
@@ -75,7 +74,7 @@ export function PlayPanel() {
   const [profileError, setProfileError] = useState<string | null>(null);
 
   // Vinculación manual de cuenta MT5
-  const [brokerName, setBrokerName] = useState("");
+  const [brokerName, setBrokerName] = useState("Vantage");
   const [accountNumber, setAccountNumber] = useState("");
   const [accountType, setAccountType] = useState<"NORMAL" | "CENT">("NORMAL");
   const [investorLogin, setInvestorLogin] = useState("");
@@ -144,7 +143,10 @@ export function PlayPanel() {
 
   async function handleAccountSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!brokerName.trim() || !accountNumber.trim()) return;
+    if (!brokerName.trim() || !accountNumber.trim() || !investorLogin.trim() || !investorPassword || !mt5Server.trim()) {
+      setAccountError("Para vincular la cuenta hace falta conectar MT5: login investor, contraseña y servidor.");
+      return;
+    }
     setSavingAccount(true);
     setAccountError(null);
     try {
@@ -165,7 +167,7 @@ export function PlayPanel() {
         setAccountError(data.error ?? "No se pudo vincular la cuenta.");
         return;
       }
-      setBrokerName("");
+      setBrokerName("Vantage");
       setAccountNumber("");
       setInvestorLogin("");
       setInvestorPassword("");
@@ -315,14 +317,11 @@ export function PlayPanel() {
             {profile.vCoinBalance} V-COIN
           </div>
           <p style={{ fontSize: 15, color: "var(--textDim)", marginTop: 10 }}>
-            Es un saldo único: lo ganas tanto por la comisión que generas operando con tu cuenta de Vantage vinculada
-            al IB, como por el lotaje en XAUUSD que operas en cualquier otro broker, sincronizado solo desde tu
-            cuenta MT5. Aquí en Vantax Play se usa para los cofres; la vinculación de tu cuenta de Vantage se
-            gestiona en la pantalla de V-COIN.
+            Es un saldo único: lo ganas tanto por la comisión que generas operando con tu cuenta de Vantage, como por
+            el lotaje en XAUUSD que operas en cualquier otro broker — todo sincronizado solo desde tu cuenta MT5, sin
+            que tengas que hacer nada más. Aquí en Vantax Play se usa para los cofres, y la vinculación de tu cuenta
+            se hace una sola vez, en la pestaña "PERFIL".
           </p>
-          <Link href="/vcoin" className={styles.btn} style={{ display: "inline-block", textDecoration: "none" }}>
-            IR A V-COIN
-          </Link>
         </div>
       )}
 
@@ -394,9 +393,10 @@ export function PlayPanel() {
           <div className={styles.card}>
             <h3 className={styles.sectionTitle}>VINCULAR CUENTA MT5</h3>
             <p style={{ fontSize: 15, color: "var(--textDim)" }}>
-              Indica el broker y el número de cuenta, y si añades el servidor MT5 y la contraseña <b>investor</b> (solo
-              lectura, nunca la de trading), tu saldo y el lotaje de XAUUSD se sincronizan solos cada 15 minutos, sin
-              que tengas que hacer nada más.
+              Un solo paso: indica el broker, el número de cuenta y conecta MT5 con la contraseña <b>investor</b> (solo
+              lectura, nunca la de trading). Con eso ya está — tu saldo, el lotaje de XAUUSD y (si es una cuenta de
+              Vantage) tu comisión de IB se sincronizan solos cada 15 minutos, sin nada más que vincular en ningún
+              otro sitio.
             </p>
             <form onSubmit={handleAccountSubmit}>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -418,19 +418,23 @@ export function PlayPanel() {
               </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <div style={{ flex: 1, minWidth: 150 }}>
-                  <label className={styles.label}>Servidor MT5 (opcional)</label>
+                  <label className={styles.label}>Servidor MT5</label>
                   <input className={styles.input} type="text" value={mt5Server} onChange={(e) => setMt5Server(e.target.value)} disabled={savingAccount} />
                 </div>
                 <div style={{ flex: 1, minWidth: 150 }}>
-                  <label className={styles.label}>Login investor (opcional)</label>
+                  <label className={styles.label}>Login investor</label>
                   <input className={styles.input} type="text" value={investorLogin} onChange={(e) => setInvestorLogin(e.target.value)} disabled={savingAccount} />
                 </div>
                 <div style={{ flex: 1, minWidth: 150 }}>
-                  <label className={styles.label}>Contraseña investor (opcional)</label>
+                  <label className={styles.label}>Contraseña investor</label>
                   <input className={styles.input} type="password" value={investorPassword} onChange={(e) => setInvestorPassword(e.target.value)} disabled={savingAccount} />
                 </div>
               </div>
-              <button className={styles.btn} type="submit" disabled={savingAccount || !brokerName.trim() || !accountNumber.trim()}>
+              <button
+                className={styles.btn}
+                type="submit"
+                disabled={savingAccount || !brokerName.trim() || !accountNumber.trim() || !investorLogin.trim() || !investorPassword || !mt5Server.trim()}
+              >
                 {savingAccount ? "VINCULANDO…" : "VINCULAR CUENTA"}
               </button>
             </form>
@@ -538,4 +542,5 @@ export function PlayPanel() {
     </div>
   );
 }
+
 
