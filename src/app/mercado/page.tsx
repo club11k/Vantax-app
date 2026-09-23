@@ -194,6 +194,16 @@ export default async function MercadoPage() {
         </div>
       </div>
 
+      {/*
+        Este ticker-tape es un widget de TradingView independiente: pide los
+        precios directamente al feed de TradingView desde el navegador, no
+        pasa por nuestro backend ni por FRED. Los símbolos "FRED:DGS10",
+        "FRED:VIXCLS", "FRED:DTWEXBGS", etc. NO existen en el feed en vivo de
+        este widget (solo sirven para gráficos de "Economic Data" dentro de
+        tradingview.com) — por eso salían con el icono rojo de error. Aquí
+        hay que usar los símbolos "nativos" de TradingView (TVC:US10Y,
+        TVC:VIX, TVC:DXY, ...), que sí están soportados por el ticker tape.
+      */}
       <TradingViewWidget
         height={46}
         src="https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js"
@@ -201,13 +211,13 @@ export default async function MercadoPage() {
           symbols: [
             { proName: "OANDA:XAUUSD", title: "Oro (XAU/USD)" },
             { proName: "TVC:GOLD", title: "Oro (spot)" },
-            { proName: "FRED:DTWEXBGS", title: "USD ponderado (Fed)" },
-            { proName: "FRED:VIXCLS", title: "VIX" },
+            { proName: "TVC:DXY", title: "Índice USD (DXY)" },
+            { proName: "TVC:VIX", title: "VIX" },
             { proName: "CAPITALCOM:OIL_BRENT", title: "Petróleo Brent (Cash)" },
-            { proName: "FRED:DGS5", title: "US 5Y" },
-            { proName: "FRED:DGS10", title: "US 10Y" },
-            { proName: "FRED:DGS20", title: "US 20Y" },
-            { proName: "FRED:DGS30", title: "US 30Y" },
+            { proName: "TVC:US05Y", title: "US 5Y" },
+            { proName: "TVC:US10Y", title: "US 10Y" },
+            { proName: "TVC:US20Y", title: "US 20Y" },
+            { proName: "TVC:US30Y", title: "US 30Y" },
           ],
           colorTheme: "dark",
           isTransparent: true,
@@ -437,3 +447,4 @@ export default async function MercadoPage() {
     </div>
   );
 }
+
