@@ -197,12 +197,20 @@ export default async function MercadoPage() {
       {/*
         Este ticker-tape es un widget de TradingView independiente: pide los
         precios directamente al feed de TradingView desde el navegador, no
-        pasa por nuestro backend ni por FRED. Los símbolos "FRED:DGS10",
-        "FRED:VIXCLS", "FRED:DTWEXBGS", etc. NO existen en el feed en vivo de
-        este widget (solo sirven para gráficos de "Economic Data" dentro de
-        tradingview.com) — por eso salían con el icono rojo de error. Aquí
-        hay que usar los símbolos "nativos" de TradingView (TVC:US10Y,
-        TVC:VIX, TVC:DXY, ...), que sí están soportados por el ticker tape.
+        pasa por nuestro backend ni por FRED. Confirmado con TradingView
+        (tooltip real visto en producción): los símbolos "TVC:*" de VIX,
+        índice del dólar y rendimientos de bonos del Tesoro dan "Este
+        símbolo solo está disponible en TradingView" — son datos con
+        licencia restringida para insertar en widgets externos (CBOE/ICE),
+        no un símbolo mal escrito, así que NINGÚN símbolo "TVC:" para estos
+        arregla el error.
+        - Índice USD y VIX: sí existen como CFD del broker Capital.com
+          (mismo proveedor que ya usamos para el petróleo Brent más abajo,
+          que sí funciona), así que se sustituyen por esos.
+        - Rendimientos de bonos del Tesoro (5Y/10Y/20Y/30Y): no existe un
+          CFD equivalente insertable gratis en ningún broker de TradingView,
+          así que se quitan de esta cinta — el dato real y correcto (FRED)
+          ya se ve más abajo, en el Bias Score y en "Mapa de Fuentes".
       */}
       <TradingViewWidget
         height={46}
@@ -211,13 +219,9 @@ export default async function MercadoPage() {
           symbols: [
             { proName: "OANDA:XAUUSD", title: "Oro (XAU/USD)" },
             { proName: "TVC:GOLD", title: "Oro (spot)" },
-            { proName: "TVC:DXY", title: "Índice USD (DXY)" },
-            { proName: "TVC:VIX", title: "VIX" },
+            { proName: "CAPITALCOM:DXY", title: "Índice USD (DXY)" },
+            { proName: "CAPITALCOM:VIX", title: "VIX" },
             { proName: "CAPITALCOM:OIL_BRENT", title: "Petróleo Brent (Cash)" },
-            { proName: "TVC:US05Y", title: "US 5Y" },
-            { proName: "TVC:US10Y", title: "US 10Y" },
-            { proName: "TVC:US20Y", title: "US 20Y" },
-            { proName: "TVC:US30Y", title: "US 30Y" },
           ],
           colorTheme: "dark",
           isTransparent: true,
