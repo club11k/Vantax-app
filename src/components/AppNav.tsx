@@ -1,9 +1,13 @@
 import Link from "next/link";
 
 // Barra de navegación común a toda la app: se usa en el dashboard, Centro de
-// Mercado, Journaly, Calculadora de riesgo, V-COIN y el panel de admin, para
-// que desde cualquier pantalla se pueda ir directamente a cualquier otra sin
+// Mercado, Journaly, Calculadora de riesgo y el panel de admin, para que
+// desde cualquier pantalla se pueda ir directamente a cualquier otra sin
 // tener que volver antes al panel principal.
+//
+// V-COIN ya no tiene pantalla propia — vive dentro de Vantax Play (pestaña
+// V-COIN de ahí), junto con la vinculación de cuenta MT5/Vantage, para no
+// tener el mismo dato repartido en varios sitios.
 //
 // No incluye su propio <div className="btn-row">: cada página lo envuelve
 // ella misma, así puede añadir botones extra (ej. "Gestionar suscripción")
@@ -14,7 +18,6 @@ const NAV_ITEMS = [
   { href: "/mercado", label: "Centro de mercado", key: "mercado" },
   { href: "/journal", label: "Journaly", key: "journal" },
   { href: "/riesgo", label: "Calculadora de riesgo", key: "riesgo" },
-  { href: "/vcoin", label: "V-COIN", key: "vcoin" },
   { href: "/play", label: "Vantax Play", key: "play" },
 ] as const;
 
@@ -39,4 +42,5 @@ export function AppNav({ isAdmin, active }: { isAdmin?: boolean; active?: string
     </>
   );
 }
+
 
