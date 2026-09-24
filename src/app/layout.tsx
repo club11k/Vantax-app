@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Footer } from "@/components/Footer";
+import { InactivityWarningBanner } from "@/components/InactivityWarningBanner";
 
 export const metadata: Metadata = {
   title: "VANTAX — Análisis de XAU/USD y DXY",
@@ -11,6 +12,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="es">
       <body style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+        {/* Aparece solo, en cualquier página, mientras el usuario tenga un
+            aviso de inactividad pendiente — ver el propio componente. */}
+        <InactivityWarningBanner />
         <div style={{ flex: 1 }}>{children}</div>
         <Footer />
       </body>
