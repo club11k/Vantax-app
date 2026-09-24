@@ -27,6 +27,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <Link href="/admin" className="btn">Resumen</Link>
         <Link href="/admin/users" className="btn">Usuarios</Link>
         <Link href="/admin/vantage-clients" className="btn">Clientes Vantage</Link>
+        <Link href="/admin/vantage-inactivity" className="btn">Avisos de inactividad</Link>
         <Link href="/admin/players" className="btn">Jugadores (Play)</Link>
         <Link href="/admin/plans" className="btn">Planes</Link>
         <Link href="/admin/settings" className="btn">Configuración</Link>
@@ -35,4 +36,5 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     </div>
   );
 }
+
 
