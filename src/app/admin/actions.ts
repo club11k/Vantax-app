@@ -222,6 +222,31 @@ export async function toggleIbActive(accountId: string, active: boolean) {
   revalidatePath("/admin/players");
 }
 
+// Fuerza a mano el estado "activa" de una cuenta de Vantage para el
+// bloqueo automático de acceso a toda la app (ver src/lib/vantage-block.ts)
+// — para casos que el sync automático de Vantage (ibStatus + lastTradeTime)
+// no vaya a detectar bien, sin tener que esperar al próximo sync.
+// override: true = forzar activa (nunca bloquea por esta cuenta), false =
+// forzar inactiva (bloquea por esta cuenta aunque el sync la vea activa),
+// null = volver al cálculo automático.
+export async function setVantageManualOverride(accountId: string, override: boolean | null) {
+  const admin = await requireAdmin();
+  await prisma.vantageIbAccount.update({ where: { id: accountId }, data: { manualActiveOverride: override } });
+  await logAction(admin.id, "set_vantage_manual_override", { accountId, override });
+  revalidatePath("/admin/vantage-clients");
+}
+
+// Marca a un usuario como "avisado" de que lleva 15+ días sin operar — a
+// partir de aquí le sale el aviso dentro de la app (ver
+// src/components/InactivityWarningBanner.tsx) hasta que vuelva a operar.
+// Ver /admin/vantage-inactivity.
+export async function warnUserInactivity(userId: string) {
+  const admin = await requireAdmin();
+  await prisma.user.update({ where: { id: userId }, data: { vantageInactivityWarnedAt: new Date() } });
+  await logAction(admin.id, "warn_user_inactivity", { userId });
+  revalidatePath("/admin/vantage-inactivity");
+}
+
 // Regala un cofre a un jugador concreto, sin que tenga que ganarlo con la
 // barra de Progreso del Trader. El premio se define aquí (V-COIN suelto, o
 // un artículo del catálogo) y queda pendiente hasta que el jugador lo abra
@@ -251,3 +276,4 @@ export async function giftChest(
 // el orquestador MT5 propio en la VPS (mt5-orchestrator/) — ya no hace
 // falta un botón de "sincronizar ahora" a mano, ver
 // src/lib/play/mt5-native-sync.ts.
+
