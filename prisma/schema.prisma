@@ -126,6 +126,14 @@ model User {
   analyses          Analysis[]
   suspended         Boolean  @default(false)
 
+  // Aviso manual de inactividad (15 días sin operar en ninguna cuenta de
+  // Vantage) — lo pone un admin con un botón desde /admin/vantage-inactivity
+  // (ver src/lib/vantage-block.ts, getVantageWarningStatus). Mientras esté
+  // puesto Y la cuenta siga inactiva, se le muestra un aviso en la propia
+  // app avisando de que se bloqueará a los 30 días. Se deja de mostrar solo
+  // si vuelve a operar (no hace falta "leerlo" ni borrarlo a mano).
+  vantageInactivityWarnedAt DateTime?
+
   // Acceso al Centro de Mercado (/mercado), independiente del acceso a
   // Análisis (que sigue dependiendo de subscriptionStatus + plan). Un admin
   // otorga cada uno por separado desde /admin/usuarios — así se puede dar
@@ -314,6 +322,17 @@ model VantageIbAccount {
   ibStatus         String    @default("LINKED")
   lastAllocationAt DateTime?
   lastAllocationType String? // "In" o "Out", el del evento más reciente aplicado
+
+  // Bloqueo automático de acceso a VANTAX (ver src/lib/vantage-block.ts):
+  // se bloquea toda la cuenta si NINGUNA cuenta de Vantage del usuario está
+  // "activa" (vinculada al IB y con operativa en los últimos 30 días). Este
+  // campo deja que un admin fuerce el resultado a mano desde
+  // /admin/vantage-clients sin esperar al próximo sync de Vantage: null =
+  // usar el cálculo automático (ibStatus + lastTradeTime), true = forzar
+  // "activa" (nunca bloquea por esta cuenta aunque el sync diga lo
+  // contrario), false = forzar "inactiva" (bloquea por esta cuenta aunque
+  // el sync la vea activa).
+  manualActiveOverride Boolean?
 
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
