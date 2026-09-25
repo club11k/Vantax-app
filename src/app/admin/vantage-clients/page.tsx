@@ -39,15 +39,15 @@ export default async function AdminVantageClientsPage() {
     <div className="panel">
       <h2 style={{ marginTop: 0, fontSize: 16 }}>Clientes de Vantage ({rows.length})</h2>
       <p style={{ fontSize: 12.5, color: "var(--text-muted)", marginTop: -6 }}>
-        "Activo (30 días)" = operó en los últimos 30 días, según la última operación que reporta Vantage
-        (lastTradeTime). "Estado IB" sale del historial de entradas/salidas de Vantage (Allocation Data API): si la
-        cuenta se desvincula de tu IB, se marca "Desvinculado" en el próximo sync.
+        "V-COIN (lotaje MT5)" y "Última operación" salen directo de MT5 (vía el orquestador propio de la VPS), no de
+        la comisión de Vantage — ver /completar-mt5, ahora obligatorio para todo el mundo. "Estado IB" sale del
+        historial de entradas/salidas de Vantage (Allocation Data API): si la cuenta se desvincula de tu IB, se marca
+        "Desvinculado" en el próximo sync (eso sí sigue viniendo de Vantage, es lo único que solo ella sabe).
       </p>
       <p style={{ fontSize: 12.5, color: "var(--text-muted)", marginTop: 4 }}>
         <strong>Bloqueo de acceso:</strong> un usuario pierde el acceso a toda la app en cuanto NINGUNA de sus
         cuentas de Vantage está "Activa" en la columna de abajo (desvinculada del IB, o vinculada pero sin operar en
-        30 días). La columna "Acceso" te deja forzarlo a mano por cuenta sin esperar al próximo sync. El sync
-        automático corre solo una vez al día (o a mano con el botón de /admin/settings).
+        30 días). La columna "Acceso" te deja forzarlo a mano por cuenta sin esperar al próximo sync.
       </p>
       <VantageClientsTable rows={rows} />
     </div>
