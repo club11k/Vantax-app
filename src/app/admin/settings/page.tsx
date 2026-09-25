@@ -55,17 +55,17 @@ export default async function AdminSettingsPage() {
       <div className="panel" style={{ fontSize: 13, color: "var(--text-muted)" }}>
         <strong>V-COIN — cuentas de Vantage (IB)</strong>
         <p style={{ margin: "6px 0 0" }}>
-          La API de Vantage solo da la comisión acumulada por cuenta, no el lotaje de cada operación. Por eso el
-          V-COIN de estas cuentas se calcula a partir de la comisión, por porcentaje (no por lote): la base es que 1
-          céntimo de comisión nueva generada equivale a 1 V-COIN al 100%, y el campo de abajo decide qué porcentaje
-          de eso se reparte de verdad (ej. con 50%, $10 de comisión nueva dan 500 V-COIN). Al ser un ratio sobre la
-          comisión en $, funciona igual para cuentas normales y cuentas Cent — no hace falta un tramo distinto para
-          cada tipo.
+          RETIRADO: el V-COIN de estas cuentas se calculaba antes a partir de la comisión que reportaba la API de
+          Vantage, por porcentaje (el campo de abajo). Desde que MT5 es obligatorio para todo el mundo, se sustituyó
+          del todo por lotaje real leído directo de MT5 (más preciso, y no depende de que Vantage tenga la comisión
+          al día) — ver la configuración de tramos de V-COIN por lotaje más abajo, que es la que manda ahora para
+          todas las cuentas. El campo de abajo ya no tiene ningún efecto; se deja visible por si hiciera falta
+          consultarlo, no hace falta tocarlo.
         </p>
       </div>
       <SettingForm
         settingKey="vcoin.commission_percent"
-        label="Porcentaje de la comisión nueva que se reparte como V-COIN (0-100)"
+        label="(Retirado) Porcentaje de la comisión nueva que se reparte como V-COIN"
         initialValue={extractValue(byKey.get("vcoin.commission_percent") ?? null, "50")}
       />
       <VantageSyncPanel />
@@ -92,4 +92,5 @@ export default async function AdminSettingsPage() {
     </div>
   );
 }
+
 
