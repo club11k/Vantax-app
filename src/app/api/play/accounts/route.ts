@@ -3,8 +3,7 @@ import { getServerSession } from "next-auth";
 import { z } from "zod";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { encrypt } from "@/lib/play/crypto";
-import { findOrCreatePlayBroker } from "@/lib/play/brokers";
+import { linkMt5Account } from "@/lib/play/link-mt5-account";
 import { getPlayConfig, vcoinsForLots, tierForBalance } from "@/lib/play/vcoin-engine";
 
 // Vincular una cuenta MT5 (modo observador/investor). El saldo, equity y
@@ -90,60 +89,20 @@ export async function POST(req: Request) {
   }
   const { brokerName, accountNumber, accountType, investorLogin, investorPassword, mt5Server } = parsed.data;
 
-  const brokerId = await findOrCreatePlayBroker(brokerName);
-
-  const existing = await prisma.playMt5Account.findUnique({
-    where: { brokerId_accountNumber: { brokerId, accountNumber } },
+  const result = await linkMt5Account({
+    userId,
+    brokerName,
+    accountNumber,
+    accountType,
+    investorLogin,
+    investorPassword,
+    mt5Server,
   });
-  if (existing) {
-    return NextResponse.json(
-      { error: existing.userId === userId ? "Ya tienes esa cuenta vinculada." : "Esa cuenta ya está vinculada a otro usuario." },
-      { status: 409 }
-    );
+
+  if (!result.ok) {
+    return NextResponse.json({ error: result.error }, { status: result.status });
   }
 
-  let investorPasswordEnc: string | null;
-  try {
-    investorPasswordEnc = encrypt(investorPassword);
-  } catch (err: any) {
-    console.error("Error cifrando la contraseña investor:", err.message);
-    return NextResponse.json({ error: "No se pudo cifrar la contraseña investor. Revisa ENCRYPTION_KEY en el servidor." }, { status: 500 });
-  }
-  if (!investorPasswordEnc) {
-    return NextResponse.json({ error: "No se pudo cifrar la contraseña investor." }, { status: 500 });
-  }
-
-  try {
-    const account = await prisma.playMt5Account.create({
-      data: {
-        userId,
-        brokerId,
-        accountNumber,
-        accountType,
-        investorLogin,
-        investorPasswordEnc,
-        mt5Server,
-      },
-    });
-
-    // Si es una cuenta de Vantage, se vincula también del lado del IB para
-    // que salga en Panel de admin → Clientes Vantage — sin bloquear la
-    // creación de la cuenta de Play si esto falla por lo que sea (ej. ese
-    // número de cuenta ya estaba vinculado por otro usuario desde antes).
-    if (brokerName.trim().toLowerCase() === "vantage") {
-      try {
-        const alreadyLinked = await prisma.vantageIbAccount.findUnique({ where: { accountNumber } });
-        if (!alreadyLinked) {
-          await prisma.vantageIbAccount.create({ data: { userId, accountNumber } });
-        }
-      } catch (err) {
-        console.error("No se pudo enlazar la cuenta con Vantage IB (no afecta a la cuenta de Play):", err);
-      }
-    }
-
-    return NextResponse.json({ account }, { status: 201 });
-  } catch (err) {
-    console.error("Error vinculando la cuenta MT5:", err);
-    return NextResponse.json({ error: "No se pudo vincular la cuenta." }, { status: 500 });
-  }
+  const account = await prisma.playMt5Account.findUnique({ where: { id: result.accountId } });
+  return NextResponse.json({ account }, { status: 201 });
 }
