@@ -18,13 +18,13 @@ export function VantageSyncPanel() {
 
   return (
     <div className="panel" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <label>Sincronizar V-COIN con la comisión de Vantage (IB)</label>
+      <label>Sincronizar historial del IB de Vantage</label>
       <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: 0 }}>
-        Consulta la comisión acumulada de todas tus cuentas de Vantage y acredita V-COIN solo por la comisión nueva
-        generada desde la última vez (nunca se acredita dos veces lo mismo). De paso trae el historial de
-        entradas/salidas del IB (quién se desvincula) y la fecha de la última operación de cada cuenta — todo eso lo
-        puedes ver en detalle en <a href="/admin/vantage-clients">Clientes Vantage</a>. No hay sincronización
-        automática todavía — hay que lanzarla a mano.
+        Trae el historial de entradas/salidas del IB (quién se desvincula) — lo puedes ver en detalle en{" "}
+        <a href="/admin/vantage-clients">Clientes Vantage</a>. El V-COIN y la fecha de última operación de cada
+        cuenta YA NO salen de aquí: desde que MT5 es obligatorio para todo el mundo, esos dos datos se actualizan
+        solos vía el orquestador propio de la VPS, cada vez que sincroniza. Esto de aquí también corre solo, cada
+        15-30 min (Cron Job en Render) — este botón es solo para forzarlo a mano sin esperar.
       </p>
       <div>
         <button className="btn btn-primary" onClick={handleSync} disabled={isPending}>
@@ -55,4 +55,5 @@ export function VantageSyncPanel() {
     </div>
   );
 }
+
 
