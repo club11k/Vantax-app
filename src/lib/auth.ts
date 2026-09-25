@@ -3,6 +3,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { getVantageBlockStatus } from "@/lib/vantage-block";
+import { userHasMt5Account } from "@/lib/mt5-gate";
 
 // Cada cuánto se revalida, para una sesión YA abierta, que el usuario
 // siga sin estar suspendido/bloqueado — sin esto, alguien que se queda sin
@@ -20,6 +21,19 @@ async function computeBlockedCode(userId: string): Promise<string | null> {
   const vantageBlock = await getVantageBlockStatus(userId);
   if (vantageBlock.blocked) return vantageBlock.reason === "ib_unlinked" ? "blocked_ib" : "blocked_inactivity";
   return null;
+}
+
+// Aparte del bloqueo de arriba (que muestra un mensaje en /login y corta el
+// paso del todo), esto decide si hay que mandar al usuario a
+// /completar-mt5 antes de dejarle usar nada — no es un "bloqueo" en el
+// mismo sentido (no pasa por authorize(), no da error al iniciar sesión):
+// se deja entrar con normalidad y es el middleware quien lo redirige
+// dentro de la propia app, porque es un paso de configuración pendiente,
+// no una sanción. Los admins quedan exentos — no tiene sentido pedirles
+// una cuenta de trading para gestionar el panel.
+async function computeNeedsMt5Setup(userId: string, role: string): Promise<boolean> {
+  if (role === "ADMIN") return false;
+  return !(await userHasMt5Account(userId));
 }
 
 // NextAuth con proveedor de credenciales (email + contraseña) y sesiones JWT.
@@ -71,19 +85,26 @@ export const authOptions: AuthOptions = {
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
         token.id = (user as any).id;
         token.role = (user as any).role;
         token.blocked = null; // recién logueado: authorize() ya comprobó que no estaba bloqueado
+        token.needsMt5Setup = await computeNeedsMt5Setup(token.id as string, token.role as string);
         token.blockCheckedAt = Date.now();
         return token;
       }
       // Sesión ya existente: revalida de vez en cuando (ver
-      // BLOCK_RECHECK_INTERVAL_MS) que no se haya bloqueado mientras tanto.
+      // BLOCK_RECHECK_INTERVAL_MS) que no se haya bloqueado mientras tanto,
+      // o de inmediato si viene de un update() explícito del cliente (ver
+      // src/components/CompletarMt5Form.tsx, que lo llama justo después de
+      // vincular la cuenta — si no, needsMt5Setup seguiría en true hasta el
+      // próximo refresco automático y el middleware devolvería para atrás).
+      const forceRecheck = trigger === "update";
       const lastChecked = (token.blockCheckedAt as number) || 0;
-      if (token.id && Date.now() - lastChecked > BLOCK_RECHECK_INTERVAL_MS) {
+      if (token.id && (forceRecheck || Date.now() - lastChecked > BLOCK_RECHECK_INTERVAL_MS)) {
         token.blocked = await computeBlockedCode(token.id as string);
+        token.needsMt5Setup = await computeNeedsMt5Setup(token.id as string, token.role as string);
         token.blockCheckedAt = Date.now();
       }
       return token;
@@ -93,6 +114,7 @@ export const authOptions: AuthOptions = {
         (session.user as any).id = token.id;
         (session.user as any).role = token.role;
         (session.user as any).blocked = token.blocked ?? null;
+        (session.user as any).needsMt5Setup = token.needsMt5Setup ?? false;
       }
       return session;
     },
