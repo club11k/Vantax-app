@@ -191,98 +191,28 @@ export type VantageSyncResult = {
   accountsExited: number; // pasaron a UNLINKED en este sync
 };
 
-// Compara la comisión acumulada que devuelve Vantage ahora mismo contra la
-// que teníamos guardada de la última vez (lastCommission) y solo acredita
-// V-COIN por la diferencia — así una misma comisión nunca se paga dos veces
-// aunque se ejecute la sincronización varias veces.
+// RETIRADO (decisión de Esther, 2026-09-25): el V-COIN de las cuentas de
+// Vantage se calculaba antes por un % de la comisión nueva que reportaba
+// esta API. Ahora que MT5 es obligatorio para todo el mundo (ver
+// src/lib/mt5-gate.ts), se sustituye del todo por lotaje real leído
+// directo de MT5 — más preciso, y no depende de que Vantage tenga la
+// comisión al día (la comisión de esta API llegó a quedarse en $0 para
+// cuentas que sí estaban operando de verdad). Por el mismo motivo,
+// lastTradeTime de VantageIbAccount ya NO se toca aquí — ahora lo escribe
+// el sync nativo de MT5 (ver src/lib/play/mt5-native-sync.ts), y si esta
+// función lo siguiera pisando con el dato (menos fiable) de comisión,
+// podría deshacer ese valor más preciso en el próximo cron diario.
+//
+// Se deja la función y fetchVantageCommissions() sin borrar por si hace
+// falta consultarlas para algo puntual en el futuro, pero ya no se llaman
+// desde ningún sitio (ver syncVantageFull más abajo) — no golpea la API de
+// Vantage ni concede V-COIN.
 export async function syncVantageVCoin(): Promise<VantageSyncResult> {
-  const percent = await getVCoinPercent();
-  if (!percent || percent <= 0) {
-    return {
-      totalAccountsFromVantage: 0,
-      matchedAccounts: 0,
-      accountsCredited: 0,
-      totalVCoinAwarded: 0,
-      skippedNoRate: true,
-      allocationEventsFound: 0,
-      accountsEntered: 0,
-      accountsExited: 0,
-    };
-  }
-
-  const [rows, linkedAccounts] = await Promise.all([
-    fetchVantageCommissions(),
-    prisma.vantageIbAccount.findMany(),
-  ]);
-
-  const byAccountNumber = new Map(linkedAccounts.map((a) => [a.accountNumber, a]));
-
-  let matchedAccounts = 0;
-  let accountsCredited = 0;
-  let totalVCoinAwarded = 0;
-
-  for (const row of rows) {
-    const linked = byAccountNumber.get(String(row.account));
-    if (!linked) continue; // referido de Vantage que aún no vinculó su cuenta en VANTAX
-    matchedAccounts += 1;
-
-    const commission = Number(row.commission) || 0;
-    const delta = commission - linked.lastCommission;
-    const lastTradeTime = row.lastTradeTime ? new Date(row.lastTradeTime) : null;
-
-    // Estos campos se refrescan siempre que la cuenta aparece en
-    // commissionData, haya o no comisión nueva — así lastTradeTime (con lo
-    // que se calcula si está "activo este mes") y lastSyncedAt quedan al
-    // día en cada sync, no solo cuando hay V-COIN que repartir.
-    const baseData = {
-      vantageUserId: row.userId,
-      lastTradeTime,
-      accountType: row.accountType ?? linked.accountType,
-      platform: row.platform ?? linked.platform,
-      lastSyncedAt: new Date(),
-    };
-
-    if (delta <= 0) {
-      await prisma.vantageIbAccount.update({
-        where: { id: linked.id },
-        data: { ...baseData, lastCommission: commission },
-      });
-      continue;
-    }
-
-    // percent está en [0,100]; a 100% cada céntimo de comisión nueva (delta
-    // en dólares × 100) se convierte en 1 V-COIN, así que multiplicar delta
-    // directamente por percent da el resultado (ej. delta=$12.50, percent=50
-    // → 625 V-COIN).
-    const vCoinToAward = Math.floor(delta * percent);
-    if (vCoinToAward <= 0) {
-      await prisma.vantageIbAccount.update({
-        where: { id: linked.id },
-        data: { ...baseData, lastCommission: commission },
-      });
-      continue;
-    }
-
-    await prisma.$transaction([
-      prisma.vantageIbAccount.update({
-        where: { id: linked.id },
-        data: { ...baseData, lastCommission: commission, vCoinEarned: { increment: vCoinToAward } },
-      }),
-      prisma.user.update({
-        where: { id: linked.userId },
-        data: { vCoinBalance: { increment: vCoinToAward } },
-      }),
-    ]);
-
-    accountsCredited += 1;
-    totalVCoinAwarded += vCoinToAward;
-  }
-
   return {
-    totalAccountsFromVantage: rows.length,
-    matchedAccounts,
-    accountsCredited,
-    totalVCoinAwarded,
+    totalAccountsFromVantage: 0,
+    matchedAccounts: 0,
+    accountsCredited: 0,
+    totalVCoinAwarded: 0,
     skippedNoRate: false,
     allocationEventsFound: 0,
     accountsEntered: 0,
@@ -391,9 +321,12 @@ export async function syncVantageAllocations(): Promise<Pick<VantageSyncResult, 
   return { allocationEventsFound: rows.length, accountsEntered, accountsExited };
 }
 
-// Sync completo de Vantage (un solo botón en /admin/settings): comisión →
-// V-COIN por lotaje de comisión, más el historial de entradas/salidas del
-// IB. Se combinan en un único resultado para no tener dos botones separados.
+// Sync completo de Vantage (un solo botón en /admin/settings, y el cron
+// diario /api/cron/vantage-sync): en la práctica ahora solo hace el
+// historial de entradas/salidas del IB (syncVantageAllocations) — la parte
+// de comisión/V-COIN está retirada (ver syncVantageVCoin más arriba). Se
+// mantiene la misma forma de resultado (VantageSyncResult) para no romper
+// el botón de /admin/settings ni el cron ya configurado en Render.
 export async function syncVantageFull(): Promise<VantageSyncResult> {
   const commissionResult = await syncVantageVCoin();
   if (commissionResult.skippedNoRate) return commissionResult;
