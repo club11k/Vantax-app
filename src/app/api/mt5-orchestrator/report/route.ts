@@ -30,6 +30,9 @@ const reportSchema = z.discriminatedUnion("kind", [
     equity: z.number(),
     lotsThisMonth: z.number(),
     profitAmount: z.number().optional(),
+    // Opcional para no romper con un orquestador viejo que todavía no lo
+    // mande — ver src/lib/play/mt5-native-sync.ts.
+    lastTradeTime: z.string().nullable().optional(),
   }),
   z.object({
     kind: z.literal("journal"),
