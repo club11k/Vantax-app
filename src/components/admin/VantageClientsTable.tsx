@@ -118,7 +118,7 @@ export function VantageClientsTable({ rows }: { rows: ClientRow[] }) {
             <tr>
               <th>Usuario</th>
               <th>Cuenta Vantage</th>
-              <th>Comisión / V-COIN</th>
+              <th>V-COIN (lotaje MT5)</th>
               <th>Última operación</th>
               <th>Actividad</th>
               <th>Estado IB</th>
@@ -138,9 +138,7 @@ export function VantageClientsTable({ rows }: { rows: ClientRow[] }) {
                     {[r.accountType, r.platform].filter(Boolean).join(" · ") || "—"}
                   </div>
                 </td>
-                <td style={{ fontFamily: "var(--font-mono)" }}>
-                  {r.lastCommission.toFixed(2)} / {r.vCoinEarned} V-COIN
-                </td>
+                <td style={{ fontFamily: "var(--font-mono)" }}>{r.vCoinEarned} V-COIN</td>
                 <td style={{ fontSize: 12.5 }}>{fmtDate(r.lastTradeTime)}</td>
                 <td>
                   <span className={`tag ${r.activeLast30Days ? "pos" : "neu"}`}>
