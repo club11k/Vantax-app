@@ -75,6 +75,10 @@ export function formatSnapshotForPrompt(snapshot: MarketSnapshot): string {
   if (f.cotGoldManagedMoney) {
     const c = f.cotGoldManagedMoney;
     lines.push(`- COT Managed Money oro (neto): ${c.netCurrent.toLocaleString("es-ES")} contratos, semana anterior ${c.netPrev?.toLocaleString("es-ES") ?? "n/d"} (${c.date}), open interest ${c.openInterest.toLocaleString("es-ES")}`);
+    if (c.cotIndex3y !== null) {
+      const extremo = c.cotIndex3y >= 80 ? "muy comprado" : c.cotIndex3y <= 20 ? "muy vendido" : "sin extremo";
+      lines.push(`- COT Index oro (posición del neto actual dentro de su rango de ~3 años, 0-100): ${c.cotIndex3y.toFixed(0)}/100 (${extremo})`);
+    }
   } else {
     lines.push("- COT Managed Money oro: no disponible.");
   }
