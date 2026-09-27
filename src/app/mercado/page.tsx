@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { buildMarketSnapshot } from "@/lib/vantax-data";
 import { computeBiasScore } from "@/lib/bias-score";
+import { fetchGoldNewsHeadlines } from "@/lib/telegram-news";
 import { SessionsClock } from "@/components/market/SessionsClock";
 import { MarketFlowMap } from "@/components/market/MarketFlowMap";
 import { TradingViewWidget } from "@/components/market/TradingViewWidget";
@@ -75,7 +76,7 @@ export default async function MercadoPage() {
     }
   }
 
-  const snapshot = await buildMarketSnapshot();
+  const [snapshot, goldNews] = await Promise.all([buildMarketSnapshot(), fetchGoldNewsHeadlines()]);
   const bias = computeBiasScore(snapshot);
 
   const gauges = [
@@ -460,30 +461,63 @@ export default async function MercadoPage() {
         (feedMode: market/forex) -- enseñaba GBP/USD, USD/JPY, EUR/USD, no
         noticias de oro (Esther lo detectó). Como ya existe el canal propio
         de noticias de oro filtradas con IA (@club11k_news, el bot
-        gold-news-telegram-bot), tiene más sentido mostrar ESO aquí en vez
-        de un feed genérico.
+        gold-news-telegram-bot), tiene más sentido mostrar ESO aquí.
 
-        Telegram no ofrece un widget oficial para incrustar el feed en vivo
-        de un canal completo (solo el "Post Widget" para un mensaje suelto,
-        ver core.telegram.org/widgets/post) -- así que se usa la página
-        pública de vista previa del canal (t.me/s/<canal>), que es HTML
-        normal sin JS pensado para que motores de búsqueda y navegadores sin
-        sesión puedan ver el contenido, y que por eso se puede incrustar en
-        un iframe (técnica no oficial pero muy usada). Si Telegram cambiara
-        esto y dejara de permitirse, el iframe simplemente se vería vacío;
-        por eso el enlace directo de arriba SIEMPRE está visible, no depende
-        de que el iframe cargue.
+        Primer intento (descartado): incrustar t.me/s/club11k_news en un
+        <iframe> -- Telegram bloquea que su página se muestre dentro de un
+        marco (protección anti-framing del navegador), así que salía en
+        blanco/con icono de error. La solución: el SERVIDOR de Vantax
+        descarga esa misma página pública (fetchGoldNewsHeadlines, en
+        src/lib/telegram-news.ts -- eso sí funciona, el bloqueo de framing
+        solo aplica a un <iframe> en el navegador) y la parseamos para
+        renderizar los titulares como HTML propio, no como iframe ajeno.
       */}
-      <div className="panel" style={{ padding: 0, overflow: "hidden" }}>
-        <iframe
-          src="https://t.me/s/club11k_news"
-          title="Club 11K Gold News — Telegram"
-          width="100%"
-          height={400}
-          style={{ border: "none", display: "block", colorScheme: "normal" }}
-          loading="lazy"
-        />
-      </div>
+      {goldNews.length > 0 ? (
+        <div className="panel" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {goldNews.map((n) => (
+            <a
+              key={n.url}
+              href={n.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "flex",
+                gap: 12,
+                alignItems: "flex-start",
+                textDecoration: "none",
+                color: "inherit",
+                paddingBottom: 12,
+                borderBottom: "1px solid var(--line)",
+              }}
+            >
+              {n.photoUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={n.photoUrl}
+                  alt=""
+                  width={64}
+                  height={64}
+                  style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 6, flexShrink: 0 }}
+                />
+              )}
+              <div>
+                <div style={{ fontSize: 13.5, whiteSpace: "pre-line" }}>{n.text}</div>
+                {n.dateIso && (
+                  <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>{fmtDateEs(n.dateIso)}</div>
+                )}
+              </div>
+            </a>
+          ))}
+        </div>
+      ) : (
+        <div className="panel" style={{ padding: 20, color: "var(--text-dim)", fontSize: 13.5 }}>
+          No se han podido cargar los titulares del canal ahora mismo —{" "}
+          <a href="https://t.me/s/club11k_news" target="_blank" rel="noopener noreferrer" style={{ textDecoration: "underline" }}>
+            ábrelo directamente en Telegram
+          </a>
+          .
+        </div>
+      )}
 
       <div className="panel-head" style={{ margin: "4px 0 10px 2px" }}>
         <span className="panel-title">Mapa de Fuentes — Valores Usados en esta Corrida</span>
