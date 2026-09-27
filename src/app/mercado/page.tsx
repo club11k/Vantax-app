@@ -166,6 +166,17 @@ export default async function MercadoPage() {
   if (snapshot.flows.cotGoldManagedMoney) flujosItems.push({ label: "Gold Futures (GC) — Managed Money, neto", value: `Neto ${snapshot.flows.cotGoldManagedMoney.netCurrent.toLocaleString("es-ES")} contratos`, date: snapshot.flows.cotGoldManagedMoney.date, source: "CFTC — Disaggregated COT" });
   if (snapshot.flows.cotGoldManagedMoney) flujosItems.push({ label: "Open Interest — Gold Futures (GC)", value: `${snapshot.flows.cotGoldManagedMoney.openInterest.toLocaleString("es-ES")} contratos abiertos`, date: snapshot.flows.cotGoldManagedMoney.date, source: "CFTC — Disaggregated COT" });
   if (snapshot.flows.cotGoldMicro) flujosItems.push({ label: "Micro Gold Futures (10 oz) — Managed Money, neto", value: `Neto ${snapshot.flows.cotGoldMicro.netCurrent.toLocaleString("es-ES")} contratos`, date: snapshot.flows.cotGoldMicro.date, source: "CFTC — Disaggregated COT" });
+  if (snapshot.flows.etfGoldHoldings) {
+    const etf = snapshot.flows.etfGoldHoldings;
+    const delta = etf.tonnesPrev !== null ? etf.tonnes - etf.tonnesPrev : null;
+    const deltaStr = delta !== null ? ` (${delta >= 0 ? "+" : ""}${delta.toFixed(2)} t vs. día anterior)` : "";
+    flujosItems.push({
+      label: "Tenencias ETF — SPDR Gold Shares (GLD)",
+      value: `${etf.tonnes.toLocaleString("es-ES")} t${deltaStr}`,
+      date: etf.date,
+      source: "SPDR Gold Shares — CSV diario",
+    });
+  }
 
   const sourceGroups = [
     { key: "precios", title: "Precios", items: preciosItems },
@@ -451,4 +462,5 @@ export default async function MercadoPage() {
     </div>
   );
 }
+
 
