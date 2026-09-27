@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Mt5ServerField, VANTAGE_MT5_SERVERS } from "@/components/Mt5ServerField";
 
 type Currency = "EUR" | "USD" | "CENT";
 type Source = "MANUAL" | "AI_PHOTO" | "MT5_SYNC";
@@ -220,6 +221,10 @@ export function JournalDashboard({ initialAccounts }: { initialAccounts: Account
   const [setupInvestorLogin, setSetupInvestorLogin] = useState("");
   const [setupInvestorPassword, setSetupInvestorPassword] = useState("");
   const [setupMt5Server, setSetupMt5Server] = useState("");
+  // Journaly no guarda el broker (a diferencia de Vantax Play) -- esto es
+  // solo para decidir en el formulario si mostrar el desplegable de
+  // servidores de Vantage o el campo de texto libre para otro broker.
+  const [setupIsVantage, setSetupIsVantage] = useState(true);
 
   function openCreateForm() {
     setSetupUid("");
@@ -238,6 +243,7 @@ export function JournalDashboard({ initialAccounts }: { initialAccounts: Account
     setSetupInvestorLogin(account.investorLogin ?? "");
     setSetupInvestorPassword("");
     setSetupMt5Server(account.mt5Server ?? "");
+    setSetupIsVantage(!account.mt5Server || VANTAGE_MT5_SERVERS.includes(account.mt5Server));
     setSetupError(null);
     setFormMode("edit");
   }
@@ -726,13 +732,39 @@ export function JournalDashboard({ initialAccounts }: { initialAccounts: Account
               </div>
               <div>
                 <label style={{ display: "block", fontSize: 12.5, marginBottom: 4 }}>Servidor MT5</label>
-                <input
-                  type="text"
+                <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSetupIsVantage(true);
+                      if (!VANTAGE_MT5_SERVERS.includes(setupMt5Server)) setSetupMt5Server("");
+                    }}
+                    className="btn"
+                    style={setupIsVantage ? { borderColor: "var(--accent, #7aa2ff)" } : undefined}
+                  >
+                    Vantage
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSetupIsVantage(false)}
+                    className="btn"
+                    style={!setupIsVantage ? { borderColor: "var(--accent, #7aa2ff)" } : undefined}
+                  >
+                    Otro broker
+                  </button>
+                </div>
+                <Mt5ServerField
+                  brokerName={setupIsVantage ? "Vantage" : "Otro"}
                   value={setupMt5Server}
-                  onChange={(e) => setSetupMt5Server(e.target.value)}
-                  placeholder="Ej: ICMarketsSC-Demo"
+                  onChange={setSetupMt5Server}
                   style={{ ...inputStyle, width: "100%" }}
                 />
+                {!setupIsVantage && (
+                  <div style={{ fontSize: 11.5, color: "var(--text-dim)", marginTop: 4 }}>
+                    Escríbelo EXACTAMENTE igual que en tu terminal MT5 (mayúsculas y espacios incluidos) — si no
+                    coincide letra por letra, la sincronización se queda colgada sin avisar.
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1038,4 +1070,5 @@ export function JournalDashboard({ initialAccounts }: { initialAccounts: Account
     </div>
   );
 }
+
 
