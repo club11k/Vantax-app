@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import styles from "@/components/play/arcade.module.css";
 import { TraderProgressBar, type PlayProgress } from "@/components/play/TraderProgressBar";
 import { ChestCabinet } from "@/components/play/ChestCabinet";
+import { Mt5ServerField } from "@/components/Mt5ServerField";
 
 // Vantax Play, con la piel arcade del Vantax Play original (vcoin.html):
 // tabs con glow, HUD de stats en pixel font, cofres dibujados en CSS. Todo
@@ -419,7 +420,7 @@ export function PlayPanel() {
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <div style={{ flex: 1, minWidth: 150 }}>
                   <label className={styles.label}>Servidor MT5</label>
-                  <input className={styles.input} type="text" value={mt5Server} onChange={(e) => setMt5Server(e.target.value)} disabled={savingAccount} />
+                  <Mt5ServerField brokerName={brokerName} value={mt5Server} onChange={setMt5Server} disabled={savingAccount} className={styles.input} />
                 </div>
                 <div style={{ flex: 1, minWidth: 150 }}>
                   <label className={styles.label}>Login investor</label>
@@ -430,6 +431,13 @@ export function PlayPanel() {
                   <input className={styles.input} type="password" value={investorPassword} onChange={(e) => setInvestorPassword(e.target.value)} disabled={savingAccount} />
                 </div>
               </div>
+              {brokerName.trim().toLowerCase() !== "vantage" && (
+                <div style={{ fontSize: 11.5, color: "var(--text-dim)", marginTop: -6 }}>
+                  El "Servidor MT5" tiene que ser EXACTAMENTE igual que en tu terminal (mayúsculas y espacios
+                  incluidos) — lo ves en la pantalla de login de MT5 o en el correo de bienvenida de tu broker. Si no
+                  coincide letra por letra, la cuenta no se sincroniza y no avisa del motivo.
+                </div>
+              )}
               <button
                 className={styles.btn}
                 type="submit"
@@ -472,18 +480,20 @@ export function PlayPanel() {
                 {editingAccountId === a.id && (
                   <div className={styles.card} style={{ marginLeft: 24 }}>
                     <p style={{ fontSize: 13, color: "var(--textDim)" }}>
-                      Login investor: el número de login investor de MT5 (no un email). Contraseña investor: déjala en
-                      blanco si no la quieres cambiar.
+                      Login investor: el número de login investor de MT5 (no un email). Servidor MT5: tiene que
+                      coincidir EXACTAMENTE con el de tu terminal, mayúsculas y espacios incluidos (ej.
+                      "VantageMarkets-Live 14", no "VantageMarkets-Live14"). Contraseña investor: déjala en blanco si
+                      no la quieres cambiar.
                     </p>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                       <div style={{ flex: 1, minWidth: 150 }}>
                         <label className={styles.label}>Servidor MT5</label>
-                        <input
-                          className={styles.input}
-                          type="text"
+                        <Mt5ServerField
+                          brokerName={a.broker.name}
                           value={editMt5Server}
-                          onChange={(e) => setEditMt5Server(e.target.value)}
+                          onChange={setEditMt5Server}
                           disabled={savingEdit}
+                          className={styles.input}
                         />
                       </div>
                       <div style={{ flex: 1, minWidth: 150 }}>
@@ -542,5 +552,6 @@ export function PlayPanel() {
     </div>
   );
 }
+
 
 
