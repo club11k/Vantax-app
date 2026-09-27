@@ -176,14 +176,21 @@ async function fetchCotGoldManagedMoney(): Promise<{
   netCurrent: number;
   netPrev: number | null;
   openInterest: number;
+  cotIndex3y: number | null;
 } | null> {
   try {
     // Coincidencia EXACTA del nombre de mercado, no "like": un filtro parcial como
     // '%GOLD - COMMODITY EXCHANGE%' también hace match con "MICRO GOLD - COMMODITY
     // EXCHANGE INC." (el contrato Micro Gold), mezclando ambos contratos y
     // devolviendo cifras equivocadas — bug real detectado en producción.
+    //
+    // Pedimos 156 semanas (~3 años) en vez de solo 2: además del cambio
+    // semanal, necesitamos el rango histórico para calcular el "COT Index"
+    // de abajo (dónde queda el posicionamiento actual dentro de su propio
+    // rango reciente — lo que enseña Esther en el vídeo 3 para detectar
+    // extremos, no solo la variación semana a semana).
     const params = new URLSearchParams({
-      $limit: "2",
+      $limit: "156",
       $order: "report_date_as_yyyy_mm_dd DESC",
       $where: "market_and_exchange_names = 'GOLD - COMMODITY EXCHANGE INC.'",
     });
@@ -209,11 +216,25 @@ async function fetchCotGoldManagedMoney(): Promise<{
 
     const netPrev = rows[1] ? parseNet(rows[1]) : null;
 
+    // "COT Index" (0-100): dónde cae el neto actual dentro de su propio
+    // rango mínimo-máximo de las últimas ~156 semanas. >80 = posicionamiento
+    // históricamente muy comprado (riesgo de giro/toma de beneficios); <20 =
+    // muy vendido. Con pocas semanas disponibles (API con recorte, fuente
+    // nueva, etc.) el índice no es fiable, así que se omite.
+    const allNets = rows.map(parseNet).filter((n): n is number => n !== null);
+    let cotIndex3y: number | null = null;
+    if (allNets.length >= 20) {
+      const min = Math.min(...allNets);
+      const max = Math.max(...allNets);
+      cotIndex3y = max > min ? ((netCurrent - min) / (max - min)) * 100 : null;
+    }
+
     return {
       date: latest.report_date_as_yyyy_mm_dd,
       netCurrent,
       netPrev,
       openInterest,
+      cotIndex3y,
     };
   } catch {
     return null;
@@ -622,6 +643,9 @@ export type MarketSnapshot = {
       netCurrent: number;
       netPrev: number | null;
       openInterest: number;
+      // COT Index (0-100) del neto dentro de su rango de ~156 semanas —
+      // señal de extremo de posicionamiento, no solo el cambio semanal.
+      cotIndex3y: number | null;
     } | null;
     cotGoldMicro: {
       date: string;
