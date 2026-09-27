@@ -15,6 +15,19 @@ function fmtPct(n: number) {
   return `${n >= 0 ? "+" : ""}${n.toFixed(2)}%`;
 }
 
+// Formatea fechas al estilo español (DD/MM/AAAA) para el Mapa de Fuentes.
+// Las fechas de FRED llegan como "2026-08-01" y las del COT (CFTC) como
+// timestamp completo "2026-09-15T00:00:00.000" — ambas empiezan por
+// AAAA-MM-DD, así que basta con leer esos 10 primeros caracteres y no hace
+// falta parsear con Date() (evita líos de zona horaria en el servidor).
+// Cualquier otro texto (p. ej. "hoy") se deja tal cual.
+function fmtDateEs(raw: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw);
+  if (!m) return raw;
+  const [, year, month, day] = m;
+  return `${day}/${month}/${year}`;
+}
+
 // Notas explicativas breves para categorías de datos cuyo nombre no es
 // autoexplicativo a simple vista.
 const GROUP_NOTES: Record<string, string> = {};
@@ -85,7 +98,7 @@ export default async function MercadoPage() {
       color: "var(--down)",
     },
     snapshot.macro.us10yTipsReal && {
-      name: "Costo de Oportunidad (real yield)",
+      name: "Coste de Oportunidad (real yield)",
       value: Math.round(Math.max(0, Math.min(100, (snapshot.macro.us10yTipsReal.value / 3.5) * 100))),
       label: `TIPS 10y ${snapshot.macro.us10yTipsReal.value.toFixed(2)}%`,
       color: "var(--violet)",
@@ -149,7 +162,12 @@ export default async function MercadoPage() {
   if (snapshot.macro.m2YoY) liquidezItems.push({ label: "M2 (oferta monetaria) interanual", value: `${snapshot.macro.m2YoY.value.toFixed(2)}%`, date: snapshot.macro.m2YoY.date, source: "FRED — M2SL" });
   if (snapshot.liquidity.fedBalanceSheet) liquidezItems.push({ label: "Balance de la Fed", value: `$${snapshot.liquidity.fedBalanceSheet.value.toLocaleString("es-ES")} M`, date: snapshot.liquidity.fedBalanceSheet.date, source: "FRED — WALCL" });
   if (snapshot.liquidity.onRRP) liquidezItems.push({ label: "Overnight Reverse Repo (ON RRP)", value: `$${snapshot.liquidity.onRRP.value.toLocaleString("es-ES")} MM`, date: snapshot.liquidity.onRRP.date, source: "FRED — RRPONTSYD" });
-  if (snapshot.liquidity.tga) liquidezItems.push({ label: "Treasury General Account (TGA)", value: `$${snapshot.liquidity.tga.value.toLocaleString("es-ES")} MM`, date: snapshot.liquidity.tga.date, source: "FRED — WDTGAL" });
+  // WDTGAL viene en MILLONES de dólares (confirmado en FRED), no en miles de
+  // millones -- estaba etiquetado "MM" y parecía mil veces más grande de lo
+  // real (947.317 MM ≈ 947 billones en vez de los ~947.000 millones/947 mil
+  // millones reales). Ver también "Balance de la Fed" (WALCL) abajo, que sí
+  // usa "M" correctamente para la misma unidad.
+  if (snapshot.liquidity.tga) liquidezItems.push({ label: "Treasury General Account (TGA)", value: `$${snapshot.liquidity.tga.value.toLocaleString("es-ES")} M`, date: snapshot.liquidity.tga.date, source: "FRED — WDTGAL" });
 
   if (snapshot.macro.unemploymentRate) empleoItems.push({ label: "Tasa de desempleo", value: `${snapshot.macro.unemploymentRate.value}%`, date: snapshot.macro.unemploymentRate.date, source: "FRED — UNRATE" });
   if (snapshot.labor.nfpChange) empleoItems.push({ label: "Nóminas no agrícolas (cambio mensual)", value: `${snapshot.labor.nfpChange.value >= 0 ? "+" : ""}${snapshot.labor.nfpChange.value}k`, date: snapshot.labor.nfpChange.date, source: "FRED — PAYEMS" });
@@ -166,6 +184,16 @@ export default async function MercadoPage() {
   if (snapshot.flows.cotGoldManagedMoney) flujosItems.push({ label: "Gold Futures (GC) — Managed Money, neto", value: `Neto ${snapshot.flows.cotGoldManagedMoney.netCurrent.toLocaleString("es-ES")} contratos`, date: snapshot.flows.cotGoldManagedMoney.date, source: "CFTC — Disaggregated COT" });
   if (snapshot.flows.cotGoldManagedMoney) flujosItems.push({ label: "Open Interest — Gold Futures (GC)", value: `${snapshot.flows.cotGoldManagedMoney.openInterest.toLocaleString("es-ES")} contratos abiertos`, date: snapshot.flows.cotGoldManagedMoney.date, source: "CFTC — Disaggregated COT" });
   if (snapshot.flows.cotGoldMicro) flujosItems.push({ label: "Micro Gold Futures (10 oz) — Managed Money, neto", value: `Neto ${snapshot.flows.cotGoldMicro.netCurrent.toLocaleString("es-ES")} contratos`, date: snapshot.flows.cotGoldMicro.date, source: "CFTC — Disaggregated COT" });
+  if (snapshot.flows.cotGoldManagedMoney?.cotIndex3y !== null && snapshot.flows.cotGoldManagedMoney?.cotIndex3y !== undefined) {
+    const idx = snapshot.flows.cotGoldManagedMoney.cotIndex3y;
+    const extremo = idx >= 80 ? "muy comprado" : idx <= 20 ? "muy vendido" : "sin extremo";
+    flujosItems.push({
+      label: "COT Index (~3 años) — extremo de posicionamiento",
+      value: `${idx.toFixed(0)}/100 (${extremo})`,
+      date: snapshot.flows.cotGoldManagedMoney.date,
+      source: "CFTC — Disaggregated COT (calculado)",
+    });
+  }
   if (snapshot.flows.etfGoldHoldings) {
     const etf = snapshot.flows.etfGoldHoldings;
     const delta = etf.tonnesPrev !== null ? etf.tonnes - etf.tonnesPrev : null;
@@ -415,21 +443,47 @@ export default async function MercadoPage() {
       />
       <div style={{ marginBottom: 24 }} />
 
-      <div className="panel-title" style={{ margin: "4px 0 10px 2px" }}>Feed de Titulares</div>
-      <TradingViewWidget
-        height={400}
-        src="https://s3.tradingview.com/external-embedding/embed-widget-timeline.js"
-        config={{
-          width: "100%",
-          height: 400,
-          feedMode: "market",
-          market: "forex",
-          colorTheme: "dark",
-          isTransparent: true,
-          displayMode: "regular",
-          locale: "es",
-        }}
-      />
+      <div className="panel-head" style={{ margin: "4px 0 10px 2px" }}>
+        <span className="panel-title">Feed de Titulares — Club 11K Gold News</span>
+        <a
+          href="https://t.me/s/club11k_news"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="panel-sub"
+          style={{ textDecoration: "underline" }}
+        >
+          Abrir canal en Telegram ↗
+        </a>
+      </div>
+      {/*
+        Antes aquí iba el widget genérico "Timeline" de TradingView
+        (feedMode: market/forex) -- enseñaba GBP/USD, USD/JPY, EUR/USD, no
+        noticias de oro (Esther lo detectó). Como ya existe el canal propio
+        de noticias de oro filtradas con IA (@club11k_news, el bot
+        gold-news-telegram-bot), tiene más sentido mostrar ESO aquí en vez
+        de un feed genérico.
+
+        Telegram no ofrece un widget oficial para incrustar el feed en vivo
+        de un canal completo (solo el "Post Widget" para un mensaje suelto,
+        ver core.telegram.org/widgets/post) -- así que se usa la página
+        pública de vista previa del canal (t.me/s/<canal>), que es HTML
+        normal sin JS pensado para que motores de búsqueda y navegadores sin
+        sesión puedan ver el contenido, y que por eso se puede incrustar en
+        un iframe (técnica no oficial pero muy usada). Si Telegram cambiara
+        esto y dejara de permitirse, el iframe simplemente se vería vacío;
+        por eso el enlace directo de arriba SIEMPRE está visible, no depende
+        de que el iframe cargue.
+      */}
+      <div className="panel" style={{ padding: 0, overflow: "hidden" }}>
+        <iframe
+          src="https://t.me/s/club11k_news"
+          title="Club 11K Gold News — Telegram"
+          width="100%"
+          height={400}
+          style={{ border: "none", display: "block", colorScheme: "normal" }}
+          loading="lazy"
+        />
+      </div>
 
       <div className="panel-head" style={{ margin: "4px 0 10px 2px" }}>
         <span className="panel-title">Mapa de Fuentes — Valores Usados en esta Corrida</span>
@@ -450,7 +504,7 @@ export default async function MercadoPage() {
                   <div className="source-card-label">{s.label}</div>
                   <div className="source-card-value">{s.value}</div>
                   <div className="source-card-meta">
-                    <span>{s.date}</span>
+                    <span>{fmtDateEs(s.date)}</span>
                     <span>{s.source}</span>
                   </div>
                 </div>
