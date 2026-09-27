@@ -10,6 +10,8 @@
 // llamada falla, devuelven null en vez de tirar la app abajo. El prompt de
 // análisis está preparado para avisar cuando un dato no está disponible.
 
+import { inflateRawSync } from "zlib";
+
 const FRED_BASE = "https://api.stlouisfed.org/fred/series/observations";
 const TWELVE_DATA_BASE = "https://api.twelvedata.com";
 
@@ -271,55 +273,197 @@ async function fetchCotGoldMicro(): Promise<{
 }
 
 // Tenencias diarias de oro del ETF SPDR Gold Shares (GLD) — el ETF de oro
-// físico más grande del mundo. SPDR publica un CSV histórico público (sin
-// login) con la evolución día a día de las toneladas en custodia. Es el dato
-// más "fresco" de posicionamiento vía ETFs que existe (Goldhub, la fuente
-// con el desglose completo por región/fondo que pidió Esther, se actualiza
-// con más retraso y requiere descarga manual con registro — ver el resto de
-// campos de "flows" pendientes de esa fuente).
+// físico más grande del mundo. SPDR publica un Excel histórico público (sin
+// login, confirmado a mano por Esther: hizo clic en el enlace de descarga
+// de "Charts & Data" en spdrgoldshares.com/usa/gld/ y se descargó sin
+// pedirle ninguna cuenta) con la evolución día a día de las toneladas en
+// custodia — URL real capturada desde su navegador (chrome://downloads),
+// no adivinada. Es el dato más "fresco" de posicionamiento vía ETFs que
+// existe (Goldhub, la fuente con el desglose completo por región/fondo que
+// pidió Esther, se actualiza con más retraso y requiere descarga manual con
+// registro — ver el resto de campos de "flows" pendientes de esa fuente).
 //
-// OJO: esta URL no se pudo verificar en el entorno donde se escribió este
-// código (bloqueada por robots.txt para herramientas de scraping/IA, pero
-// eso no afecta a este fetch normal desde el servidor de producción). El
-// parseo de abajo es deliberadamente defensivo (no asume nombres de columna
-// ni orden fijo) para que, si el formato real difiere de lo esperado,
-// simplemente devuelva null en vez de romper nada — igual que el resto de
-// funciones de este archivo. Si tras desplegar esto "Tenencias ETF (GLD)" no
-// aparece en el Mapa de Fuentes de /mercado, lo más probable es que el CSV
-// real tenga cabeceras distintas a "Date"/"Tonnes"/"Ounces"; en ese caso hay
-// que mirar el CSV real y ajustar la detección de columnas de abajo.
-const SPDR_GLD_CSV_URL = "https://www.spdrgoldshares.com/assets/dynamic/GLD/GLD_US_archive_EN.csv";
+// El archivo real (Esther nos pasó una copia para revisar el formato,
+// "US_GLD_Archive_EN.xlsx") tiene dos hojas ("Disclaimer" y "US GLD
+// Historical Archive") y esta columnas confirmadas en la hoja buena:
+// Date | Closing Price | Ounces of Gold per Share | ... | Daily Share
+// Volume | Total Ounces of Gold in the Trust | Tonnes of Gold | Total Net
+// Asset Value in the Trust. La fecha viene como texto "24-Sep-2026" (no
+// como fecha real de Excel), y algunas filas (festivos de EE.UU.) traen el
+// texto "US Holiday" en vez de números -- se descartan al vuelo.
+const SPDR_GLD_HOLDINGS_URL = "https://api.spdrgoldshares.com/api/v1/historical-archive?product=gld&exchange=NYSE&lang=en";
 
-// Parseo simple de una línea CSV con soporte de campos entre comillas
-// (por si algún valor trae comas dentro, p. ej. "1,234.56").
-function parseCsvLine(line: string): string[] {
-  const out: string[] = [];
-  let cur = "";
-  let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const c = line[i];
-    if (inQuotes) {
-      if (c === '"') {
-        if (line[i + 1] === '"') {
-          cur += '"';
-          i++;
-        } else {
-          inQuotes = false;
-        }
-      } else {
-        cur += c;
-      }
-    } else if (c === '"') {
-      inQuotes = true;
-    } else if (c === ",") {
-      out.push(cur);
-      cur = "";
-    } else {
-      cur += c;
+// --- Lector mínimo de .xlsx (zip + XML), sin librería externa ---
+//
+// Se implementa a mano en vez de añadir el paquete "xlsx" (SheetJS) de npm
+// a propósito: la versión publicada en el registro de npm (0.18.5, la
+// última disponible ahí) tiene dos vulnerabilidades conocidas sin parchear
+// (prototype pollution y ReDoS — SheetJS solo distribuye las versiones
+// arregladas desde su propio CDN, no vía npm). No parece razonable meter
+// eso en el mismo proceso que maneja contraseñas cifradas de cuentas MT5 y
+// pagos con Stripe, solo para leer dos columnas de un archivo. Este parser
+// es deliberadamente mínimo: solo sabe leer filas y celdas simples (texto
+// compartido y números), justo lo que trae el archivo real de SPDR. Si algo
+// no encaja (SPDR cambia el formato del archivo), todo el asunto devuelve
+// null como el resto de fetchers de este archivo — nunca rompe la página.
+
+function unzipEntry(buf: Buffer, entryName: string): Buffer | null {
+  const EOCD_SIG = 0x06054b50;
+  let eocdOffset = -1;
+  const searchStart = Math.max(0, buf.length - 22 - 65536);
+  for (let i = buf.length - 22; i >= searchStart; i--) {
+    if (buf.readUInt32LE(i) === EOCD_SIG) {
+      eocdOffset = i;
+      break;
     }
   }
-  out.push(cur);
-  return out.map((s) => s.trim());
+  if (eocdOffset === -1) return null;
+
+  const entryCount = buf.readUInt16LE(eocdOffset + 10);
+  let centralDirOffset = buf.readUInt32LE(eocdOffset + 16);
+
+  for (let i = 0; i < entryCount; i++) {
+    if (centralDirOffset + 46 > buf.length) return null;
+    const sig = buf.readUInt32LE(centralDirOffset);
+    if (sig !== 0x02014b50) return null;
+    const compressionMethod = buf.readUInt16LE(centralDirOffset + 10);
+    const compressedSize = buf.readUInt32LE(centralDirOffset + 20);
+    const fileNameLength = buf.readUInt16LE(centralDirOffset + 28);
+    const extraLength = buf.readUInt16LE(centralDirOffset + 30);
+    const commentLength = buf.readUInt16LE(centralDirOffset + 32);
+    const localHeaderOffset = buf.readUInt32LE(centralDirOffset + 42);
+    const fileName = buf.subarray(centralDirOffset + 46, centralDirOffset + 46 + fileNameLength).toString("utf8");
+
+    if (fileName === entryName) {
+      const lfNameLength = buf.readUInt16LE(localHeaderOffset + 26);
+      const lfExtraLength = buf.readUInt16LE(localHeaderOffset + 28);
+      const dataStart = localHeaderOffset + 30 + lfNameLength + lfExtraLength;
+      const compressed = buf.subarray(dataStart, dataStart + compressedSize);
+      if (compressionMethod === 0) return Buffer.from(compressed);
+      if (compressionMethod === 8) return inflateRawSync(compressed);
+      return null;
+    }
+
+    centralDirOffset += 46 + fileNameLength + extraLength + commentLength;
+  }
+  return null;
+}
+
+function decodeXmlEntities(s: string): string {
+  return s
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(parseInt(code, 10)))
+    .replace(/&amp;/g, "&");
+}
+
+function parseSharedStrings(xml: string): string[] {
+  const strings: string[] = [];
+  const siMatches = xml.match(/<si[ >][\s\S]*?<\/si>/g) ?? [];
+  const tRegex = /<t[^>]*>([\s\S]*?)<\/t>/g;
+  for (const si of siMatches) {
+    let text = "";
+    tRegex.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = tRegex.exec(si))) text += m[1];
+    strings.push(decodeXmlEntities(text));
+  }
+  return strings;
+}
+
+// Encuentra la ruta interna (p. ej. "xl/worksheets/sheet2.xml") de la hoja
+// cuyo nombre coincida con el patrón dado, siguiendo workbook.xml (nombre
+// -> r:id) y workbook.xml.rels (r:id -> archivo) — no asume que el número
+// del archivo coincida con el orden de las pestañas.
+function resolveSheetPath(workbookXml: string, relsXml: string, sheetNamePattern: RegExp): string | null {
+  const sheetTags = workbookXml.match(/<sheet\b[^>]*\/>/g) ?? [];
+  let rId: string | null = null;
+  for (const tag of sheetTags) {
+    const nameMatch = /name="([^"]*)"/.exec(tag);
+    const ridMatch = /r:id="([^"]*)"/.exec(tag);
+    if (nameMatch && ridMatch && sheetNamePattern.test(decodeXmlEntities(nameMatch[1]))) {
+      rId = ridMatch[1];
+      break;
+    }
+  }
+  if (!rId) return null;
+
+  const relTags = relsXml.match(/<Relationship\b[^>]*\/>/g) ?? [];
+  for (const tag of relTags) {
+    const idMatch = /Id="([^"]*)"/.exec(tag);
+    const targetMatch = /Target="([^"]*)"/.exec(tag);
+    if (idMatch && targetMatch && idMatch[1] === rId) {
+      const target = targetMatch[1];
+      return target.startsWith("/") ? target.slice(1) : `xl/${target}`;
+    }
+  }
+  return null;
+}
+
+// Parsea una hoja a filas "columna (letra) -> valor" — números tal cual,
+// texto ya resuelto vía sharedStrings (celdas t="s") o inline (t="str"/"inlineStr").
+function parseSheetRows(sheetXml: string, sharedStrings: string[]): Map<string, string | number>[] {
+  const rows: Map<string, string | number>[] = [];
+  const rowRegex = /<row\b[^>]*>([\s\S]*?)<\/row>/g;
+  const cellRegex = /<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g;
+  const vRegex = /<v>([\s\S]*?)<\/v>/;
+  const isRegex = /<is>[\s\S]*?<t[^>]*>([\s\S]*?)<\/t>[\s\S]*?<\/is>/;
+
+  let rowMatch: RegExpExecArray | null;
+  while ((rowMatch = rowRegex.exec(sheetXml))) {
+    const rowXml = rowMatch[1];
+    const rowMap = new Map<string, string | number>();
+    cellRegex.lastIndex = 0;
+    let cellMatch: RegExpExecArray | null;
+    while ((cellMatch = cellRegex.exec(rowXml))) {
+      const attrs = cellMatch[1] ?? "";
+      const inner = cellMatch[2];
+      const refMatch = /r="([A-Z]+)\d+"/.exec(attrs);
+      if (!refMatch || inner === undefined) continue;
+      const col = refMatch[1];
+      const typeMatch = /\bt="([a-zA-Z]+)"/.exec(attrs);
+      const type = typeMatch?.[1];
+
+      if (type === "inlineStr") {
+        const m = isRegex.exec(inner);
+        if (m) rowMap.set(col, decodeXmlEntities(m[1]));
+        continue;
+      }
+      const vMatch = vRegex.exec(inner);
+      if (!vMatch) continue;
+      const rawValue = vMatch[1];
+
+      if (type === "s") {
+        rowMap.set(col, sharedStrings[parseInt(rawValue, 10)] ?? "");
+      } else if (type === "str") {
+        rowMap.set(col, decodeXmlEntities(rawValue));
+      } else {
+        const num = parseFloat(rawValue);
+        rowMap.set(col, Number.isNaN(num) ? decodeXmlEntities(rawValue) : num);
+      }
+    }
+    rows.push(rowMap);
+  }
+  return rows;
+}
+
+const SPDR_MONTHS: Record<string, number> = {
+  jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+  jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+};
+
+// Convierte fechas tipo "24-Sep-2026" (formato de texto tal cual las trae
+// el Excel real de SPDR) a Date. Si el formato no coincide, null.
+function parseSpdrDate(raw: string): Date | null {
+  const m = /^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/.exec(raw.trim());
+  if (!m) return null;
+  const month = SPDR_MONTHS[m[2].toLowerCase()];
+  const day = parseInt(m[1], 10);
+  const year = parseInt(m[3], 10);
+  if (month === undefined || Number.isNaN(day) || Number.isNaN(year)) return null;
+  return new Date(Date.UTC(year, month, day));
 }
 
 async function fetchGldHoldings(): Promise<{
@@ -328,57 +472,56 @@ async function fetchGldHoldings(): Promise<{
   tonnesPrev: number | null;
 } | null> {
   try {
-    const res = await fetch(SPDR_GLD_CSV_URL, {
+    const res = await fetch(SPDR_GLD_HOLDINGS_URL, {
       next: { revalidate: 21600 }, // 6h — SPDR publica una vez al día tras el cierre
-      headers: { Accept: "text/csv, text/plain, */*" },
     });
     if (!res.ok) return null;
-    const text = await res.text();
-    const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
-    if (lines.length < 2) return null;
+    const buf = Buffer.from(await res.arrayBuffer());
 
-    // El CSV de SPDR suele traer alguna línea de título antes de la fila de
-    // columnas real — buscamos la primera fila (entre las primeras 10) que
-    // tenga a la vez una columna de fecha y una de toneladas/onzas.
-    let headerIdx = -1;
-    let cols: string[] = [];
-    for (let i = 0; i < Math.min(lines.length, 10); i++) {
-      const candidate = parseCsvLine(lines[i]);
-      const hasDate = candidate.some((c) => /date/i.test(c));
-      const hasTonnesOrOz = candidate.some((c) => /tonnes|ounces/i.test(c));
-      if (hasDate && hasTonnesOrOz) {
-        headerIdx = i;
-        cols = candidate;
-        break;
+    const workbookXml = unzipEntry(buf, "xl/workbook.xml")?.toString("utf8");
+    const relsXml = unzipEntry(buf, "xl/_rels/workbook.xml.rels")?.toString("utf8");
+    if (!workbookXml || !relsXml) return null;
+
+    const sheetPath = resolveSheetPath(workbookXml, relsXml, /historical.?archive/i);
+    if (!sheetPath) return null;
+    const sheetXmlBuf = unzipEntry(buf, sheetPath);
+    if (!sheetXmlBuf) return null;
+
+    const sharedStringsBuf = unzipEntry(buf, "xl/sharedStrings.xml");
+    const sharedStrings = sharedStringsBuf ? parseSharedStrings(sharedStringsBuf.toString("utf8")) : [];
+
+    const rows = parseSheetRows(sheetXmlBuf.toString("utf8"), sharedStrings);
+    if (rows.length < 2) return null;
+
+    const header = rows[0];
+    let dateCol: string | null = null;
+    let tonnesCol: string | null = null;
+    for (const [col, value] of header.entries()) {
+      if (typeof value !== "string") continue;
+      if (/date/i.test(value)) dateCol = col;
+      if (/tonnes of gold/i.test(value)) tonnesCol = col;
+    }
+    if (!tonnesCol) {
+      for (const [col, value] of header.entries()) {
+        if (typeof value === "string" && /tonnes/i.test(value)) tonnesCol = col;
       }
     }
-    if (headerIdx === -1) return null;
+    if (!dateCol || !tonnesCol) return null;
 
-    const dateIdx = cols.findIndex((c) => /date/i.test(c));
-    let valueIdx = cols.findIndex((c) => /tonnes/i.test(c));
-    let isOunces = false;
-    if (valueIdx === -1) {
-      valueIdx = cols.findIndex((c) => /ounces/i.test(c));
-      isOunces = true;
+    const parsedRows: { date: Date; tonnes: number }[] = [];
+    for (let i = 1; i < rows.length; i++) {
+      const rawDate = rows[i].get(dateCol);
+      const rawTonnes = rows[i].get(tonnesCol);
+      if (typeof rawDate !== "string" || typeof rawTonnes !== "number") continue; // filas "US Holiday" u otras no numéricas
+      const d = parseSpdrDate(rawDate);
+      if (!d) continue;
+      parsedRows.push({ date: d, tonnes: rawTonnes });
     }
-    if (dateIdx === -1 || valueIdx === -1) return null;
+    if (parsedRows.length === 0) return null;
 
-    const rows: { date: Date; tonnes: number }[] = [];
-    for (let i = headerIdx + 1; i < lines.length; i++) {
-      const cells = parseCsvLine(lines[i]);
-      if (cells.length <= Math.max(dateIdx, valueIdx)) continue;
-      const d = new Date(cells[dateIdx]);
-      const raw = parseFloat(cells[valueIdx].replace(/,/g, ""));
-      if (Number.isNaN(d.getTime()) || Number.isNaN(raw)) continue;
-      // 1 tonelada métrica = 32.150,7 onzas troy.
-      const tonnes = isOunces ? raw / 32150.7 : raw;
-      rows.push({ date: d, tonnes });
-    }
-    if (rows.length === 0) return null;
-
-    rows.sort((a, b) => b.date.getTime() - a.date.getTime());
-    const latest = rows[0];
-    const prev = rows[1] ?? null;
+    parsedRows.sort((a, b) => b.date.getTime() - a.date.getTime());
+    const latest = parsedRows[0];
+    const prev = parsedRows[1] ?? null;
 
     return {
       date: latest.date.toISOString().slice(0, 10),
