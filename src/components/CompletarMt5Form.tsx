@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { Mt5ServerField } from "@/components/Mt5ServerField";
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
@@ -95,7 +96,14 @@ export function CompletarMt5Form() {
       </div>
       <div>
         <label style={labelStyle}>Servidor MT5</label>
-        <input style={inputStyle} type="text" placeholder="Ej: VantageMarkets-Live 14" value={mt5Server} onChange={(e) => setMt5Server(e.target.value)} disabled={saving} />
+        <Mt5ServerField brokerName={brokerName} value={mt5Server} onChange={setMt5Server} disabled={saving} style={inputStyle} />
+        {brokerName.trim().toLowerCase() !== "vantage" && (
+          <div style={{ fontSize: 11.5, color: "var(--text-dim)", marginTop: 4 }}>
+            Escríbelo EXACTAMENTE igual que en tu MT5 (mayúsculas y espacios incluidos) — lo ves en la pantalla de
+            login del terminal o en el correo de bienvenida de tu broker. Si no coincide letra por letra, la
+            sincronización se queda colgada sin avisar.
+          </div>
+        )}
       </div>
       <div>
         <label style={labelStyle}>Login de inversor</label>
