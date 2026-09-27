@@ -270,6 +270,126 @@ async function fetchCotGoldMicro(): Promise<{
   }
 }
 
+// Tenencias diarias de oro del ETF SPDR Gold Shares (GLD) — el ETF de oro
+// físico más grande del mundo. SPDR publica un CSV histórico público (sin
+// login) con la evolución día a día de las toneladas en custodia. Es el dato
+// más "fresco" de posicionamiento vía ETFs que existe (Goldhub, la fuente
+// con el desglose completo por región/fondo que pidió Esther, se actualiza
+// con más retraso y requiere descarga manual con registro — ver el resto de
+// campos de "flows" pendientes de esa fuente).
+//
+// OJO: esta URL no se pudo verificar en el entorno donde se escribió este
+// código (bloqueada por robots.txt para herramientas de scraping/IA, pero
+// eso no afecta a este fetch normal desde el servidor de producción). El
+// parseo de abajo es deliberadamente defensivo (no asume nombres de columna
+// ni orden fijo) para que, si el formato real difiere de lo esperado,
+// simplemente devuelva null en vez de romper nada — igual que el resto de
+// funciones de este archivo. Si tras desplegar esto "Tenencias ETF (GLD)" no
+// aparece en el Mapa de Fuentes de /mercado, lo más probable es que el CSV
+// real tenga cabeceras distintas a "Date"/"Tonnes"/"Ounces"; en ese caso hay
+// que mirar el CSV real y ajustar la detección de columnas de abajo.
+const SPDR_GLD_CSV_URL = "https://www.spdrgoldshares.com/assets/dynamic/GLD/GLD_US_archive_EN.csv";
+
+// Parseo simple de una línea CSV con soporte de campos entre comillas
+// (por si algún valor trae comas dentro, p. ej. "1,234.56").
+function parseCsvLine(line: string): string[] {
+  const out: string[] = [];
+  let cur = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (line[i + 1] === '"') {
+          cur += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        cur += c;
+      }
+    } else if (c === '"') {
+      inQuotes = true;
+    } else if (c === ",") {
+      out.push(cur);
+      cur = "";
+    } else {
+      cur += c;
+    }
+  }
+  out.push(cur);
+  return out.map((s) => s.trim());
+}
+
+async function fetchGldHoldings(): Promise<{
+  date: string;
+  tonnes: number;
+  tonnesPrev: number | null;
+} | null> {
+  try {
+    const res = await fetch(SPDR_GLD_CSV_URL, {
+      next: { revalidate: 21600 }, // 6h — SPDR publica una vez al día tras el cierre
+      headers: { Accept: "text/csv, text/plain, */*" },
+    });
+    if (!res.ok) return null;
+    const text = await res.text();
+    const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+    if (lines.length < 2) return null;
+
+    // El CSV de SPDR suele traer alguna línea de título antes de la fila de
+    // columnas real — buscamos la primera fila (entre las primeras 10) que
+    // tenga a la vez una columna de fecha y una de toneladas/onzas.
+    let headerIdx = -1;
+    let cols: string[] = [];
+    for (let i = 0; i < Math.min(lines.length, 10); i++) {
+      const candidate = parseCsvLine(lines[i]);
+      const hasDate = candidate.some((c) => /date/i.test(c));
+      const hasTonnesOrOz = candidate.some((c) => /tonnes|ounces/i.test(c));
+      if (hasDate && hasTonnesOrOz) {
+        headerIdx = i;
+        cols = candidate;
+        break;
+      }
+    }
+    if (headerIdx === -1) return null;
+
+    const dateIdx = cols.findIndex((c) => /date/i.test(c));
+    let valueIdx = cols.findIndex((c) => /tonnes/i.test(c));
+    let isOunces = false;
+    if (valueIdx === -1) {
+      valueIdx = cols.findIndex((c) => /ounces/i.test(c));
+      isOunces = true;
+    }
+    if (dateIdx === -1 || valueIdx === -1) return null;
+
+    const rows: { date: Date; tonnes: number }[] = [];
+    for (let i = headerIdx + 1; i < lines.length; i++) {
+      const cells = parseCsvLine(lines[i]);
+      if (cells.length <= Math.max(dateIdx, valueIdx)) continue;
+      const d = new Date(cells[dateIdx]);
+      const raw = parseFloat(cells[valueIdx].replace(/,/g, ""));
+      if (Number.isNaN(d.getTime()) || Number.isNaN(raw)) continue;
+      // 1 tonelada métrica = 32.150,7 onzas troy.
+      const tonnes = isOunces ? raw / 32150.7 : raw;
+      rows.push({ date: d, tonnes });
+    }
+    if (rows.length === 0) return null;
+
+    rows.sort((a, b) => b.date.getTime() - a.date.getTime());
+    const latest = rows[0];
+    const prev = rows[1] ?? null;
+
+    return {
+      date: latest.date.toISOString().slice(0, 10),
+      tonnes: Math.round(latest.tonnes * 100) / 100,
+      tonnesPrev: prev ? Math.round(prev.tonnes * 100) / 100 : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function ema(values: number[], period: number): number | null {
   if (values.length < period) return null;
   const k = 2 / (period + 1);
@@ -366,6 +486,16 @@ export type MarketSnapshot = {
       netPrev: number | null;
       openInterest: number;
     } | null;
+    // Tenencias del ETF SPDR Gold Shares (GLD), vía CSV público diario. Es
+    // solo el primer dato de la petición de Esther de integrar flujos y
+    // posicionamiento de ETFs de oro (holdings/flows por región de Goldhub,
+    // desglose por fondo GLD/IAU) — el resto necesita el Excel de Goldhub,
+    // que requiere descarga manual con registro y aún no se ha integrado.
+    etfGoldHoldings: {
+      date: string;
+      tonnes: number;
+      tonnesPrev: number | null;
+    } | null;
   };
 };
 
@@ -409,6 +539,7 @@ export async function buildMarketSnapshot(): Promise<MarketSnapshot> {
     goldSeries,
     cotGoldManagedMoney,
     cotGoldMicro,
+    etfGoldHoldings,
   ] = await Promise.all([
     fetchFredSeries("DGS10"),
     fetchFredSeries("DFII10"),
@@ -451,6 +582,7 @@ export async function buildMarketSnapshot(): Promise<MarketSnapshot> {
     fetchTwelveDataSeries("XAU/USD"),
     fetchCotGoldManagedMoney(),
     fetchCotGoldMicro(),
+    fetchGldHoldings(),
   ]);
 
   const goldCloses = goldSeries?.map((b) => b.close) ?? null;
@@ -496,7 +628,6 @@ export async function buildMarketSnapshot(): Promise<MarketSnapshot> {
     prices: { gold, dxy },
     technical,
     risk: { vix, hyOas },
-    flows: { cotGoldManagedMoney, cotGoldMicro },
+    flows: { cotGoldManagedMoney, cotGoldMicro, etfGoldHoldings },
   };
 }
-
