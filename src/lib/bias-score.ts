@@ -70,7 +70,7 @@ export function computeBiasScore(snapshot: MarketSnapshot): BiasResult {
   const macroIndicators: BiasIndicator[] = [];
 
   if (macro.us10yTipsReal) {
-    // Rendimiento real (TIPS 10y) alto = mayor costo de oportunidad de sostener oro = bajista.
+    // Rendimiento real (TIPS 10y) alto = mayor coste de oportunidad de sostener oro = bajista.
     const v = macro.us10yTipsReal.value;
     const s = clamp((1.5 - v) * 40, -100, 100); // ~1.5% real ≈ neutral, referencia del documento
     macroIndicators.push({
@@ -109,11 +109,18 @@ export function computeBiasScore(snapshot: MarketSnapshot): BiasResult {
     // Spread 10Y-3M: el más citado por la Fed como señal de recesión. Invertido (negativo) = alerta.
     const v = macro.t3m10ySpread.value;
     const s = clamp(-v * 45, -100, 100);
+    // La nota tiene que reflejar el signo REAL del spread de hoy, no asumir
+    // que siempre está invertido — antes decía "invertido" incluso con
+    // spread positivo, contradiciendo el propio valor mostrado al lado.
+    const spreadNote =
+      v < 0
+        ? "Spread invertido (negativo) → señal de recesión seguida de cerca por la Fed → soporte para el oro."
+        : "Spread normal (positivo) → sin señal de recesión en la curva por ahora → resta soporte de refugio para el oro.";
     macroIndicators.push({
       label: "Curva 10Y/3M",
       value: `${v.toFixed(2)} pp (${macro.t3m10ySpread.date})`,
       score: s,
-      note: "Spread invertido (negativo) → señal de recesión seguida de cerca por la Fed → soporte para el oro.",
+      note: spreadNote,
     });
   }
 
@@ -157,14 +164,24 @@ export function computeBiasScore(snapshot: MarketSnapshot): BiasResult {
   const tecnicoIndicators: BiasIndicator[] = [];
 
   if (technical.available && technical.ema20 !== null && technical.ema50 !== null && technical.ema200 !== null) {
-    const alignment =
-      (technical.ema20! > technical.ema50! ? 1 : -1) + (technical.ema50! > technical.ema200! ? 1 : -1);
+    const shortAboveMid = technical.ema20! > technical.ema50!;
+    const midAboveLong = technical.ema50! > technical.ema200!;
+    const alignment = (shortAboveMid ? 1 : -1) + (midAboveLong ? 1 : -1);
     const s = alignment * 40; // -80..80: ambas medias alineadas alcistas o bajistas
+    // La nota tiene que decir lo que de verdad muestran las medias de hoy —
+    // antes siempre decía "alcista" aunque el orden real fuera el
+    // contrario (EMA20 < EMA50 < EMA200, score -80), contradiciendo el dato.
+    const alignmentNote =
+      alignment === 2
+        ? "Medias cortas por encima de las largas (EMA20 > EMA50 > EMA200) → estructura de tendencia alcista."
+        : alignment === -2
+        ? "Medias cortas por debajo de las largas (EMA20 < EMA50 < EMA200) → estructura de tendencia bajista."
+        : "Medias sin alineación clara (cruzadas entre sí) → estructura de tendencia indecisa/en transición.";
     tecnicoIndicators.push({
       label: "Alineación de medias (EMA20/50/200)",
       value: `EMA20 ${technical.ema20!.toFixed(2)} · EMA50 ${technical.ema50!.toFixed(2)} · EMA200 ${technical.ema200!.toFixed(2)}`,
       score: s,
-      note: "Medias cortas por encima de las largas → estructura de tendencia alcista.",
+      note: alignmentNote,
     });
   }
 
@@ -195,6 +212,31 @@ export function computeBiasScore(snapshot: MarketSnapshot): BiasResult {
       value: `Neto ${netCurrent.toLocaleString("es-ES")} contratos (cambio ${change >= 0 ? "+" : ""}${change.toLocaleString("es-ES")}) · ${date}`,
       score: s,
       note: "Fondos especulativos ampliando posición neta larga → flujo comprador; recortándola → flujo vendedor.",
+    });
+  }
+
+  if (flows.cotGoldManagedMoney && flows.cotGoldManagedMoney.cotIndex3y !== null) {
+    const { cotIndex3y, date } = flows.cotGoldManagedMoney;
+    // Señal de EXTREMO de posicionamiento (distinta de la de arriba, que
+    // mide la dirección del flujo semana a semana): cuando el índice está
+    // muy alto o muy bajo dentro de su rango de ~3 años, históricamente
+    // aumenta el riesgo de un giro o toma de beneficios en sentido
+    // contrario — lo que enseña Esther en el vídeo 3. Se pondera bastante
+    // más suave que el cambio semanal porque es una señal de riesgo/
+    // contexto (contraria), no de dirección del flujo.
+    const extremo = cotIndex3y >= 80 ? "muy comprado" : cotIndex3y <= 20 ? "muy vendido" : "sin extremo";
+    const s = clamp(-(cotIndex3y - 50) * 0.8, -100, 100);
+    const cotIndexNote =
+      cotIndex3y >= 80
+        ? "Posicionamiento cerca del máximo de 3 años → riesgo de giro/toma de beneficios (señal contraria, resta soporte)."
+        : cotIndex3y <= 20
+        ? "Posicionamiento cerca del mínimo de 3 años → riesgo de rebote por cobertura de cortos (señal contraria, soporte para el oro)."
+        : "Posicionamiento sin extremo dentro de su rango de 3 años → sin señal contraria relevante ahora mismo.";
+    flujosIndicators.push({
+      label: "COT Index (extremo de posicionamiento, ~3 años)",
+      value: `${cotIndex3y.toFixed(0)}/100 (${extremo}) · ${date}`,
+      score: s,
+      note: cotIndexNote,
     });
   }
 
@@ -283,6 +325,3 @@ export function computeBiasScore(snapshot: MarketSnapshot): BiasResult {
     modules,
   };
 }
-
-
-
