@@ -591,6 +591,12 @@ export type MarketSnapshot = {
     us2y: FredValue;
     us30y: FredValue;
     t3m10ySpread: FredValue;
+    // Curva 10Y/2Y — la que más se cita en prensa junto a la 10Y/3M. Se
+    // pidió como tarjeta propia en Mapa de Fuentes; el Bias Score ya la
+    // calculaba internamente a partir de us10yNominal - us2y (ver
+    // bias-score.ts), esto solo la trae también como serie directa de FRED
+    // para mostrarla igual que el resto de indicadores.
+    t10y2ySpread: FredValue;
     cpiYoY: FredValue;
     coreCpiYoY: FredValue;
     pceYoY: FredValue;
@@ -623,6 +629,12 @@ export type MarketSnapshot = {
   prices: {
     gold: { price: number; percentChange: number } | null;
     dxy: { price: number; percentChange: number } | null;
+    // Plata y petróleo WTI, pedidos junto al ratio oro/plata (se calcula al
+    // vuelo donde se muestra, dividiendo gold.price / silver.price — no
+    // hace falta guardarlo aparte). Mismo proveedor y mismo patrón
+    // tolerante-a-fallos que oro/DXY.
+    silver: { price: number; percentChange: number } | null;
+    wti: { price: number; percentChange: number } | null;
   };
   technical: {
     available: boolean;
@@ -677,6 +689,7 @@ export async function buildMarketSnapshot(): Promise<MarketSnapshot> {
     us2y,
     us30y,
     t3m10ySpread,
+    t10y2ySpread,
     cpiYoY,
     coreCpiYoY,
     pceYoY,
@@ -703,6 +716,8 @@ export async function buildMarketSnapshot(): Promise<MarketSnapshot> {
     hyOas,
     gold,
     dxy,
+    silver,
+    wti,
     goldSeries,
     cotGoldManagedMoney,
     cotGoldMicro,
@@ -714,6 +729,7 @@ export async function buildMarketSnapshot(): Promise<MarketSnapshot> {
     fetchFredSeries("DGS2"),
     fetchFredSeries("DGS30"),
     fetchFredSeries("T10Y3M"),
+    fetchFredSeries("T10Y2Y"),
     fetchFredSeries("CPIAUCSL", { units: "pc1" }),
     fetchFredSeries("CPILFESL", { units: "pc1" }),
     fetchFredSeries("PCEPI", { units: "pc1" }),
@@ -746,6 +762,12 @@ export async function buildMarketSnapshot(): Promise<MarketSnapshot> {
     fetchFredSeries("BAMLH0A0HYM2"), // ICE BofA US High Yield OAS
     fetchTwelveDataQuote("XAU/USD"),
     fetchTwelveDataQuote("DXY"),
+    fetchTwelveDataQuote("XAG/USD"),
+    // Símbolo de petróleo WTI en Twelve Data — mismo patrón que XAU/USD y
+    // DXY de arriba (tolerante a fallos: si el símbolo no encaja en algún
+    // momento, esto sencillamente devuelve null y el dato se omite, no
+    // rompe nada). No se ha podido probar en vivo desde este entorno.
+    fetchTwelveDataQuote("WTI/USD"),
     fetchTwelveDataSeries("XAU/USD"),
     fetchCotGoldManagedMoney(),
     fetchCotGoldMicro(),
@@ -776,6 +798,7 @@ export async function buildMarketSnapshot(): Promise<MarketSnapshot> {
       us2y,
       us30y,
       t3m10ySpread,
+      t10y2ySpread,
       cpiYoY,
       coreCpiYoY,
       pceYoY,
@@ -792,7 +815,7 @@ export async function buildMarketSnapshot(): Promise<MarketSnapshot> {
     liquidity: { fedBalanceSheet, onRRP, tga },
     labor: { nfpChange, participationRate, avgHourlyEarningsYoY, joltsOpenings, initialClaims },
     activity: { retailSalesMoM, gdpRealYoY },
-    prices: { gold, dxy },
+    prices: { gold, dxy, silver, wti },
     technical,
     risk: { vix, hyOas },
     flows: { cotGoldManagedMoney, cotGoldMicro, etfGoldHoldings },
