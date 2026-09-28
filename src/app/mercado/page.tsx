@@ -139,8 +139,40 @@ export default async function MercadoPage() {
   const riesgoItems: SourceItem[] = [];
   const flujosItems: SourceItem[] = [];
 
-  if (snapshot.prices.gold) preciosItems.push({ label: "Oro spot (XAU/USD)", value: `$${snapshot.prices.gold.price}`, date: "hoy", source: "Twelve Data" });
-  if (snapshot.prices.dxy) preciosItems.push({ label: "DXY", value: `${snapshot.prices.dxy.price}`, date: "hoy", source: "Twelve Data" });
+  // Oro spot con 2 decimales fijos y separador de miles ("2.415,30" en vez
+  // de "2415.297" tal cual venía de la API) — pedido explícitamente porque
+  // el número crudo era difícil de leer de un vistazo.
+  if (snapshot.prices.gold)
+    preciosItems.push({
+      label: "Oro spot (XAU/USD)",
+      value: `$${snapshot.prices.gold.price.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      date: "hoy",
+      source: "Twelve Data",
+    });
+  if (snapshot.prices.dxy) preciosItems.push({ label: "DXY", value: snapshot.prices.dxy.price.toFixed(2), date: "hoy", source: "Twelve Data" });
+  if (snapshot.prices.silver)
+    preciosItems.push({
+      label: "Plata spot (XAG/USD)",
+      value: `$${snapshot.prices.silver.price.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      date: "hoy",
+      source: "Twelve Data",
+    });
+  if (snapshot.prices.gold && snapshot.prices.silver && snapshot.prices.silver.price > 0) {
+    const ratio = snapshot.prices.gold.price / snapshot.prices.silver.price;
+    preciosItems.push({
+      label: "Ratio Oro/Plata",
+      value: ratio.toFixed(1),
+      date: "hoy",
+      source: "Calculado (oro ÷ plata, Twelve Data)",
+    });
+  }
+  if (snapshot.prices.wti)
+    preciosItems.push({
+      label: "Petróleo WTI",
+      value: `$${snapshot.prices.wti.price.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      date: "hoy",
+      source: "Twelve Data",
+    });
 
   if (snapshot.macro.us10yNominal) tasasItems.push({ label: "US 10Y nominal (DGS10)", value: `${snapshot.macro.us10yNominal.value}%`, date: snapshot.macro.us10yNominal.date, source: "FRED — DGS10" });
   if (snapshot.macro.us10yTipsReal) tasasItems.push({ label: "US 10Y TIPS real (DFII10)", value: `${snapshot.macro.us10yTipsReal.value}%`, date: snapshot.macro.us10yTipsReal.date, source: "FRED — DFII10" });
@@ -148,6 +180,7 @@ export default async function MercadoPage() {
   if (snapshot.macro.us5yTipsReal) tasasItems.push({ label: "US 5Y TIPS real (DFII5)", value: `${snapshot.macro.us5yTipsReal.value}%`, date: snapshot.macro.us5yTipsReal.date, source: "FRED — DFII5" });
   if (snapshot.macro.us30y) tasasItems.push({ label: "US 30Y (DGS30)", value: `${snapshot.macro.us30y.value}%`, date: snapshot.macro.us30y.date, source: "FRED — DGS30" });
   if (snapshot.macro.t3m10ySpread) tasasItems.push({ label: "Curva 10Y/3M (T10Y3M)", value: `${snapshot.macro.t3m10ySpread.value} pp`, date: snapshot.macro.t3m10ySpread.date, source: "FRED — T10Y3M" });
+  if (snapshot.macro.t10y2ySpread) tasasItems.push({ label: "Curva 10Y/2Y (T10Y2Y)", value: `${snapshot.macro.t10y2ySpread.value} pp`, date: snapshot.macro.t10y2ySpread.date, source: "FRED — T10Y2Y" });
   if (snapshot.macro.fedFundsRate) tasasItems.push({ label: "Fed Funds efectivo (DFF)", value: `${snapshot.macro.fedFundsRate.value}%`, date: snapshot.macro.fedFundsRate.date, source: "FRED — DFF" });
 
   if (snapshot.macro.cpiYoY) inflacionItems.push({ label: "CPI interanual", value: `${snapshot.macro.cpiYoY.value.toFixed(2)}%`, date: snapshot.macro.cpiYoY.date, source: "FRED — CPIAUCSL" });
@@ -162,7 +195,17 @@ export default async function MercadoPage() {
 
   if (snapshot.macro.m2YoY) liquidezItems.push({ label: "M2 (oferta monetaria) interanual", value: `${snapshot.macro.m2YoY.value.toFixed(2)}%`, date: snapshot.macro.m2YoY.date, source: "FRED — M2SL" });
   if (snapshot.liquidity.fedBalanceSheet) liquidezItems.push({ label: "Balance de la Fed", value: `$${snapshot.liquidity.fedBalanceSheet.value.toLocaleString("es-ES")} M`, date: snapshot.liquidity.fedBalanceSheet.date, source: "FRED — WALCL" });
-  if (snapshot.liquidity.onRRP) liquidezItems.push({ label: "Overnight Reverse Repo (ON RRP)", value: `$${snapshot.liquidity.onRRP.value.toLocaleString("es-ES")} MM`, date: snapshot.liquidity.onRRP.date, source: "FRED — RRPONTSYD" });
+  // Se renombra el sufijo de "MM" a "mil M" -- con el TGA de abajo usando
+  // "M" (millones) y este usando "MM" (miles de millones), las dos
+  // abreviaturas se confundían a primera vista aunque cada una fuera
+  // correcta en su propia unidad. "mil M" es inequívoco: mil millones.
+  if (snapshot.liquidity.onRRP)
+    liquidezItems.push({
+      label: "Overnight Reverse Repo (ON RRP)",
+      value: `$${snapshot.liquidity.onRRP.value.toLocaleString("es-ES", { maximumFractionDigits: 1 })} mil M`,
+      date: snapshot.liquidity.onRRP.date,
+      source: "FRED — RRPONTSYD",
+    });
   // WDTGAL viene en MILLONES de dólares (confirmado en FRED), no en miles de
   // millones -- estaba etiquetado "MM" y parecía mil veces más grande de lo
   // real (947.317 MM ≈ 947 billones en vez de los ~947.000 millones/947 mil
@@ -174,13 +217,33 @@ export default async function MercadoPage() {
   if (snapshot.labor.nfpChange) empleoItems.push({ label: "Nóminas no agrícolas (cambio mensual)", value: `${snapshot.labor.nfpChange.value >= 0 ? "+" : ""}${snapshot.labor.nfpChange.value}k`, date: snapshot.labor.nfpChange.date, source: "FRED — PAYEMS" });
   if (snapshot.labor.participationRate) empleoItems.push({ label: "Tasa de participación laboral", value: `${snapshot.labor.participationRate.value}%`, date: snapshot.labor.participationRate.date, source: "FRED — CIVPART" });
   if (snapshot.labor.avgHourlyEarningsYoY) empleoItems.push({ label: "Ganancias medias por hora interanual", value: `${snapshot.labor.avgHourlyEarningsYoY.value.toFixed(2)}%`, date: snapshot.labor.avgHourlyEarningsYoY.date, source: "FRED — CES0500000003" });
-  if (snapshot.labor.joltsOpenings) empleoItems.push({ label: "Vacantes JOLTS", value: `${snapshot.labor.joltsOpenings.value.toLocaleString("es-ES")}k`, date: snapshot.labor.joltsOpenings.date, source: "FRED — JTSJOL" });
+  // JTSJOL viene en MILES de vacantes -- se mostraba tal cual con sufijo
+  // "k" (p. ej. "7.181k"), técnicamente correcto pero pedido en formato de
+  // millones, que es como se suele citar esta cifra en prensa (p. ej.
+  // "7,18 M" en vez de "7.181k").
+  if (snapshot.labor.joltsOpenings)
+    empleoItems.push({
+      label: "Vacantes JOLTS",
+      value: `${(snapshot.labor.joltsOpenings.value / 1000).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} M`,
+      date: snapshot.labor.joltsOpenings.date,
+      source: "FRED — JTSJOL",
+    });
   if (snapshot.labor.initialClaims) empleoItems.push({ label: "Solicitudes iniciales de desempleo", value: `${snapshot.labor.initialClaims.value.toLocaleString("es-ES")}`, date: snapshot.labor.initialClaims.date, source: "FRED — ICSA" });
   if (snapshot.activity.retailSalesMoM) empleoItems.push({ label: "Ventas minoristas mensual", value: `${snapshot.activity.retailSalesMoM.value.toFixed(2)}%`, date: snapshot.activity.retailSalesMoM.date, source: "FRED — RSXFS" });
   if (snapshot.activity.gdpRealYoY) empleoItems.push({ label: "PIB real interanual", value: `${snapshot.activity.gdpRealYoY.value.toFixed(2)}%`, date: snapshot.activity.gdpRealYoY.date, source: "FRED — GDPC1" });
 
   if (snapshot.risk.vix) riesgoItems.push({ label: "VIX (índice de volatilidad CBOE)", value: `${snapshot.risk.vix.value.toFixed(2)}`, date: snapshot.risk.vix.date, source: "FRED — VIXCLS" });
   if (snapshot.risk.hyOas) riesgoItems.push({ label: "High Yield OAS (diferencial de crédito)", value: `${snapshot.risk.hyOas.value}%`, date: snapshot.risk.hyOas.date, source: "FRED — BAMLH0A0HYM2" });
+  // DXY también entra aquí (además de en Precios) porque ahora participa
+  // en el Bias Score como indicador de correlación intermercado -- ver
+  // bias-score.ts, módulo "Intermercado & Riesgo".
+  if (snapshot.prices.dxy)
+    riesgoItems.push({
+      label: "DXY (índice del dólar) — correlación con el oro",
+      value: `${snapshot.prices.dxy.price.toFixed(2)} (${snapshot.prices.dxy.percentChange >= 0 ? "+" : ""}${snapshot.prices.dxy.percentChange.toFixed(2)}% hoy)`,
+      date: "hoy",
+      source: "Twelve Data",
+    });
 
   if (snapshot.flows.cotGoldManagedMoney) flujosItems.push({ label: "Gold Futures (GC) — Managed Money, neto", value: `Neto ${snapshot.flows.cotGoldManagedMoney.netCurrent.toLocaleString("es-ES")} contratos`, date: snapshot.flows.cotGoldManagedMoney.date, source: "CFTC — Disaggregated COT" });
   if (snapshot.flows.cotGoldManagedMoney) flujosItems.push({ label: "Open Interest — Gold Futures (GC)", value: `${snapshot.flows.cotGoldManagedMoney.openInterest.toLocaleString("es-ES")} contratos abiertos`, date: snapshot.flows.cotGoldManagedMoney.date, source: "CFTC — Disaggregated COT" });
@@ -439,7 +502,15 @@ export default async function MercadoPage() {
           isTransparent: true,
           locale: "es",
           countryFilter: "us",
-          importanceFilter: "0,1",
+          // Antes "0,1" -- excluía uno de los tres niveles de importancia
+          // del widget de TradingView. Esther reportó que el calendario
+          // no mostraba eventos de alto impacto (NFP, CPI) mientras sí
+          // mostraba datos menores (peticiones de desempleo, permisos de
+          // construcción) -- indicio de que el nivel excluido era
+          // justamente el de "alto impacto", no el de "bajo impacto" como
+          // cabría esperar del nombre del parámetro. "-1,0,1" cubre los
+          // tres niveles (bajo, medio, alto) sin excluir ninguno.
+          importanceFilter: "-1,0,1",
         }}
       />
       <div style={{ marginBottom: 24 }} />
