@@ -35,7 +35,7 @@ type PayoutRow = {
   amountVCoin: number;
   network: "TRC20" | "BEP20";
   wallet: string;
-  requestedAt: string;
+  requestedAt?: string;
   txHash?: string | null;
   paidAt?: string | null;
 };
@@ -354,7 +354,7 @@ function PayoutRowItem({ payout }: { payout: PayoutRow }) {
       <td>{payout.amountVCoin} V-COIN</td>
       <td>{payout.network}</td>
       <td style={{ fontFamily: "var(--font-mono)", fontSize: 11, wordBreak: "break-all", maxWidth: 220 }}>{payout.wallet}</td>
-      <td>{new Date(payout.requestedAt).toLocaleDateString("es-ES")}</td>
+      <td>{payout.requestedAt ? new Date(payout.requestedAt).toLocaleDateString("es-ES") : "—"}</td>
       <td>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           <input
