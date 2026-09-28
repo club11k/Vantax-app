@@ -5,6 +5,7 @@ import styles from "@/components/play/arcade.module.css";
 import { TraderProgressBar, type PlayProgress } from "@/components/play/TraderProgressBar";
 import { ChestCabinet } from "@/components/play/ChestCabinet";
 import { Mt5ServerField } from "@/components/Mt5ServerField";
+import { isArcadeMusicOn, stopArcadeMusic, toggleArcadeMusic } from "@/components/play/arcadeMusic";
 
 // Vantax Play, con la piel arcade del Vantax Play original (vcoin.html):
 // tabs con glow, HUD de stats en pixel font, cofres dibujados en CSS. Todo
@@ -92,6 +93,18 @@ export function PlayPanel() {
   const [editMt5Server, setEditMt5Server] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+
+  // Música arcade de fondo (Web Audio API, ver arcadeMusic.ts) — apagada por
+  // defecto (autoplay de audio bloqueado por los navegadores de todas formas)
+  // y se para sola si el jugador sale de esta pantalla.
+  const [musicOn, setMusicOn] = useState(false);
+  useEffect(() => {
+    return () => stopArcadeMusic();
+  }, []);
+  function handleToggleMusic() {
+    toggleArcadeMusic();
+    setMusicOn(isArcadeMusicOn());
+  }
 
   async function load() {
     setLoading(true);
@@ -265,6 +278,17 @@ export function PlayPanel() {
 
   return (
     <div className={styles.root}>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+        <button
+          type="button"
+          className={`${styles.btn} ${styles.btnGhost}`}
+          style={{ marginTop: 0 }}
+          onClick={handleToggleMusic}
+          aria-pressed={musicOn}
+        >
+          {musicOn ? "♪ MÚSICA: ON" : "♪ MÚSICA: OFF"}
+        </button>
+      </div>
       <div className={`${styles.grid} ${styles.cols4}`}>
         <div className={styles.stat}>
           <div className={styles.statVal}>{profile.vCoinBalance}</div>
@@ -313,16 +337,31 @@ export function PlayPanel() {
 
       {effectiveTab === "vcoin" && (
         <div className={styles.card}>
-          <h3 className={styles.sectionTitle}>V-COIN</h3>
+          <h3 className={styles.sectionTitle}>¿QUÉ ES V-COIN?</h3>
           <div className={styles.pix} style={{ fontSize: 26, color: "var(--gold)", textShadow: "0 0 8px #facc1580" }}>
             {profile.vCoinBalance} V-COIN
           </div>
           <p style={{ fontSize: 15, color: "var(--textDim)", marginTop: 10 }}>
-            Es un saldo único: lo ganas tanto por la comisión que generas operando con tu cuenta de Vantage, como por
-            el lotaje en XAUUSD que operas en cualquier otro broker — todo sincronizado solo desde tu cuenta MT5, sin
-            que tengas que hacer nada más. Aquí en Vantax Play se usa para los cofres, y la vinculación de tu cuenta
-            se hace una sola vez, en la pestaña "PERFIL".
+            V-COIN es la moneda de cashback de Vantax Play. Cada vez que operas con tu cuenta MT5 vinculada, el
+            sistema mide cuántos lotes has movido y te recompensa por ello: cuantos más lotes operes, más V-COIN
+            acumulas. Lo ganas tanto por el lotaje en XAUUSD de cualquier cuenta vinculada, como por la comisión que
+            generas si esa cuenta es de Vantage con el IB activo — todo se sincroniza solo, sin que tengas que hacer
+            nada más que vincular tu MT5 una vez en la pestaña "PERFIL". Ese saldo es el que abre los cofres de
+            "PROGRESO" y, más adelante, se podrá canjear en la "TIENDA".
           </p>
+          <div
+            style={{
+              border: "1px dashed var(--gold)",
+              background: "#facc1512",
+              padding: "10px 12px",
+              marginTop: 14,
+              fontSize: 14,
+              color: "var(--text)",
+            }}
+          >
+            ⚠️ Importante: solo cuentan los lotes operados en XAUUSD. Operaciones en otros pares no generan V-COIN ni
+            avanzan tu barra de progreso.
+          </div>
         </div>
       )}
 
