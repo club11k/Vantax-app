@@ -416,6 +416,16 @@ model PlayMt5Account {
   rankings            PlayRanking[]
 
   @@unique([brokerId, accountNumber])
+  // El "número de cuenta" de arriba lo escribe el usuario a mano, así que
+  // por sí solo no evita que alguien intente vincular la misma cuenta real
+  // dos veces con un número escrito distinto a propósito. investorLogin +
+  // servidor es el identificador real de MT5 (no se puede falsear sin
+  // credenciales investor válidas de esa cuenta), así que también tiene que
+  // ser único por broker — si no, la misma cuenta podría acumular V-COIN en
+  // dos usuarios de Vantax distintos. NULLs no cuentan como duplicado
+  // (Postgres), así que las cuentas antiguas sin MT5 todavía no se ven
+  // afectadas.
+  @@unique([brokerId, investorLogin, mt5Server])
   @@index([userId])
 }
 
