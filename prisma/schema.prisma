@@ -480,13 +480,20 @@ model PlayChest {
 
 // Cofres obtenidos por un jugador.
 model PlayUserChest {
-  id         String    @id @default(cuid())
-  userId     String
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  chestId    String
-  chest      PlayChest @relation(fields: [chestId], references: [id])
-  unlockedAt DateTime  @default(now())
-  openedAt   DateTime?
+  id            String              @id @default(cuid())
+  userId        String
+  user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chestId       String
+  chest         PlayChest           @relation(fields: [chestId], references: [id])
+  unlockedAt    DateTime            @default(now())
+  openedAt      DateTime?
+  // Lo que le tocó de verdad al abrirlo — se guarda en el momento de abrir
+  // (no se recalcula luego) para que el "inventario" del admin muestre
+  // siempre el premio real entregado, aunque después se cambie la
+  // configuración del cofre. vcoinAwarded null = cofre todavía sin abrir.
+  vcoinAwarded  Float?
+  wonArticleId  String?
+  wonArticle    PlayCatalogArticle? @relation(fields: [wonArticleId], references: [id])
 }
 
 // Rankings calculados por periodo (snapshot, para históricos).
@@ -557,8 +564,9 @@ model PlayCatalogArticle {
   active    Boolean              @default(true)
   createdAt DateTime             @default(now())
 
-  loot      PlayChestLoot[]
-  gifts     PlayPlayerGift[]
+  loot          PlayChestLoot[]
+  gifts         PlayPlayerGift[]
+  wonInChests   PlayUserChest[]
 }
 
 // Probabilidad de cada artículo como premio de un cofre concreto.
@@ -596,10 +604,13 @@ model PlayPlayerGift {
   tier       PlayTier
   rewardType PlayGiftRewardType
   amount     Float?
-  articleId  String?
-  article    PlayCatalogArticle? @relation(fields: [articleId], references: [id])
-  delivered  Boolean             @default(false)
-  createdAt  DateTime            @default(now())
+  articleId   String?
+  article     PlayCatalogArticle? @relation(fields: [articleId], references: [id])
+  delivered   Boolean             @default(false)
+  createdAt   DateTime            @default(now())
+  // Cuándo lo abrió de verdad el jugador (distinto de createdAt, que es
+  // cuándo el admin se lo regaló) — para el inventario del admin.
+  deliveredAt DateTime?
 }
 
 // Vinculación con Myfxbook (alternativa gratuita para leer, en modo
