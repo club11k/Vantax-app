@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import styles from "@/components/play/arcade.module.css";
 import { TraderProgressBar, type PlayProgress } from "@/components/play/TraderProgressBar";
 import { ChestCabinet } from "@/components/play/ChestCabinet";
+import { RankingBoard } from "@/components/play/RankingBoard";
 import { Mt5ServerField } from "@/components/Mt5ServerField";
 import { isArcadeMusicOn, stopArcadeMusic, toggleArcadeMusic } from "@/components/play/arcadeMusic";
 
@@ -53,10 +54,11 @@ function formatLastSync(iso: string | null): string {
   return `Sincronizada hace ${diffD} d`;
 }
 
-type Tab = "progreso" | "perfil" | "vcoin" | "tienda";
+type Tab = "progreso" | "ranking" | "perfil" | "vcoin" | "tienda";
 
 const TAB_LABEL: Record<Tab, string> = {
   progreso: "PROGRESO",
+  ranking: "RANKING",
   perfil: "PERFIL",
   vcoin: "V-COIN",
   tienda: "TIENDA",
@@ -334,6 +336,8 @@ export function PlayPanel() {
           <ChestCabinet progress={profile.progress} onChanged={load} />
         </>
       )}
+
+      {effectiveTab === "ranking" && <RankingBoard />}
 
       {effectiveTab === "vcoin" && (
         <div className={styles.card}>
