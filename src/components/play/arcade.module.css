@@ -211,11 +211,13 @@
   color: var(--lilaGlow);
 }
 
-/* ---- chest (dibujado en CSS, sin imágenes — igual que el mockup) ---- */
+/* ---- chest (dibujado en CSS, sin imágenes — silueta de cofre de verdad,
+   con tapa abombada de esquinas cortadas "pixel", tablones, remaches,
+   fleje central dorado y candado — no dos rectángulos planos) ---- */
 .chest {
   background: var(--panel2);
   border: 2px solid var(--line);
-  padding: 16px;
+  padding: 18px 16px;
   text-align: center;
   transition: 0.15s;
 }
@@ -223,7 +225,7 @@
   cursor: pointer;
 }
 .chestClickable:hover {
-  transform: translateY(-3px);
+  transform: translateY(-3px) scale(1.02);
   border-color: var(--lilaGlow);
 }
 .chestPending {
@@ -240,49 +242,127 @@
   }
 }
 .chestBox {
-  width: 56px;
-  height: 44px;
-  margin: 0 auto 10px;
+  width: 88px;
+  height: 74px;
+  margin: 0 auto 12px;
   position: relative;
+  filter: drop-shadow(0 5px 5px rgba(0, 0, 0, 0.45));
+}
+/* fleje metálico central: une tapa y base visualmente, se queda fijo en la
+   caja mientras la tapa vuela al abrir (como el cierre real de un cofre) */
+.chestBox::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 6px;
+  bottom: 6px;
+  width: 13px;
+  transform: translateX(-50%);
+  background: linear-gradient(180deg, #fff6c8 0%, var(--gold) 45%, #93690c 100%);
+  border-left: 1px solid #5a3f05;
+  border-right: 1px solid #5a3f05;
+  z-index: 2;
 }
 .chestBox .lid {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  height: 16px;
+  height: 30px;
+  clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%, 0 10px);
+  box-shadow: inset 0 4px 0 rgba(255, 255, 255, 0.22), inset 0 -6px 8px rgba(0, 0, 0, 0.35);
 }
 .chestBox .body {
   position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
-  height: 28px;
+  height: 48px;
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px));
+  box-shadow: inset 0 4px 0 rgba(255, 255, 255, 0.12), inset 0 -8px 10px rgba(0, 0, 0, 0.4);
+}
+/* remaches en las esquinas + tablones verticales, en capa por encima del
+   degradado propio de cada tramo (definido abajo, por tier) */
+.chestBox .lid,
+.chestBox .body {
+  background-image:
+    radial-gradient(circle 2.5px at 11px 9px, #3a2a10 92%, transparent 94%),
+    radial-gradient(circle 2.5px at calc(100% - 11px) 9px, #3a2a10 92%, transparent 94%),
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.16) 0 2px, transparent 2px 13px);
 }
 .chest.basico .lid,
 .chest.basico .body {
-  background: #5a6b8c;
+  background-color: #5a6b8c;
+  background-image:
+    radial-gradient(circle 2.5px at 11px 9px, #29344a 92%, transparent 94%),
+    radial-gradient(circle 2.5px at calc(100% - 11px) 9px, #29344a 92%, transparent 94%),
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.16) 0 2px, transparent 2px 13px),
+    linear-gradient(160deg, #b9c4e6 0%, #5a6b8c 55%, #333c52 100%);
 }
 .chest.intermedio .lid,
 .chest.intermedio .body {
-  background: #2f8f5b;
+  background-color: #2f8f5b;
+  background-image:
+    radial-gradient(circle 2.5px at 11px 9px, #143a26 92%, transparent 94%),
+    radial-gradient(circle 2.5px at calc(100% - 11px) 9px, #143a26 92%, transparent 94%),
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.16) 0 2px, transparent 2px 13px),
+    linear-gradient(160deg, #7fe2c4 0%, #2f8f5b 55%, #184a30 100%);
 }
 .chest.epico .lid,
 .chest.epico .body {
-  background: var(--lilaDim);
+  background-color: var(--lilaDim);
+  background-image:
+    radial-gradient(circle 2.5px at 11px 9px, #2e1d4d 92%, transparent 94%),
+    radial-gradient(circle 2.5px at calc(100% - 11px) 9px, #2e1d4d 92%, transparent 94%),
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.16) 0 2px, transparent 2px 13px),
+    linear-gradient(160deg, #d9b3ff 0%, #7c4fc9 55%, #4a2d80 100%);
 }
 .chest.legendario .lid,
 .chest.legendario .body {
-  background: #8a6d1a;
+  background-color: #8a6d1a;
+  background-image:
+    radial-gradient(circle 2.5px at 11px 9px, #4a3608 92%, transparent 94%),
+    radial-gradient(circle 2.5px at calc(100% - 11px) 9px, #4a3608 92%, transparent 94%),
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.16) 0 2px, transparent 2px 13px),
+    linear-gradient(160deg, #fff2b0 0%, var(--gold) 50%, #93690c 100%);
 }
+/* candado real (arco + cuerpo), centrado sobre el fleje, en la línea donde
+   se juntan tapa y base */
 .chestLock {
   position: absolute;
-  top: 12px;
+  top: 41%;
   left: 50%;
+  width: 22px;
+  height: 17px;
+  transform: translate(-50%, -50%);
+  background: linear-gradient(180deg, #fff6c8 0%, var(--gold) 45%, #93690c 100%);
+  border: 2px solid #5a3f05;
+  border-radius: 3px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.45);
+  z-index: 3;
+}
+.chestLock::before {
+  content: "";
+  position: absolute;
+  top: -11px;
+  left: 50%;
+  width: 13px;
+  height: 11px;
   transform: translateX(-50%);
-  width: 12px;
-  height: 12px;
-  background: var(--gold);
+  border: 3px solid #d9a334;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+}
+.chestLock::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  transform: translateX(-50%);
+  background: #5a3f05;
+  border-radius: 50%;
 }
 .chest h4 {
   font-size: 11px;
@@ -382,8 +462,8 @@
     transform: translateY(0) rotate(0deg);
   }
   100% {
-    transform: translateY(-14px) rotate(-24deg);
-    opacity: 0.4;
+    transform: translateY(-22px) rotate(-30deg);
+    opacity: 0.3;
   }
 }
 .coinWrap {
