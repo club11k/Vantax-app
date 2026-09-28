@@ -32,7 +32,6 @@ export const VANTAGE_MT5_SERVERS = [
   "VantageMarkets-Live 17",
   "VantageMarkets-Live 19",
   "VantageMarkets-Live 21",
-  "VantageMarkets-Demo",
 ];
 
 const OTHER = "__otro__";
