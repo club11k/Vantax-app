@@ -36,17 +36,27 @@ export async function POST(req: Request) {
 
       // Premio garantizado en V-COIN + posibilidad de un artículo extra
       // según la probabilidad configurada del cofre (chest_loot).
-      let wonArticle: { name: string; imageUrl: string | null } | null = null;
+      let wonArticle: { id: string; name: string; imageUrl: string | null } | null = null;
       for (const loot of userChest.chest.loot) {
         if (Math.random() * 100 < loot.probability) {
-          wonArticle = { name: loot.article.name, imageUrl: loot.article.imageUrl };
+          wonArticle = { id: loot.article.id, name: loot.article.name, imageUrl: loot.article.imageUrl };
           break;
         }
       }
 
       const vcoinAmount = Math.round(userChest.chest.vcoinReward);
       await prisma.$transaction([
-        prisma.playUserChest.update({ where: { id }, data: { openedAt: new Date() } }),
+        prisma.playUserChest.update({
+          where: { id },
+          data: {
+            openedAt: new Date(),
+            // Se guarda el premio real entregado (no solo se calcula al
+            // vuelo) para que el admin pueda ver después qué le tocó a
+            // cada jugador — ver /admin/play-inventory.
+            vcoinAwarded: vcoinAmount,
+            wonArticleId: wonArticle ? wonArticle.id : null,
+          },
+        }),
         ...(vcoinAmount > 0
           ? [
               prisma.playVCoinTransaction.create({
@@ -82,7 +92,7 @@ export async function POST(req: Request) {
     const vcoinAmount = gift.rewardType === "VCOIN" ? Math.round(gift.amount ?? 0) : 0;
 
     await prisma.$transaction([
-      prisma.playPlayerGift.update({ where: { id }, data: { delivered: true } }),
+      prisma.playPlayerGift.update({ where: { id }, data: { delivered: true, deliveredAt: new Date() } }),
       ...(vcoinAmount > 0
         ? [
             prisma.playVCoinTransaction.create({
