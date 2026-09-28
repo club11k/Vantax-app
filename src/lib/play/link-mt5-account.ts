@@ -48,6 +48,26 @@ export async function linkMt5Account(input: LinkMt5AccountInput): Promise<LinkMt
     };
   }
 
+  // El "número de cuenta" de arriba lo escribe el usuario a mano, así que
+  // por sí solo no evita que alguien vincule la MISMA cuenta MT5 real con
+  // un número distinto a propósito para acumular V-COIN en varios usuarios
+  // de Vantax. El login investor + servidor sí identifica la cuenta real
+  // (no se puede falsear sin las credenciales investor de esa cuenta), así
+  // que también se comprueba aparte.
+  const existingByLogin = await prisma.playMt5Account.findFirst({
+    where: { brokerId, investorLogin, mt5Server },
+  });
+  if (existingByLogin) {
+    return {
+      ok: false,
+      status: 409,
+      error:
+        existingByLogin.userId === userId
+          ? "Ya tienes esa cuenta MT5 vinculada (con otro número de cuenta)."
+          : "Esa cuenta MT5 ya está vinculada a otro usuario — no se puede acumular V-COIN en la misma cuenta desde dos usuarios distintos.",
+    };
+  }
+
   let investorPasswordEnc: string | null;
   try {
     investorPasswordEnc = encrypt(investorPassword);
@@ -88,7 +108,19 @@ export async function linkMt5Account(input: LinkMt5AccountInput): Promise<LinkMt
     }
 
     return { ok: true, accountId: account.id };
-  } catch (err) {
+  } catch (err: any) {
+    // P2002 = choque con una restricción única — por ejemplo si dos
+    // peticiones llegan a la vez y las comprobaciones de arriba no llegan
+    // a pillarlo (carrera poco probable, pero la restricción de la base de
+    // datos es la última barrera real contra la misma cuenta MT5 en dos
+    // usuarios de Vantax).
+    if (err?.code === "P2002") {
+      return {
+        ok: false,
+        status: 409,
+        error: "Esa cuenta ya está vinculada (número de cuenta o login MT5 ya en uso).",
+      };
+    }
     console.error("Error vinculando la cuenta MT5:", err);
     return { ok: false, status: 500, error: "No se pudo vincular la cuenta." };
   }
