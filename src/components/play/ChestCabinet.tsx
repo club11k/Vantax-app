@@ -7,8 +7,9 @@ import { TIER_ORDER, TIER_LABEL, tierClassKey, type PlayTierValue } from "@/comp
 import type { PlayProgress } from "@/components/play/TraderProgressBar";
 
 // El armario de cofres, dibujado en CSS exactamente como el mockup original
-// de Vantax Play (cofre = caja "lid" + "body" coloreada por tramo, con un
-// candado dorado encima si está bloqueado) — nada de imágenes ni emojis de
+// de Vantax Play (cofre = caja "lid" + "body" + "lock" + "band" coloreada
+// por tramo, con animación propia por tramo — respira/flota/se balancea
+// con puntos orbitando/tiembla con chispas) — nada de imágenes ni emojis de
 // regalo. Siempre se ven los 4 tramos; los regalos de un admin van aparte
 // debajo, porque pueden tocar cualquier tramo sin depender de en qué tramo
 // va el jugador.
@@ -26,16 +27,38 @@ function ChestTile({
 }) {
   const tierKey = tierClassKey(tier);
   const clickable = state === "pending";
-  const classes = [styles.chest, styles[tierKey], clickable ? styles.chestClickable : "", state === "pending" ? styles.chestPending : ""]
+  const cardClasses = [
+    styles["chest-card"],
+    tierKey === "legendario" ? styles.legendario : "",
+    clickable ? styles.chestClickable : "",
+    state === "pending" ? styles.chestPending : "",
+  ]
     .filter(Boolean)
     .join(" ");
+  const pixClasses = [styles["pix-chest"], styles[`chest-${tierKey}`]].join(" ");
 
   return (
-    <div className={classes} onClick={clickable ? onClick : undefined} role={clickable ? "button" : undefined}>
-      <div className={styles.chestBox}>
-        <div className={styles.lid} />
-        <div className={styles.body} />
-        {state === "locked" && <div className={styles.chestLock} />}
+    <div className={cardClasses} onClick={clickable ? onClick : undefined} role={clickable ? "button" : undefined}>
+      <div className={styles["chest-stage"]}>
+        <div className={pixClasses}>
+          <div className={styles.lid} />
+          <div className={styles.body} />
+          <div className={styles.lock} />
+          <div className={styles.band} />
+          {tierKey === "epico" && (
+            <>
+              <span className={styles.orbit} style={{ animationDelay: "0s" }} />
+              <span className={styles.orbit} style={{ animationDelay: "-1.2s" }} />
+            </>
+          )}
+          {tierKey === "legendario" && (
+            <>
+              <span className={styles["gold-spark"]} style={{ left: "18%", animationDelay: "0s" }} />
+              <span className={styles["gold-spark"]} style={{ left: "48%", animationDelay: "-0.6s" }} />
+              <span className={styles["gold-spark"]} style={{ left: "76%", animationDelay: "-1.2s" }} />
+            </>
+          )}
+        </div>
       </div>
       <h4>{TIER_LABEL[tier]}</h4>
       {state === "pending" && (
@@ -118,4 +141,5 @@ export function ChestCabinet({ progress, onChanged }: { progress: PlayProgress; 
     </div>
   );
 }
+
 
