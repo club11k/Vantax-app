@@ -34,6 +34,7 @@ export function formatSnapshotForPrompt(snapshot: MarketSnapshot): string {
   lines.push(`- US 2Y: ${fmtFred(m.us2y)}`);
   lines.push(`- US 30Y: ${fmtFred(m.us30y)}`);
   lines.push(`- Curva 10Y/3M: ${fmtFred(m.t3m10ySpread, " pp")}`);
+  lines.push(`- Curva 10Y/2Y: ${fmtFred(m.t10y2ySpread, " pp")}`);
   lines.push(`- Tipo de interés Fed Funds (efectivo): ${fmtFred(m.fedFundsRate)}`);
   lines.push("");
   lines.push("MACRO — INFLACIÓN:");
@@ -66,6 +67,9 @@ export function formatSnapshotForPrompt(snapshot: MarketSnapshot): string {
   lines.push("PRECIOS:");
   lines.push(`- Oro (XAU/USD): ${p.gold ? `$${p.gold.price} (${p.gold.percentChange >= 0 ? "+" : ""}${p.gold.percentChange}% hoy)` : "no disponible — configurar TWELVE_DATA_API_KEY"}`);
   lines.push(`- DXY: ${p.dxy ? `${p.dxy.price} (${p.dxy.percentChange >= 0 ? "+" : ""}${p.dxy.percentChange}% hoy)` : "no disponible — configurar TWELVE_DATA_API_KEY"}`);
+  lines.push(`- Plata (XAG/USD): ${p.silver ? `$${p.silver.price} (${p.silver.percentChange >= 0 ? "+" : ""}${p.silver.percentChange}% hoy)` : "no disponible"}`);
+  lines.push(`- Ratio Oro/Plata: ${p.gold && p.silver && p.silver.price > 0 ? (p.gold.price / p.silver.price).toFixed(1) : "no disponible"}`);
+  lines.push(`- Petróleo WTI: ${p.wti ? `$${p.wti.price} (${p.wti.percentChange >= 0 ? "+" : ""}${p.wti.percentChange}% hoy)` : "no disponible"}`);
   lines.push("");
   lines.push("RIESGO E INTERMERCADO:");
   lines.push(`- VIX: ${fmtFred(r.vix, "", 2)}`);
