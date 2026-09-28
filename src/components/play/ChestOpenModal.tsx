@@ -121,7 +121,7 @@ export function ChestOpenModal({
               style={{ background: "transparent", border: "none", padding: 0, margin: "18px auto", width: "fit-content" }}
             >
               <div
-                className={styles.chestBox}
+                className={`${styles.chestBox} ${step === "opening" ? styles.lidOpening : ""}`}
                 style={{ transform: step === "opening" ? "scale(1.08)" : undefined, transition: "transform 0.3s ease" }}
               >
                 <div className={styles.lid} />
@@ -143,7 +143,10 @@ export function ChestOpenModal({
 
         {step === "revealed" && prize && (
           <>
-            <div style={{ fontSize: 44, margin: "10px 0" }}>✨</div>
+            <div className={styles.coinWrap}>
+              <div className={styles.prizeName}>{prize.article ? prize.article.name : `Cofre ${label}`}</div>
+              <div className={styles.coin}>V</div>
+            </div>
             {prize.vcoinAmount > 0 && (
               <div className={styles.pix} style={{ fontSize: 22, color: "var(--gold)", textShadow: "0 0 8px #facc1580" }}>
                 +{prize.vcoinAmount} V-COIN
@@ -167,4 +170,5 @@ export function ChestOpenModal({
     </div>
   );
 }
+
 
