@@ -66,6 +66,36 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     return NextResponse.json({ error: "No hay ningún cambio que guardar." }, { status: 400 });
   }
 
+  // El login/servidor que va a quedar DESPUÉS de este cambio (mezclando lo
+  // nuevo con lo que ya tenía) no puede coincidir con el de otra cuenta del
+  // mismo broker — si no, se podría "mover" una cuenta MT5 ya vinculada a
+  // un segundo usuario editando aquí en vez de vincularla desde cero (que
+  // sí lo comprueba, ver src/lib/play/link-mt5-account.ts).
+  const finalInvestorLogin = parsed.data.clearMt5 ? null : mt5Data.investorLogin !== undefined ? mt5Data.investorLogin : existing.investorLogin;
+  const finalMt5Server = parsed.data.clearMt5 ? null : mt5Data.mt5Server !== undefined ? mt5Data.mt5Server : existing.mt5Server;
+
+  if (finalInvestorLogin && finalMt5Server) {
+    const conflict = await prisma.playMt5Account.findFirst({
+      where: {
+        brokerId: existing.brokerId,
+        investorLogin: finalInvestorLogin,
+        mt5Server: finalMt5Server,
+        id: { not: existing.id },
+      },
+    });
+    if (conflict) {
+      return NextResponse.json(
+        {
+          error:
+            conflict.userId === userId
+              ? "Ya tienes otra cuenta vinculada con ese mismo login y servidor MT5."
+              : "Esa cuenta MT5 ya está vinculada a otro usuario — no se puede acumular V-COIN en la misma cuenta desde dos usuarios distintos.",
+        },
+        { status: 409 }
+      );
+    }
+  }
+
   try {
     const account = await prisma.playMt5Account.update({
       where: { id: params.id },
@@ -73,7 +103,10 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     });
     const { investorPasswordEnc, ...safeAccount } = account;
     return NextResponse.json({ account: { ...safeAccount, mt5Connected: Boolean(investorPasswordEnc) } });
-  } catch (err) {
+  } catch (err: any) {
+    if (err?.code === "P2002") {
+      return NextResponse.json({ error: "Ese login y servidor MT5 ya están en uso en otra cuenta." }, { status: 409 });
+    }
     console.error("Error actualizando la cuenta Play:", err);
     return NextResponse.json(
       { error: "No se pudo actualizar la cuenta. Inténtalo de nuevo en unos segundos." },
