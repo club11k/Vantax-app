@@ -373,6 +373,72 @@
   font-size: 14px;
 }
 
+/* ---- apertura de cofre: tapa abriéndose + moneda de premio ---- */
+.chestBox.lidOpening .lid {
+  animation: lidFlip 0.5s ease-out forwards;
+}
+@keyframes lidFlip {
+  0% {
+    transform: translateY(0) rotate(0deg);
+  }
+  100% {
+    transform: translateY(-14px) rotate(-24deg);
+    opacity: 0.4;
+  }
+}
+.coinWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 14px auto 6px;
+  animation: coinPop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes coinPop {
+  0% {
+    transform: scale(0.2) translateY(10px);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.15) translateY(-4px);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) translateY(0);
+  }
+}
+.coin {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff6c8 0%, var(--gold) 45%, #a8790a 100%);
+  border: 3px solid #a8790a;
+  box-shadow: 0 0 18px #facc15aa, inset 0 0 6px #fff8d8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Press Start 2P", monospace;
+  font-size: 20px;
+  color: #5a3f05;
+  animation: coinSpin 2.4s linear infinite;
+}
+@keyframes coinSpin {
+  0%,
+  100% {
+    transform: rotateY(0deg);
+  }
+  50% {
+    transform: rotateY(180deg);
+  }
+}
+.prizeName {
+  font-family: "Press Start 2P", monospace;
+  font-size: 13px;
+  color: var(--lilaGlow);
+  text-shadow: 0 0 8px #a855f780;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+
 /* ---- modal ---- */
 .overlay {
   position: fixed;
