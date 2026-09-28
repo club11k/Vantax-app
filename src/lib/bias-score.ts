@@ -64,7 +64,7 @@ function scoreLabel(score: number): string {
 }
 
 export function computeBiasScore(snapshot: MarketSnapshot): BiasResult {
-  const { macro, technical, risk, flows } = snapshot;
+  const { macro, technical, risk, flows, prices } = snapshot;
 
   // --- Módulo Macro & Tasas (peso 40%) ---
   const macroIndicators: BiasIndicator[] = [];
@@ -267,6 +267,21 @@ export function computeBiasScore(snapshot: MarketSnapshot): BiasResult {
       value: `${v.toFixed(2)}% (${risk.hyOas.date})`,
       score: s,
       note: "Diferencial amplio → estrés de crédito/aversión al riesgo → soporte de refugio para el oro.",
+    });
+  }
+
+  if (prices.dxy) {
+    // Correlación inversa clásica oro-dólar (vídeo del módulo 7 de
+    // intermercado de Esther): usamos el cambio del día del DXY, no su
+    // nivel absoluto, porque no tenemos una referencia histórica de "DXY
+    // neutral" tan clara como sí la tenemos para el VIX o el HY OAS.
+    const pct = prices.dxy.percentChange;
+    const s = clamp(-pct * 20, -100, 100);
+    riesgoIndicators.push({
+      label: "DXY (índice del dólar, correlación intermercado)",
+      value: `${prices.dxy.price.toFixed(2)} (${pct >= 0 ? "+" : ""}${pct.toFixed(2)}% hoy)`,
+      score: s,
+      note: "DXY subiendo (dólar fuerte) → presión bajista típica sobre el oro por correlación inversa; DXY bajando → soporte para el oro.",
     });
   }
 
