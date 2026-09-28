@@ -26,30 +26,43 @@ export function TraderProgressBar({ progress }: { progress: PlayProgress }) {
         <span className={`${styles.tier} ${styles[tierKey]}`}>{TIER_LABEL[progress.tier]}</span>
       </div>
 
-      <div
-        style={{
-          height: 18,
-          background: "var(--void)",
-          border: "2px solid var(--line)",
-          position: "relative",
-          overflow: "hidden",
-        }}
-      >
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <div
           style={{
-            height: "100%",
-            width: `${progress.barFillPercent}%`,
-            transition: "width 0.6s ease",
-            background:
-              tierKey === "legendario"
-                ? "linear-gradient(90deg, #8a6d1a, var(--gold))"
-                : tierKey === "epico"
-                ? "linear-gradient(90deg, var(--lilaDim, #5b3f8a), var(--lilaGlow))"
-                : tierKey === "intermedio"
-                ? "linear-gradient(90deg, #1f6b45, var(--teal))"
-                : "linear-gradient(90deg, #3d4966, #9ab0ff)",
+            flex: 1,
+            height: 18,
+            background: "var(--void)",
+            border: "2px solid var(--line)",
+            position: "relative",
+            overflow: "hidden",
           }}
-        />
+        >
+          <div
+            style={{
+              height: "100%",
+              width: `${progress.barFillPercent}%`,
+              transition: "width 0.6s ease",
+              background:
+                tierKey === "legendario"
+                  ? "linear-gradient(90deg, #8a6d1a, var(--gold))"
+                  : tierKey === "epico"
+                  ? "linear-gradient(90deg, var(--lilaDim, #5b3f8a), var(--lilaGlow))"
+                  : tierKey === "intermedio"
+                  ? "linear-gradient(90deg, #1f6b45, var(--teal))"
+                  : "linear-gradient(90deg, #3d4966, #9ab0ff)",
+            }}
+          />
+        </div>
+        <div className={styles["tp-end-chest"]} title="Cofre misterioso al final del recorrido">
+          <div className={styles["chest-stage"]}>
+            <div className={`${styles["pix-chest"]} ${styles["chest-mystery"]}`}>
+              <div className={styles.lid} />
+              <div className={styles.body} />
+              <div className={styles.lock} />
+              <div className={styles.band} />
+            </div>
+          </div>
+        </div>
       </div>
 
       <p style={{ margin: "10px 0 0", fontSize: 15, color: "var(--textDim)" }}>Opera cada día y consigue tu recompensa.</p>
@@ -62,4 +75,5 @@ export function TraderProgressBar({ progress }: { progress: PlayProgress }) {
     </div>
   );
 }
+
 
