@@ -22,6 +22,16 @@ export const TIER_LABEL: Record<PlayTierValue, string> = {
   LEGENDARIO: "Legendario",
 };
 
+// Nombre "de liga" de cada tramo, solo para la pantalla de Ranking (mismo
+// tramo de siempre por debajo — Básico/Intermedio/Épico/Legendario — pero
+// ahí se llama Bronce/Plata/Oro/Diamante, calcado del mockup original).
+export const LEAGUE_LABEL: Record<PlayTierValue, string> = {
+  BASICO: "Bronce",
+  INTERMEDIO: "Plata",
+  EPICO: "Oro",
+  LEGENDARIO: "Diamante",
+};
+
 // Color del cofre decorativo / icono genérico: distinto a los 4 de arriba,
 // para que siempre destaque sea cual sea el tramo actual.
 export const CHEST_ACCENT_COLOR = "#C15A82";
