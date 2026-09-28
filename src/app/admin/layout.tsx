@@ -30,6 +30,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <Link href="/admin/vantage-inactivity" className="btn">Avisos de inactividad</Link>
         <Link href="/admin/players" className="btn">Jugadores (Play)</Link>
         <Link href="/admin/play-config" className="btn">Vantax Play · Config</Link>
+        <Link href="/admin/play-inventory" className="btn">Inventario de cofres</Link>
         <Link href="/admin/plans" className="btn">Planes</Link>
         <Link href="/admin/settings" className="btn">Configuración</Link>
       </nav>
