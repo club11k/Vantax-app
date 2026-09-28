@@ -1,8 +1,12 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type CSSProperties } from "react";
 import styles from "@/components/play/arcade.module.css";
 import { tierClassKey, type PlayTierValue } from "@/components/play/tierStyles";
+
+// Ángulos del abanico de monedas que salen disparadas del cofre al abrirlo
+// (una .coin-particle por ángulo, con su propio --dx/--dy calculado aquí).
+const COIN_ANGLES = [-70, -50, -30, -10, 10, 30, 50, 70];
 
 // Pantalla de apertura de cofre, estilo arcade (cofre CSS abriéndose +
 // destello dorado), igual que el resto de Vantax Play. No existe un archivo
@@ -114,38 +118,79 @@ export function ChestOpenModal({
           {label}
         </h3>
 
-        {step !== "revealed" && (
-          <>
+        <div
+          className={`${styles["chest-card"]} ${tierKey === "legendario" ? styles.legendario : ""}`}
+          style={{ background: "transparent", border: "none", padding: 0, margin: "18px auto", width: "fit-content" }}
+        >
+          <div className={styles["chest-stage"]}>
             <div
-              className={`${styles.chest} ${styles[tierKey]}`}
-              style={{ background: "transparent", border: "none", padding: 0, margin: "18px auto", width: "fit-content" }}
+              className={`${styles["pix-chest"]} ${styles[`chest-${tierKey}`]} ${step === "revealed" ? styles.opened : ""}`}
             >
-              <div
-                className={`${styles.chestBox} ${step === "opening" ? styles.lidOpening : ""}`}
-                style={{ transform: step === "opening" ? "scale(1.08)" : undefined, transition: "transform 0.3s ease" }}
-              >
-                <div className={styles.lid} />
-                <div className={styles.body} />
-              </div>
+              <div className={styles.lid} />
+              <div className={styles.body} />
+              <div className={styles.lock} />
+              <div className={styles.band} />
+              {tierKey === "epico" && step !== "revealed" && (
+                <>
+                  <span className={styles.orbit} style={{ animationDelay: "0s" }} />
+                  <span className={styles.orbit} style={{ animationDelay: "-1.2s" }} />
+                </>
+              )}
+              {tierKey === "legendario" && step !== "revealed" && (
+                <>
+                  <span className={styles["gold-spark"]} style={{ left: "18%", animationDelay: "0s" }} />
+                  <span className={styles["gold-spark"]} style={{ left: "48%", animationDelay: "-0.6s" }} />
+                  <span className={styles["gold-spark"]} style={{ left: "76%", animationDelay: "-1.2s" }} />
+                </>
+              )}
+              {step === "revealed" &&
+                COIN_ANGLES.map((deg, i) => {
+                  const rad = (deg * Math.PI) / 180;
+                  const dist = 48;
+                  const dx = Math.sin(rad) * dist;
+                  const dy = -Math.abs(Math.cos(rad)) * dist - 8;
+                  return (
+                    <span
+                      key={i}
+                      className={styles["coin-particle"]}
+                      style={{ "--dx": `${dx}px`, "--dy": `${dy}px`, animationDelay: `${i * 0.03}s` } as CSSProperties}
+                    />
+                  );
+                })}
+              {step === "revealed" && prize && (
+                <div className={`${styles["reward-pop"]} ${styles.show}`}>
+                  {prize.article?.imageUrl ? (
+                    <img src={prize.article.imageUrl} alt={prize.article.name} />
+                  ) : (
+                    <span className={styles["reward-emoji"]}>{prize.article ? "🎁" : "🪙"}</span>
+                  )}
+                </div>
+              )}
             </div>
+          </div>
+
+          {step !== "revealed" && (
             <p style={{ fontSize: 15, color: "var(--textDim)" }}>{step === "opening" ? "Abriendo…" : "Toca abrir cuando quieras."}</p>
-            {error && <div className={styles.errorMsg}>{error}</div>}
-            <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 6 }}>
-              <button className={styles.btn} onClick={handleOpen} disabled={step === "opening"}>
-                {step === "opening" ? "ABRIENDO…" : "ABRIR COFRE"}
-              </button>
-              <button className={`${styles.btn} ${styles.btnGhost}`} onClick={() => onClose(false)} disabled={step === "opening"}>
-                CERRAR
-              </button>
-            </div>
-          </>
+          )}
+          {step === "revealed" && <div className={styles["opened-badge"]}>¡Cofre abierto!</div>}
+          {error && <div className={styles.errorMsg}>{error}</div>}
+        </div>
+
+        {step !== "revealed" && (
+          <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 6 }}>
+            <button className={styles.btn} onClick={handleOpen} disabled={step === "opening"}>
+              {step === "opening" ? "ABRIENDO…" : "ABRIR COFRE"}
+            </button>
+            <button className={`${styles.btn} ${styles.btnGhost}`} onClick={() => onClose(false)} disabled={step === "opening"}>
+              CERRAR
+            </button>
+          </div>
         )}
 
         {step === "revealed" && prize && (
           <>
-            <div className={styles.coinWrap}>
-              <div className={styles.prizeName}>{prize.article ? prize.article.name : `Cofre ${label}`}</div>
-              <div className={styles.coin}>V</div>
+            <div className={styles.prizeName} style={{ marginTop: 44 }}>
+              {prize.article ? prize.article.name : `Cofre ${label}`}
             </div>
             {prize.vcoinAmount > 0 && (
               <div className={styles.pix} style={{ fontSize: 22, color: "var(--gold)", textShadow: "0 0 8px #facc1580" }}>
