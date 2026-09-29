@@ -79,6 +79,12 @@ export type PriceBar = { open: number; high: number; low: number; close: number 
 // TWELVE_DATA_API_KEY configurada (tier gratuito alcanza para uso moderado).
 // Si no está configurada, el módulo técnico queda marcado como no
 // disponible, igual que en el panel anterior.
+// Nota sobre "desfase": son velas DIARIAS, así que el EMA20/50/200 solo
+// cambia de verdad cuando cierra la vela del día — eso es intencional (mide
+// estructura de tendencia diaria, no precio en vivo). Lo que sí se ha
+// acortado es la caché (antes 1h) para que en cuanto Twelve Data actualice
+// la vela del día en curso, se refleje antes en Vantax — alineado con el
+// revalidate de 5 min que ya tiene la página /mercado.
 async function fetchTwelveDataSeries(
   symbol: string,
   interval: "1day" = "1day",
@@ -91,7 +97,7 @@ async function fetchTwelveDataSeries(
       `${TWELVE_DATA_BASE}/time_series?symbol=${encodeURIComponent(
         symbol
       )}&interval=${interval}&outputsize=${outputsize}&apikey=${apiKey}`,
-      { next: { revalidate: 3600 } }
+      { next: { revalidate: 300 } }
     );
     if (!res.ok) return null;
     const json = await res.json();
