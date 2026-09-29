@@ -167,9 +167,6 @@ model User {
   publicId              String?             @unique
   payoutWallet          String?             // wallet USDT por defecto para cobrar V-COIN
   payoutNetwork         PlayPayoutNetwork?
-  brokerName            String?             // datos de perfil del jugador con su broker (fuera de Vantage)
-  brokerEmail           String?
-  brokerUid             String?
 
   playMt5Accounts       PlayMt5Account[]
   playVCoinTransactions PlayVCoinTransaction[]
