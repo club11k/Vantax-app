@@ -266,9 +266,6 @@ async function main() {
           publicId,
           payoutWallet: u.payout_wallet ?? undefined,
           payoutNetwork: u.payout_network ? (u.payout_network as any) : undefined,
-          brokerName: u.broker_name ?? undefined,
-          brokerEmail: u.broker_email ?? undefined,
-          brokerUid: u.broker_uid ?? undefined,
         },
       });
       userIdMap.set(u.id, created.id);
@@ -286,9 +283,6 @@ async function main() {
             publicId: fallbackId,
             payoutWallet: u.payout_wallet ?? undefined,
             payoutNetwork: u.payout_network ? (u.payout_network as any) : undefined,
-            brokerName: u.broker_name ?? undefined,
-            brokerEmail: u.broker_email ?? undefined,
-            brokerUid: u.broker_uid ?? undefined,
           },
         });
         userIdMap.set(u.id, created.id);
