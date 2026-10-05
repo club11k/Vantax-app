@@ -89,10 +89,18 @@ function average(scores: (number | null)[]): number | null {
   return valid.reduce((a, b) => a + b, 0) / valid.length;
 }
 
+// Pedido por Esther (05/10/2026): la banda "Neutral" (-12 a +12) se parte
+// en tres, sin tocar los límites de Sesgo/Fuerte (±12 y ±40) que ya existían
+// — +6/-6 es el punto medio exacto de cada mitad de la banda neutral
+// original, así que separa "casi neutral de verdad" de "neutral pero ya se
+// nota una inclinación", sin cambiar ninguna lectura que antes cayera fuera
+// de -12..+12.
 function scoreLabel(score: number): string {
   if (score >= 40) return "Alcista fuerte (oro)";
   if (score >= 12) return "Sesgo alcista (oro)";
-  if (score > -12) return "Neutral";
+  if (score >= 6) return "Neutral ligeramente alcista";
+  if (score > -6) return "Neutral";
+  if (score > -12) return "Neutral ligeramente bajista";
   if (score > -40) return "Sesgo bajista (oro)";
   return "Bajista fuerte (oro)";
 }
