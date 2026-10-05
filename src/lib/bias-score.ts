@@ -1,9 +1,18 @@
 // Cálculo del Bias Score en base a los datos que la app SÍ puede traer en
 // vivo (FRED + Twelve Data + CFTC pública). El documento de arquitectura
 // original definía 4 módulos con pesos Macro 40%, Flujos 25%, Riesgo 15%,
-// Técnico 20% — reajustados a Macro 25%, Flujos 30%, Riesgo 15%, Técnico
-// 30% (ver nota junto a los pesos de cada módulo más abajo, en la
-// declaración de `modules`, sobre por qué se bajó el peso de Macro).
+// Técnico 20%. Desde que se añadió el sesgo por temporalidad (pedido de
+// Esther, 05/10/2026: pestañas 15min/30min/1h/Diario en /mercado), los
+// pesos ya NO son fijos — cada temporalidad tiene su propio esquema (ver
+// TIMEFRAME_WEIGHTS más abajo): cuanto más corta la temporalidad, más peso
+// se le da a Técnico (lo único que de verdad cambia intradía) y menos a
+// Macro/Flujos (datos lentos — mensuales, semanales — que apenas aportan
+// para decidir una entrada en M15/M30). El esquema "1day" es el que se
+// reajustó primero (Macro 40%→25%, Técnico 20%→30%, Flujos 25%→30%) porque
+// con el peso original, en semanas de inflación aún alta Y rendimientos
+// reales subiendo por esa misma inflación, el módulo Macro salía casi
+// neutro (sus propios indicadores se cancelaban entre sí) y aplastaba el
+// total aunque Técnico y Flujos sí reflejaran una caída real del precio.
 // Macro ya cubre tasas reales y nominales, curva 10Y/2Y y 10Y/3M,
 // CPI, Core PCE, PPI y breakeven de inflación 10 años. Riesgo cubre VIX y
 // el diferencial de crédito High Yield (OAS). Quedan dos módulos parciales:
@@ -23,7 +32,29 @@
 // (-100 a +100 por indicador, promediado por módulo) del panel original,
 // aplicado solo a los indicadores que tenemos con datos reales.
 
-import type { MarketSnapshot } from "./vantax-data";
+import type { MarketSnapshot, TimeframeKey } from "./vantax-data";
+
+export type { TimeframeKey };
+
+// Etiquetas cortas para las pestañas de /mercado.
+export const TIMEFRAME_LABEL: Record<TimeframeKey, string> = {
+  "15min": "15min",
+  "30min": "30min",
+  "1h": "1h",
+  "1day": "Diario",
+};
+
+// Pesos por temporalidad — ver nota al principio del archivo. Todas suman
+// 1.0. Riesgo (VIX/HY OAS/DXY) se deja igual en las 3 temporalidades
+// intradía: el VIX y el HY OAS son de cierre diario igual que en Diario,
+// pero el DXY sí se actualiza casi en vivo (caché de 5 min), así que ese
+// módulo no pierde del todo relevancia al acortar la temporalidad.
+const TIMEFRAME_WEIGHTS: Record<TimeframeKey, { macro: number; flujos: number; riesgo: number; tecnico: number }> = {
+  "15min": { macro: 0.05, flujos: 0.05, riesgo: 0.2, tecnico: 0.7 },
+  "30min": { macro: 0.1, flujos: 0.1, riesgo: 0.2, tecnico: 0.6 },
+  "1h": { macro: 0.15, flujos: 0.15, riesgo: 0.2, tecnico: 0.5 },
+  "1day": { macro: 0.25, flujos: 0.3, riesgo: 0.15, tecnico: 0.3 },
+};
 
 export type BiasIndicator = {
   label: string;
@@ -35,7 +66,7 @@ export type BiasIndicator = {
 export type BiasModule = {
   key: "macro" | "flujos" | "riesgo" | "tecnico";
   name: string;
-  weight: number; // peso original según el documento de arquitectura
+  weight: number; // peso para la temporalidad con la que se calculó este resultado (ver TIMEFRAME_WEIGHTS)
   available: boolean;
   score: number | null; // -100..100, promedio de los indicadores del módulo
   unavailableReason?: string;
@@ -66,10 +97,12 @@ function scoreLabel(score: number): string {
   return "Bajista fuerte (oro)";
 }
 
-export function computeBiasScore(snapshot: MarketSnapshot): BiasResult {
-  const { macro, technical, risk, flows, prices } = snapshot;
+export function computeBiasScore(snapshot: MarketSnapshot, timeframe: TimeframeKey = "1day"): BiasResult {
+  const { macro, risk, flows, prices } = snapshot;
+  const technical = snapshot.technicalByTimeframe[timeframe];
+  const weights = TIMEFRAME_WEIGHTS[timeframe];
 
-  // --- Módulo Macro & Tasas (peso 25%) ---
+  // --- Módulo Macro & Tasas (peso: ver TIMEFRAME_WEIGHTS) ---
   const macroIndicators: BiasIndicator[] = [];
 
   if (macro.us10yTipsReal) {
@@ -163,26 +196,31 @@ export function computeBiasScore(snapshot: MarketSnapshot): BiasResult {
     });
   }
 
-  // --- Módulo Técnico & Microestructura (peso 30%) ---
+  // --- Módulo Técnico & Microestructura (peso: ver TIMEFRAME_WEIGHTS) ---
+  // Los periodos de EMA (fast/mid/slow) dependen de la temporalidad elegida
+  // — ver TIMEFRAME_EMA_PERIODS en vantax-data.ts (9/21/50 en M15/M30,
+  // 20/50/200 en H1/Diario). Por eso aquí la etiqueta y la nota se arman
+  // con los periodos reales de `technical`, nunca con "EMA20/50/200" fijo.
   const tecnicoIndicators: BiasIndicator[] = [];
 
-  if (technical.available && technical.ema20 !== null && technical.ema50 !== null && technical.ema200 !== null) {
-    const shortAboveMid = technical.ema20! > technical.ema50!;
-    const midAboveLong = technical.ema50! > technical.ema200!;
+  if (technical.available && technical.emaFast !== null && technical.emaMid !== null && technical.emaSlow !== null) {
+    const { emaFastPeriod, emaMidPeriod, emaSlowPeriod, emaFast, emaMid, emaSlow } = technical;
+    const shortAboveMid = emaFast > emaMid;
+    const midAboveLong = emaMid > emaSlow;
     const alignment = (shortAboveMid ? 1 : -1) + (midAboveLong ? 1 : -1);
     const s = alignment * 40; // -80..80: ambas medias alineadas alcistas o bajistas
     // La nota tiene que decir lo que de verdad muestran las medias de hoy —
     // antes siempre decía "alcista" aunque el orden real fuera el
-    // contrario (EMA20 < EMA50 < EMA200, score -80), contradiciendo el dato.
+    // contrario, contradiciendo el dato.
     const alignmentNote =
       alignment === 2
-        ? "Medias cortas por encima de las largas (EMA20 > EMA50 > EMA200) → estructura de tendencia alcista."
+        ? `Medias cortas por encima de las largas (EMA${emaFastPeriod} > EMA${emaMidPeriod} > EMA${emaSlowPeriod}) → estructura de tendencia alcista.`
         : alignment === -2
-        ? "Medias cortas por debajo de las largas (EMA20 < EMA50 < EMA200) → estructura de tendencia bajista."
+        ? `Medias cortas por debajo de las largas (EMA${emaFastPeriod} < EMA${emaMidPeriod} < EMA${emaSlowPeriod}) → estructura de tendencia bajista.`
         : "Medias sin alineación clara (cruzadas entre sí) → estructura de tendencia indecisa/en transición.";
     tecnicoIndicators.push({
-      label: "Alineación de medias (EMA20/50/200)",
-      value: `EMA20 ${technical.ema20!.toFixed(2)} · EMA50 ${technical.ema50!.toFixed(2)} · EMA200 ${technical.ema200!.toFixed(2)}`,
+      label: `Alineación de medias (EMA${emaFastPeriod}/${emaMidPeriod}/${emaSlowPeriod})`,
+      value: `EMA${emaFastPeriod} ${emaFast.toFixed(2)} · EMA${emaMidPeriod} ${emaMid.toFixed(2)} · EMA${emaSlowPeriod} ${emaSlow.toFixed(2)}`,
       score: s,
       note: alignmentNote,
     });
@@ -192,14 +230,14 @@ export function computeBiasScore(snapshot: MarketSnapshot): BiasResult {
     // RSI centrado en 50; > 70 sobrecompra (riesgo de corrección), < 30 sobreventa (riesgo de rebote).
     const s = clamp((technical.rsi14! - 50) * 2.2, -100, 100);
     tecnicoIndicators.push({
-      label: "RSI (14, diario)",
+      label: "RSI (14)",
       value: technical.rsi14!.toFixed(1),
       score: s,
       note: "Momentum del precio; valores extremos (>70 / <30) señalan sobrecompra o sobreventa.",
     });
   }
 
-  // --- Módulo Flujos & Posicionamiento (peso 30%) ---
+  // --- Módulo Flujos & Posicionamiento (peso: ver TIMEFRAME_WEIGHTS) ---
   // Cubrimos la pata de futuros (COT) con datos públicos y gratuitos de la
   // CFTC. Los ETF (GLD) y las compras oficiales (PBoC) todavía no están
   // conectados — quedan para una siguiente vuelta.
@@ -243,7 +281,7 @@ export function computeBiasScore(snapshot: MarketSnapshot): BiasResult {
     });
   }
 
-  // --- Módulo Intermercado & Riesgo (peso 15%) ---
+  // --- Módulo Intermercado & Riesgo (peso: ver TIMEFRAME_WEIGHTS) ---
   // Cubrimos el VIX (gratis en FRED). El MOVE Index (volatilidad de bonos)
   // es propiedad de ICE y no tiene fuente gratuita — se muestra solo como
   // referencia visual en /mercado, sin entrar en este cálculo.
@@ -288,22 +326,13 @@ export function computeBiasScore(snapshot: MarketSnapshot): BiasResult {
     });
   }
 
-  // Pesos reajustados a petición de Esther (05/10/2026): con el peso
-  // original (Macro 40%), en entornos como el de estas semanas — inflación
-  // (CPI/Core PCE) todavía por encima del objetivo Y rendimientos reales
-  // subiendo por esa misma inflación — el módulo Macro salía casi neutro,
-  // porque sus propios indicadores se cancelaban entre sí (TIPS muy
-  // bajista vs. CPI/PCE "bullish por cobertura"), aunque de fondo ambas
-  // cosas sean la MISMA historia bajista para el oro. Con el 40% de peso
-  // eso aplastaba el total aunque Técnico y Flujos sí reflejaran la caída
-  // real del precio. Se baja Macro a 25% y se sube Técnico (20%→30%) y
-  // Flujos (25%→30%), que son los dos módulos que sí responden al
-  // movimiento de precio/posicionamiento actual; Riesgo se deja igual.
+  // Pesos según la temporalidad elegida — ver TIMEFRAME_WEIGHTS al
+  // principio del archivo para el razonamiento completo de cada esquema.
   const modules: BiasModule[] = [
     {
       key: "macro",
       name: "Macro & Tasas",
-      weight: 0.25,
+      weight: weights.macro,
       available: macroIndicators.length > 0,
       score: average(macroIndicators.map((i) => i.score)),
       unavailableReason: macroIndicators.length === 0 ? "Falta configurar FRED_API_KEY." : undefined,
@@ -312,7 +341,7 @@ export function computeBiasScore(snapshot: MarketSnapshot): BiasResult {
     {
       key: "flujos",
       name: "Flujos & Posicionamiento",
-      weight: 0.3,
+      weight: weights.flujos,
       available: flujosIndicators.length > 0,
       score: average(flujosIndicators.map((i) => i.score)),
       unavailableReason:
@@ -324,7 +353,7 @@ export function computeBiasScore(snapshot: MarketSnapshot): BiasResult {
     {
       key: "riesgo",
       name: "Intermercado & Riesgo",
-      weight: 0.15,
+      weight: weights.riesgo,
       available: riesgoIndicators.length > 0,
       score: average(riesgoIndicators.map((i) => i.score)),
       unavailableReason: riesgoIndicators.length === 0 ? "Falta configurar FRED_API_KEY (VIX)." : undefined,
@@ -333,7 +362,7 @@ export function computeBiasScore(snapshot: MarketSnapshot): BiasResult {
     {
       key: "tecnico",
       name: "Técnico & Microestructura",
-      weight: 0.3,
+      weight: weights.tecnico,
       available: tecnicoIndicators.length > 0,
       score: average(tecnicoIndicators.map((i) => i.score)),
       unavailableReason: tecnicoIndicators.length === 0 ? "Falta configurar TWELVE_DATA_API_KEY." : undefined,
