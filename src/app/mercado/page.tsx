@@ -6,6 +6,7 @@ import { buildMarketSnapshot } from "@/lib/vantax-data";
 import { computeBiasScore } from "@/lib/bias-score";
 import { fetchGoldNewsHeadlines } from "@/lib/telegram-news";
 import { SessionsClock } from "@/components/market/SessionsClock";
+import { BiasScorePanel } from "@/components/market/BiasScorePanel";
 import { MarketFlowMap } from "@/components/market/MarketFlowMap";
 import { TradingViewWidget } from "@/components/market/TradingViewWidget";
 import { AppNav } from "@/components/AppNav";
@@ -32,13 +33,6 @@ function fmtDateEs(raw: string): string {
 // Notas explicativas breves para categorías de datos cuyo nombre no es
 // autoexplicativo a simple vista.
 const GROUP_NOTES: Record<string, string> = {};
-
-function scoreColor(score: number | null) {
-  if (score === null) return "var(--text-dim)";
-  if (score > 8) return "var(--up)";
-  if (score < -8) return "var(--down)";
-  return "var(--text-muted)";
-}
 
 export default async function MercadoPage() {
   const session = await getServerSession(authOptions);
@@ -77,7 +71,15 @@ export default async function MercadoPage() {
   }
 
   const [snapshot, goldNews] = await Promise.all([buildMarketSnapshot(), fetchGoldNewsHeadlines()]);
-  const bias = computeBiasScore(snapshot);
+  // Un BiasResult por temporalidad — BiasScorePanel (cliente) guarda en
+  // estado cuál pestaña está activa y pinta el que corresponda, sin volver
+  // a pedir datos al navegar entre pestañas.
+  const biasByTimeframe = {
+    "15min": computeBiasScore(snapshot, "15min"),
+    "30min": computeBiasScore(snapshot, "30min"),
+    "1h": computeBiasScore(snapshot, "1h"),
+    "1day": computeBiasScore(snapshot, "1day"),
+  };
 
   const gauges = [
     snapshot.prices.gold && {
@@ -337,102 +339,7 @@ export default async function MercadoPage() {
         <MarketFlowMap />
       </div>
 
-      <div style={{ marginTop: 4, marginBottom: 10, fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.1em", color: "var(--text-dim)", textTransform: "uppercase" }}>
-        Bias Score — Motor de Scoring Algorítmico
-      </div>
-      <div className="panel" style={{ marginBottom: 24 }}>
-        <div className="bias-panel">
-          <div className="bias-score-box">
-            <div className="bias-score-num" style={{ color: scoreColor(bias.total) }}>
-              {bias.total !== null ? `${bias.total >= 0 ? "+" : ""}${bias.total.toFixed(0)}` : "—"}
-            </div>
-            <div className="bias-score-label">{bias.label}</div>
-            <div className="bias-score-formula">
-              Bias Score = promedio ponderado
-              <br />
-              de los módulos con datos disponibles
-              <br />
-              (pesos: 0.25 Macro + 0.30 Flujos
-              <br />
-              + 0.15 Riesgo + 0.30 Técnico)
-            </div>
-          </div>
-          <div className="bias-modules">
-            {bias.modules.map((mod) => (
-              <div key={mod.key}>
-                {mod.available && mod.score !== null ? (
-                  <div className="bias-mod-row">
-                    <div className="bias-mod-name">
-                      {mod.name}
-                      <span className="bias-mod-weight">peso {(mod.weight * 100).toFixed(0)}%</span>
-                    </div>
-                    <div className="bias-mod-track">
-                      <div className="bias-mod-zero" />
-                      <div
-                        className="bias-mod-fill"
-                        style={{
-                          [mod.score >= 0 ? "left" : "right"]: "50%",
-                          width: `${Math.abs(mod.score) / 2}%`,
-                          background: mod.score >= 0 ? "var(--up)" : "var(--down)",
-                        } as React.CSSProperties}
-                      />
-                    </div>
-                    <div className="bias-mod-score" style={{ color: mod.score >= 0 ? "var(--up)" : "var(--down)" }}>
-                      {mod.score >= 0 ? "+" : ""}
-                      {mod.score.toFixed(0)}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="bias-mod-row">
-                    <div className="bias-mod-name">
-                      {mod.name}
-                      <span className="bias-mod-weight">peso {(mod.weight * 100).toFixed(0)}%</span>
-                    </div>
-                    <div className="bias-mod-unavailable">No disponible — {mod.unavailableReason}</div>
-                  </div>
-                )}
-              </div>
-            ))}
-
-            <details className="indicators" style={{ marginTop: 6 }}>
-              <summary>Ver los indicadores subyacentes y cómo se calificó cada uno</summary>
-              <div className="table-scroll">
-                <table className="indicators-table">
-                  <thead>
-                    <tr>
-                      <th>Indicador</th>
-                      <th>Valor</th>
-                      <th>Score</th>
-                      <th>Nota</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {bias.modules
-                      .flatMap((m) => m.indicators)
-                      .map((ind, i) => (
-                        <tr key={i}>
-                          <td data-label="Indicador">{ind.label}</td>
-                          <td data-label="Valor" style={{ fontFamily: "var(--font-mono)", color: "var(--text-primary)" }}>{ind.value}</td>
-                          <td data-label="Score" style={{ color: ind.score === null ? "var(--text-dim)" : ind.score >= 0 ? "var(--up)" : "var(--down)" }}>
-                            {ind.score !== null ? `${ind.score >= 0 ? "+" : ""}${ind.score.toFixed(0)}` : "—"}
-                          </td>
-                          <td data-label="Nota" style={{ fontSize: 12 }}>{ind.note}</td>
-                        </tr>
-                      ))}
-                    {bias.modules.every((m) => m.indicators.length === 0) && (
-                      <tr>
-                        <td colSpan={4} style={{ color: "var(--text-dim)" }}>
-                          Todavía no hay datos — configura FRED_API_KEY y TWELVE_DATA_API_KEY en Render.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </details>
-          </div>
-        </div>
-      </div>
+      <BiasScorePanel results={biasByTimeframe} />
 
       <div className="panel-title" style={{ margin: "4px 0 10px 2px" }}>Sesiones de Mercado (hora real, UTC)</div>
       <SessionsClock />
