@@ -4,24 +4,35 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { GlobeVisual } from "@/components/GlobeVisual";
 
+// El icono es puramente decorativo (rediseño pedido por Esther 06/10/2026)
+// — título y descripción de cada tarjeta son exactamente el mismo texto que
+// ya había, no se ha cambiado ni añadido ningún contenido.
 const FEATURES = [
   {
+    icon: "⚡",
     title: "Bias Score en vivo",
     desc: "Un motor cuantitativo que pondera tasas reales, inflación, riesgo intermercado y técnico en un solo número, con cada indicador auditable.",
   },
   {
+    icon: "🧠",
     title: "Análisis diario con IA",
     desc: "Cada día generas tu lectura de XAU/USD y DXY, en el formato que prefieras: mensaje directo o detalle técnico completo.",
   },
   {
+    icon: "🌍",
     title: "Centro de mercado",
     desc: "Sesiones de Sydney, Tokio, Londres y Nueva York en vivo, calendario económico, gráfico de oro y feed de titulares, todo en un solo lugar.",
   },
   {
+    icon: "📡",
     title: "Datos reales, no relato",
     desc: "FRED y Twelve Data alimentan cada número. Cuando un dato no está disponible, el panel lo dice — nunca lo inventa.",
   },
 ];
+
+// Icono por plan, también decorativo — por posición (0,1,2…), para no
+// depender de ningún texto del plan que pueda cambiar desde /admin/plans.
+const PLAN_ICONS = ["🥈", "🥇", "💎", "👑"];
 
 export default async function HomePage() {
   const [session, plans] = await Promise.all([
@@ -83,9 +94,10 @@ export default async function HomePage() {
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16, marginBottom: 60 }}>
         {FEATURES.map((f) => (
-          <div key={f.title} className="panel">
-            <div style={{ fontFamily: "var(--font-display)", fontSize: 17, marginBottom: 8 }}>{f.title}</div>
-            <p style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.6, margin: 0 }}>{f.desc}</p>
+          <div key={f.title} className="feature-pretty">
+            <div className="f-ico">{f.icon}</div>
+            <div className="f-title">{f.title}</div>
+            <p className="f-desc">{f.desc}</p>
           </div>
         ))}
       </div>
@@ -94,12 +106,15 @@ export default async function HomePage() {
         Planes
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16 }}>
-        <div className="panel" style={{ borderColor: "var(--violet)", background: "var(--violet-dim)" }}>
-          <div style={{ fontFamily: "var(--font-display)", fontSize: 22 }}>Club 11k</div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 15, color: "var(--violet-bright)", margin: "10px 0", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-            Acceso gratuito
+        <div className="panel plan-pretty" style={{ "--accent": "var(--violet)" } as React.CSSProperties}>
+          <div className="plan-pretty-top">
+            <div className="f-ico">🎓</div>
+            <span className="tag neu" style={{ color: "var(--violet-bright)", background: "var(--violet-dim)", borderColor: "var(--violet)" }}>
+              Acceso gratuito
+            </span>
           </div>
-          <p style={{ fontSize: 13, color: "var(--text-muted)", minHeight: 40 }}>
+          <div style={{ fontFamily: "var(--font-display)", fontSize: 22, marginTop: 12 }}>Club 11k</div>
+          <p style={{ fontSize: 13, color: "var(--text-muted)", minHeight: 40, marginTop: 10 }}>
             Si formas parte de la comunidad de Club 11k, entra a nuestro curso gratuito de Telegram para
             conseguir tu acceso sin coste.
           </p>
@@ -115,17 +130,20 @@ export default async function HomePage() {
             Acceso gratuito para miembros del Club 11k
           </a>
         </div>
-        {plans.map((plan) => (
-          <div key={plan.id} className="panel">
-            <div style={{ fontFamily: "var(--font-display)", fontSize: 22 }}>{plan.name}</div>
+        {plans.map((plan, i) => (
+          <div key={plan.id} className="panel plan-pretty" style={{ "--accent": "var(--gold-bright)" } as React.CSSProperties}>
+            <div className="plan-pretty-top">
+              <div className="f-ico">{PLAN_ICONS[i % PLAN_ICONS.length]}</div>
+            </div>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 22, marginTop: 12 }}>{plan.name}</div>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 26, color: "var(--gold-bright)", margin: "10px 0" }}>
               {(plan.priceCents / 100).toFixed(2)}€<span style={{ fontSize: 13, color: "var(--text-dim)" }}>/mes</span>
             </div>
             <p style={{ fontSize: 13, color: "var(--text-muted)", minHeight: 40 }}>{plan.description}</p>
-            <p style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--text-dim)", marginBottom: 16 }}>
+            <p className="tag neu" style={{ display: "inline-block", marginBottom: 16 }}>
               {plan.monthlyQuota} análisis / mes
             </p>
-            <Link href={session?.user ? "/dashboard" : "/signup"} className="btn btn-primary">
+            <Link href={session?.user ? "/dashboard" : "/signup"} className="btn btn-primary" style={{ display: "block", textAlign: "center" }}>
               Empezar
             </Link>
           </div>
@@ -144,4 +162,5 @@ export default async function HomePage() {
     </div>
   );
 }
+
 
