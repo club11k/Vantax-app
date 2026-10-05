@@ -44,8 +44,9 @@ export default async function DashboardPage() {
           <h1 style={{ fontSize: 26, margin: "4px 0 0" }}>Hola, {user?.name || user?.email}</h1>
         </div>
         <div className="btn-row">
-          <AppNav isAdmin={user?.role === "ADMIN"} active="dashboard" />
-          {hasActivePlan && <ManageSubscriptionButton />}
+          <AppNav isAdmin={user?.role === "ADMIN"} active="dashboard">
+            {hasActivePlan && <ManageSubscriptionButton />}
+          </AppNav>
         </div>
       </div>
 
@@ -149,4 +150,5 @@ export default async function DashboardPage() {
     </div>
   );
 }
+
 
