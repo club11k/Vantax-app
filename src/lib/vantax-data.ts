@@ -79,16 +79,18 @@ export type PriceBar = { open: number; high: number; low: number; close: number 
 // TWELVE_DATA_API_KEY configurada (tier gratuito alcanza para uso moderado).
 // Si no está configurada, el módulo técnico queda marcado como no
 // disponible, igual que en el panel anterior.
-// Nota sobre "desfase": son velas DIARIAS, así que el EMA20/50/200 solo
-// cambia de verdad cuando cierra la vela del día — eso es intencional (mide
-// estructura de tendencia diaria, no precio en vivo). Lo que sí se ha
-// acortado es la caché (antes 1h) para que en cuanto Twelve Data actualice
-// la vela del día en curso, se refleje antes en Vantax — alineado con el
-// revalidate de 5 min que ya tiene la página /mercado.
+// Nota sobre "desfase": en velas DIARIAS el EMA20/50/200 solo cambia de
+// verdad cuando cierra la vela del día — eso es intencional (mide
+// estructura de tendencia diaria, no precio en vivo). Desde que se añadió
+// el sesgo por temporalidad (15min/30min/1h), esta misma función también
+// se usa para pedir esas velas intradía, con su propia caché más corta
+// (ver TIMEFRAME_FETCH_CONFIG más abajo) para que sí se sientan "en vivo".
+export type TwelveDataInterval = "15min" | "30min" | "1h" | "1day";
 async function fetchTwelveDataSeries(
   symbol: string,
-  interval: "1day" = "1day",
-  outputsize = 210
+  interval: TwelveDataInterval = "1day",
+  outputsize = 210,
+  revalidateSeconds = 300
 ): Promise<PriceBar[] | null> {
   const apiKey = process.env.TWELVE_DATA_API_KEY;
   if (!apiKey) return null;
@@ -97,7 +99,7 @@ async function fetchTwelveDataSeries(
       `${TWELVE_DATA_BASE}/time_series?symbol=${encodeURIComponent(
         symbol
       )}&interval=${interval}&outputsize=${outputsize}&apikey=${apiKey}`,
-      { next: { revalidate: 300 } }
+      { next: { revalidate: revalidateSeconds } }
     );
     if (!res.ok) return null;
     const json = await res.json();
@@ -586,6 +588,78 @@ function rsi(values: number[], period = 14): number | null {
   return 100 - 100 / (1 + rs);
 }
 
+// --- Sesgo por temporalidad (pestañas 15min/30min/1h/Diario de /mercado) ---
+// Pedido por Esther (05/10/2026): poder ver el sesgo calculado con
+// parámetros realistas para cada temporalidad en la que se opera el oro,
+// no solo el diario de toda la vida. "1day" usa los mismos periodos
+// 20/50/200 que ya tenía el panel original (así la pestaña Diario da
+// exactamente los mismos números de siempre). M15/M30 usan el set rápido
+// 9/21/50, el más habitual para scalping/intradía corto en oro — un
+// EMA200 en M15 representaría solo ~50 horas de precio, lo que no se lee
+// como "tendencia de fondo" para nadie que opere en esa temporalidad. H1
+// se queda con el set clásico 20/50/200 (igual que Diario), porque en H1
+// ese EMA200 sí representa un tramo de varios días, un uso habitual entre
+// quienes operan intradía pero con visión de varias sesiones.
+export type IntradayTimeframe = "15min" | "30min" | "1h";
+export type TimeframeKey = IntradayTimeframe | "1day";
+
+const TIMEFRAME_EMA_PERIODS: Record<TimeframeKey, { fast: number; mid: number; slow: number }> = {
+  "15min": { fast: 9, mid: 21, slow: 50 },
+  "30min": { fast: 9, mid: 21, slow: 50 },
+  "1h": { fast: 20, mid: 50, slow: 200 },
+  "1day": { fast: 20, mid: 50, slow: 200 },
+};
+
+// outputsize: periodo lento + margen suficiente para que la EMA converja
+// (no solo el mínimo justo) · revalidateSeconds: caché más corta cuanto
+// más corta la temporalidad, para que de verdad se sienta "en vivo" al
+// operar scalping/intradía.
+const TIMEFRAME_FETCH_CONFIG: Record<IntradayTimeframe, { outputsize: number; revalidateSeconds: number }> = {
+  "15min": { outputsize: 150, revalidateSeconds: 60 },
+  "30min": { outputsize: 150, revalidateSeconds: 120 },
+  "1h": { outputsize: 300, revalidateSeconds: 180 },
+};
+
+export type TimeframeTechnical = {
+  available: boolean;
+  emaFastPeriod: number;
+  emaMidPeriod: number;
+  emaSlowPeriod: number;
+  emaFast: number | null;
+  emaMid: number | null;
+  emaSlow: number | null;
+  rsi14: number | null;
+};
+
+function computeTimeframeTechnical(closes: number[] | null, timeframe: TimeframeKey): TimeframeTechnical {
+  const periods = TIMEFRAME_EMA_PERIODS[timeframe];
+  if (!closes) {
+    return {
+      available: false,
+      emaFastPeriod: periods.fast,
+      emaMidPeriod: periods.mid,
+      emaSlowPeriod: periods.slow,
+      emaFast: null,
+      emaMid: null,
+      emaSlow: null,
+      rsi14: null,
+    };
+  }
+  const emaFast = ema(closes, periods.fast);
+  const emaMid = ema(closes, periods.mid);
+  const emaSlow = ema(closes, periods.slow);
+  return {
+    available: emaFast !== null && emaMid !== null && emaSlow !== null,
+    emaFastPeriod: periods.fast,
+    emaMidPeriod: periods.mid,
+    emaSlowPeriod: periods.slow,
+    emaFast,
+    emaMid,
+    emaSlow,
+    rsi14: rsi(closes, 14),
+  };
+}
+
 type FredValue = { date: string; value: number } | null;
 
 export type MarketSnapshot = {
@@ -651,6 +725,13 @@ export type MarketSnapshot = {
     rsi14: number | null;
     levels: TechnicalLevels | null;
   };
+  // Mismo dato técnico que arriba, pero calculado también para 15min/30min/
+  // 1h con periodos de EMA propios de cada temporalidad — alimenta las
+  // pestañas de sesgo por temporalidad en /mercado. La entrada "1day" usa
+  // los mismos periodos (20/50/200) que `technical` de arriba, así que
+  // technicalByTimeframe["1day"] da los mismos números, solo que en el
+  // formato genérico fast/mid/slow.
+  technicalByTimeframe: Record<TimeframeKey, TimeframeTechnical>;
   risk: {
     vix: FredValue;
     hyOas: FredValue;
@@ -725,6 +806,9 @@ export async function buildMarketSnapshot(): Promise<MarketSnapshot> {
     silver,
     wti,
     goldSeries,
+    goldSeries15min,
+    goldSeries30min,
+    goldSeries1h,
     cotGoldManagedMoney,
     cotGoldMicro,
     etfGoldHoldings,
@@ -775,12 +859,39 @@ export async function buildMarketSnapshot(): Promise<MarketSnapshot> {
     // rompe nada). No se ha podido probar en vivo desde este entorno.
     fetchTwelveDataQuote("WTI/USD"),
     fetchTwelveDataSeries("XAU/USD"),
+    // Series intradía para las pestañas de sesgo por temporalidad
+    // (15min/30min/1h) de /mercado — mismo endpoint, solo cambia el
+    // intervalo/outputsize/caché (ver TIMEFRAME_FETCH_CONFIG).
+    fetchTwelveDataSeries(
+      "XAU/USD",
+      "15min",
+      TIMEFRAME_FETCH_CONFIG["15min"].outputsize,
+      TIMEFRAME_FETCH_CONFIG["15min"].revalidateSeconds
+    ),
+    fetchTwelveDataSeries(
+      "XAU/USD",
+      "30min",
+      TIMEFRAME_FETCH_CONFIG["30min"].outputsize,
+      TIMEFRAME_FETCH_CONFIG["30min"].revalidateSeconds
+    ),
+    fetchTwelveDataSeries(
+      "XAU/USD",
+      "1h",
+      TIMEFRAME_FETCH_CONFIG["1h"].outputsize,
+      TIMEFRAME_FETCH_CONFIG["1h"].revalidateSeconds
+    ),
     fetchCotGoldManagedMoney(),
     fetchCotGoldMicro(),
     fetchGldHoldings(),
   ]);
 
   const goldCloses = goldSeries?.map((b) => b.close) ?? null;
+  const technicalByTimeframe: MarketSnapshot["technicalByTimeframe"] = {
+    "15min": computeTimeframeTechnical(goldSeries15min?.map((b) => b.close) ?? null, "15min"),
+    "30min": computeTimeframeTechnical(goldSeries30min?.map((b) => b.close) ?? null, "30min"),
+    "1h": computeTimeframeTechnical(goldSeries1h?.map((b) => b.close) ?? null, "1h"),
+    "1day": computeTimeframeTechnical(goldCloses, "1day"),
+  };
   const currentGoldPrice = gold?.price ?? goldCloses?.[goldCloses.length - 1] ?? null;
   const technical =
     goldSeries && goldCloses && currentGoldPrice !== null
@@ -823,6 +934,7 @@ export async function buildMarketSnapshot(): Promise<MarketSnapshot> {
     activity: { retailSalesMoM, gdpRealYoY },
     prices: { gold, dxy, silver, wti },
     technical,
+    technicalByTimeframe,
     risk: { vix, hyOas },
     flows: { cotGoldManagedMoney, cotGoldMicro, etfGoldHoldings },
   };
