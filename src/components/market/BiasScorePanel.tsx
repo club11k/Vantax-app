@@ -15,6 +15,13 @@ import { TIMEFRAME_LABEL } from "@/lib/bias-score";
 // computeBiasScore una vez por temporalidad) — aquí solo se guarda en
 // estado cuál pestaña está activa y se pinta ese resultado; no hay ningún
 // fetch ni recálculo en el navegador.
+//
+// isAdmin (pedido por Esther, 06/10/2026): los clientes solo ven el número
+// final y la etiqueta — no la fórmula de pesos, el "peso %" de cada módulo
+// ni el desplegable de indicadores subyacentes, porque con eso (pesos +
+// cómo se calificó cada indicador) se podría reconstruir la fórmula
+// completa y copiarla. Los admin siguen viendo todo, por si hay que
+// revisar algo.
 
 const TIMEFRAME_ORDER: TimeframeKey[] = ["15min", "30min", "1h", "1day"];
 
@@ -32,7 +39,7 @@ function scoreColor(score: number | null) {
   return "var(--text-muted)";
 }
 
-export function BiasScorePanel({ results }: { results: Record<TimeframeKey, BiasResult> }) {
+export function BiasScorePanel({ results, isAdmin = false }: { results: Record<TimeframeKey, BiasResult>; isAdmin?: boolean }) {
   const [active, setActive] = useState<TimeframeKey>("1day");
   const bias = results[active];
 
@@ -79,13 +86,15 @@ export function BiasScorePanel({ results }: { results: Record<TimeframeKey, Bias
               {bias.total !== null ? `${bias.total >= 0 ? "+" : ""}${bias.total.toFixed(0)}` : "—"}
             </div>
             <div className="bias-score-label">{bias.label}</div>
-            <div className="bias-score-formula">
-              Bias Score ({TIMEFRAME_LABEL[active]}) = promedio ponderado
-              <br />
-              de los módulos con datos disponibles
-              <br />
-              (pesos: {formulaText})
-            </div>
+            {isAdmin && (
+              <div className="bias-score-formula">
+                Bias Score ({TIMEFRAME_LABEL[active]}) = promedio ponderado
+                <br />
+                de los módulos con datos disponibles
+                <br />
+                (pesos: {formulaText})
+              </div>
+            )}
           </div>
           <div className="bias-modules">
             {bias.modules.map((mod) => (
@@ -94,7 +103,7 @@ export function BiasScorePanel({ results }: { results: Record<TimeframeKey, Bias
                   <div className="bias-mod-row">
                     <div className="bias-mod-name">
                       {mod.name}
-                      <span className="bias-mod-weight">peso {(mod.weight * 100).toFixed(0)}%</span>
+                      {isAdmin && <span className="bias-mod-weight">peso {(mod.weight * 100).toFixed(0)}%</span>}
                     </div>
                     <div className="bias-mod-track">
                       <div className="bias-mod-zero" />
@@ -116,7 +125,7 @@ export function BiasScorePanel({ results }: { results: Record<TimeframeKey, Bias
                   <div className="bias-mod-row">
                     <div className="bias-mod-name">
                       {mod.name}
-                      <span className="bias-mod-weight">peso {(mod.weight * 100).toFixed(0)}%</span>
+                      {isAdmin && <span className="bias-mod-weight">peso {(mod.weight * 100).toFixed(0)}%</span>}
                     </div>
                     <div className="bias-mod-unavailable">No disponible — {mod.unavailableReason}</div>
                   </div>
@@ -124,42 +133,44 @@ export function BiasScorePanel({ results }: { results: Record<TimeframeKey, Bias
               </div>
             ))}
 
-            <details className="indicators" style={{ marginTop: 6 }}>
-              <summary>Ver los indicadores subyacentes y cómo se calificó cada uno</summary>
-              <div className="table-scroll">
-                <table className="indicators-table">
-                  <thead>
-                    <tr>
-                      <th>Indicador</th>
-                      <th>Valor</th>
-                      <th>Score</th>
-                      <th>Nota</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {bias.modules
-                      .flatMap((m) => m.indicators)
-                      .map((ind, i) => (
-                        <tr key={i}>
-                          <td data-label="Indicador">{ind.label}</td>
-                          <td data-label="Valor" style={{ fontFamily: "var(--font-mono)", color: "var(--text-primary)" }}>{ind.value}</td>
-                          <td data-label="Score" style={{ color: ind.score === null ? "var(--text-dim)" : ind.score >= 0 ? "var(--up)" : "var(--down)" }}>
-                            {ind.score !== null ? `${ind.score >= 0 ? "+" : ""}${ind.score.toFixed(0)}` : "—"}
-                          </td>
-                          <td data-label="Nota" style={{ fontSize: 12 }}>{ind.note}</td>
-                        </tr>
-                      ))}
-                    {bias.modules.every((m) => m.indicators.length === 0) && (
+            {isAdmin && (
+              <details className="indicators" style={{ marginTop: 6 }}>
+                <summary>Ver los indicadores subyacentes y cómo se calificó cada uno</summary>
+                <div className="table-scroll">
+                  <table className="indicators-table">
+                    <thead>
                       <tr>
-                        <td colSpan={4} style={{ color: "var(--text-dim)" }}>
-                          Todavía no hay datos — configura FRED_API_KEY y TWELVE_DATA_API_KEY en Render.
-                        </td>
+                        <th>Indicador</th>
+                        <th>Valor</th>
+                        <th>Score</th>
+                        <th>Nota</th>
                       </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </details>
+                    </thead>
+                    <tbody>
+                      {bias.modules
+                        .flatMap((m) => m.indicators)
+                        .map((ind, i) => (
+                          <tr key={i}>
+                            <td data-label="Indicador">{ind.label}</td>
+                            <td data-label="Valor" style={{ fontFamily: "var(--font-mono)", color: "var(--text-primary)" }}>{ind.value}</td>
+                            <td data-label="Score" style={{ color: ind.score === null ? "var(--text-dim)" : ind.score >= 0 ? "var(--up)" : "var(--down)" }}>
+                              {ind.score !== null ? `${ind.score >= 0 ? "+" : ""}${ind.score.toFixed(0)}` : "—"}
+                            </td>
+                            <td data-label="Nota" style={{ fontSize: 12 }}>{ind.note}</td>
+                          </tr>
+                        ))}
+                      {bias.modules.every((m) => m.indicators.length === 0) && (
+                        <tr>
+                          <td colSpan={4} style={{ color: "var(--text-dim)" }}>
+                            Todavía no hay datos — configura FRED_API_KEY y TWELVE_DATA_API_KEY en Render.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
+            )}
           </div>
         </div>
       </div>
