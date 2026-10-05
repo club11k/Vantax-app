@@ -170,6 +170,23 @@ td { padding: 9px 10px; border-bottom: 1px solid var(--line); color: var(--text-
 .bias-mod-score { font-family: var(--font-mono); font-size: 11.5px; text-align: right; font-variant-numeric: tabular-nums; }
 .bias-mod-unavailable { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-dim); grid-column: 1 / -1; }
 
+/* Pestañas de temporalidad (15min/30min/1h/Diario) del Bias Score. */
+.bias-tf-tabs { display: flex; gap: 4px; background: var(--bg-panel-raised); border: 1px solid var(--line); border-radius: 7px; padding: 3px; }
+.bias-tf-tab {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.bias-tf-tab:hover { color: var(--text-primary); }
+.bias-tf-tab.active { background: var(--violet-dim); color: var(--violet-bright); font-weight: 600; }
+
 details.indicators summary { cursor: pointer; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--violet-bright); list-style: none; }
 details.indicators summary::-webkit-details-marker { display: none; }
 details.indicators summary::before { content: '▸ '; }
