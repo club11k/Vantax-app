@@ -339,7 +339,7 @@ export default async function MercadoPage() {
         <MarketFlowMap />
       </div>
 
-      <BiasScorePanel results={biasByTimeframe} />
+      <BiasScorePanel results={biasByTimeframe} isAdmin={isAdmin} />
 
       <div className="panel-title" style={{ margin: "4px 0 10px 2px" }}>Sesiones de Mercado (hora real, UTC)</div>
       <SessionsClock />
