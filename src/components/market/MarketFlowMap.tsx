@@ -12,6 +12,90 @@
 // Bias Score y en el mapa de fuentes, más abajo en esta misma página).
 
 import { useEffect, useRef, useState } from "react";
+import type { GoldNewsHeadline } from "@/lib/telegram-news";
+
+// Mapa reactivo a noticias (pedido por Esther 06/10/2026): si el titular más
+// reciente del feed real (@club11k_news, el mismo que ya se muestra abajo en
+// "Feed de Titulares") menciona a alguna de estas zonas, se marca esa zona
+// en el mapa con un punto rojo pulsante y se muestra el titular REAL junto
+// al mapa — nunca se inventa una noticia ni una magnitud, solo se resalta
+// dónde está pasando algo según el texto que ya teníamos.
+type NewsRegion = { key: string; label: string; lat: number; lon: number; keywords: string[] };
+
+const NEWS_REGIONS: NewsRegion[] = [
+  {
+    key: "us",
+    label: "Estados Unidos",
+    lat: 39,
+    lon: -95,
+    keywords: ["trump", "casa blanca", "estados unidos", "eeuu", "ee.uu", "ee uu", " fed ", "la fed", "powell", "white house", "washington"],
+  },
+  {
+    key: "eu",
+    label: "Eurozona",
+    lat: 50.1,
+    lon: 9,
+    keywords: ["bce", "lagarde", "eurozona", "zona euro", "banco central europeo"],
+  },
+  {
+    key: "uk",
+    label: "Reino Unido",
+    lat: 52,
+    lon: -1,
+    keywords: ["boe ", "bank of england", "reino unido", "libra esterlina"],
+  },
+  {
+    key: "china",
+    label: "China",
+    lat: 35,
+    lon: 105,
+    keywords: ["china", "pboc", "pekin", "beijing", "yuan", "renminbi"],
+  },
+  {
+    key: "japan",
+    label: "Japón",
+    lat: 36,
+    lon: 138,
+    keywords: ["japon", "boj", "tokio", "yen"],
+  },
+  {
+    key: "india",
+    label: "India",
+    lat: 22,
+    lon: 79,
+    keywords: ["india", "rbi", "bombay", "rupia"],
+  },
+];
+
+function normalizeText(s: string): string {
+  return ` ${s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()} `;
+}
+
+// Recorre los titulares del más reciente al más antiguo (ese es el orden en
+// el que ya llegan de fetchGoldNewsHeadlines) y devuelve la primera región
+// cuyas palabras clave aparecen en el texto real del titular.
+function matchNewsRegion(headlines: GoldNewsHeadline[] | undefined): { region: NewsRegion; headline: GoldNewsHeadline } | null {
+  if (!headlines) return null;
+  for (const h of headlines) {
+    const text = normalizeText(h.text);
+    for (const region of NEWS_REGIONS) {
+      if (region.keywords.some((kw) => text.includes(normalizeText(kw).trim()))) {
+        return { region, headline: h };
+      }
+    }
+  }
+  return null;
+}
+
+function fmtNewsAge(dateIso: string | null): string {
+  if (!dateIso) return "";
+  const diffMin = Math.round((Date.now() - new Date(dateIso).getTime()) / 60000);
+  if (diffMin < 1) return "justo ahora";
+  if (diffMin < 60) return `hace ${diffMin} min`;
+  const diffH = Math.round(diffMin / 60);
+  if (diffH < 24) return `hace ${diffH} h`;
+  return `hace ${Math.round(diffH / 24)} d`;
+}
 
 // Polígonos aproximados de los continentes, solo para la textura de puntos de fondo.
 const CONTINENTS: [number, number][][] = [
@@ -96,9 +180,11 @@ function arcPath(a: { x: number; y: number }, b: { x: number; y: number }) {
   return `M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`;
 }
 
-export function MarketFlowMap() {
+export function MarketFlowMap({ news }: { news?: GoldNewsHeadline[] }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [animate, setAnimate] = useState(false);
+  const newsAlert = matchNewsRegion(news);
+  const alertPoint = newsAlert ? project(newsAlert.region.lat, newsAlert.region.lon) : null;
 
   useEffect(() => {
     setAnimate(!window.matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -217,17 +303,59 @@ export function MarketFlowMap() {
               </g>
             ))}
           </g>
+          {alertPoint && (
+            <g>
+              <circle cx={alertPoint[0]} cy={alertPoint[1]} r={5} fill="var(--down)">
+                {animate && (
+                  <>
+                    <animate attributeName="r" values="5;18;5" dur="2.2s" repeatCount="indefinite" />
+                    <animate attributeName="opacity" values="0.9;0;0.9" dur="2.2s" repeatCount="indefinite" />
+                  </>
+                )}
+              </circle>
+              <circle cx={alertPoint[0]} cy={alertPoint[1]} r={5} fill="var(--down)" />
+            </g>
+          )}
         </svg>
       </div>
       <div style={{ display: "flex", gap: 18, marginTop: 10, flexWrap: "wrap", fontSize: 11, color: "var(--text-muted)" }}>
         <span><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: "var(--gold-bright)", marginRight: 6 }} />Compras oficiales de oro (bancos centrales)</span>
         <span><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: "var(--violet)", marginRight: 6 }} />Transmisión de política monetaria</span>
         <span><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: "var(--down)", marginRight: 6 }} />Aversión al riesgo / refugio</span>
+        {newsAlert && (
+          <span><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: "var(--down)", marginRight: 6 }} />Zona con noticia activa ahora mismo</span>
+        )}
       </div>
+
+      {/*
+        Aviso reactivo: solo aparece si alguno de los titulares reales del
+        feed de Telegram (los mismos que ya se listan abajo en "Feed de
+        Titulares") menciona una de las zonas vigiladas — el texto, la URL y
+        la fecha son exactamente los que ya trae ese titular, no se inventa
+        nada aquí.
+      */}
+      {newsAlert && (
+        <a
+          href={newsAlert.headline.url}
+          target="_blank"
+          rel="noreferrer"
+          className="map-alert"
+        >
+          <div className="map-alert-tag">
+            <span className="map-alert-pulse" />
+            Última hora · {newsAlert.region.label}
+            {newsAlert.headline.dateIso && <span style={{ color: "var(--text-dim)" }}> · {fmtNewsAge(newsAlert.headline.dateIso)}</span>}
+          </div>
+          <div className="map-alert-headline">{newsAlert.headline.text}</div>
+        </a>
+      )}
+
       <p style={{ fontFamily: "var(--font-mono)", fontSize: 9.5, color: "var(--text-dim)", marginTop: 10, lineHeight: 1.6 }}>
         Diagrama conceptual de las relaciones entre plazas financieras — no representa magnitudes de flujo en tiempo real
-        (los datos reales de flujo están en el Bias Score y el mapa de fuentes más abajo).
+        (los datos reales de flujo están en el Bias Score y el mapa de fuentes más abajo). El aviso de noticia (si aparece)
+        sí es real: viene del mismo feed de Telegram del Feed de Titulares, resaltando la zona que mencione.
       </p>
     </div>
   );
 }
+
