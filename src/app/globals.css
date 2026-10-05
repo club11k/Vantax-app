@@ -1,9 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
 
 :root {
   --bg-void: #0A0714;
   --bg-panel: #130F20;
   --bg-panel-raised: #18132A;
+  --bg-panel-hover: #1D1730;
   --line: #251D3A;
   --line-bright: #362A50;
   /* Nota: se mantienen los nombres --gold/--gold-bright para no tener que tocar
@@ -18,9 +19,14 @@
   --text-dim: #5C5678;
   --up: #63A88C;
   --down: #C15A82;
-  --font-display: 'Inter', sans-serif;
-  --font-body: 'Inter', sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  /* Rediseño visual (pedido por Esther, 06/10/2026): fuera Inter + JetBrains
+     Mono (le parecía "genérico, como hecho con IA") — Space Grotesk para
+     títulos/marca (más carácter, look fintech), Manrope para texto de
+     cuerpo, IBM Plex Mono para datos/etiquetas en mayúsculas. Los colores NO
+     se tocan, solo tipografía — toda la información sigue siendo la misma. */
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-body: 'Manrope', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
 }
 
 * { box-sizing: border-box; }
@@ -53,6 +59,45 @@ img, svg, canvas, iframe { max-width: 100%; }
 .header-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
 .btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
 
+/* Menú de navegación desplegable (sustituye a la fila de botones sueltos
+   que había antes — pedido por Esther 06/10/2026, "que todos los botones
+   esten en el desplegable"). */
+.menu-wrap { position: relative; }
+.menu-btn {
+  display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 12.5px;
+  background: var(--bg-panel-raised); border: 1px solid var(--line-bright); color: var(--text-primary);
+  padding: 9px 14px; border-radius: 8px; cursor: pointer; transition: border-color 0.15s, background 0.15s;
+}
+.menu-btn:hover { border-color: var(--violet); }
+.menu-btn .chevron { transition: transform 0.18s ease; color: var(--text-dim); }
+.menu-btn[aria-expanded="true"] .chevron { transform: rotate(180deg); }
+.menu-btn[aria-expanded="true"] { border-color: var(--violet); background: var(--violet-dim); }
+.menu-dropdown {
+  position: absolute; top: calc(100% + 8px); right: 0; width: 270px; max-height: 80vh; overflow-y: auto;
+  background: var(--bg-panel-raised); border: 1px solid var(--line-bright); border-radius: 12px; padding: 6px;
+  box-shadow: 0 16px 40px rgba(0,0,0,0.5); opacity: 0; visibility: hidden; transform: translateY(-6px);
+  transition: opacity 0.15s, transform 0.15s, visibility 0.15s; z-index: 40;
+}
+.menu-dropdown.open { opacity: 1; visibility: visible; transform: translateY(0); }
+.menu-section-label { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-dim); padding: 9px 12px 5px; }
+.menu-sep { height: 1px; background: var(--line); margin: 4px 6px; }
+.menu-item {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; cursor: pointer;
+  font-size: 13.5px; color: var(--text-primary); text-decoration: none; transition: background 0.12s;
+}
+.menu-item:hover { background: var(--bg-panel-hover); }
+.menu-item.active { background: var(--violet-dim); color: var(--violet-bright); }
+.menu-item .ico {
+  width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0; display: flex; align-items: center;
+  justify-content: center; background: var(--bg-panel); border: 1px solid var(--line); font-size: 14px;
+}
+.menu-item .label { font-weight: 600; line-height: 1.2; }
+.menu-item .desc { font-size: 10.5px; color: var(--text-dim); font-family: var(--font-mono); }
+.menu-item-sub { padding: 8px 12px 8px 46px; font-size: 12.5px; }
+.menu-item-sub .label { font-weight: 500; }
+.menu-item-slot { padding: 4px 8px 6px; }
+.menu-item-slot .btn, .menu-item-slot button { width: 100%; }
+
 @media (max-width: 720px) {
   .container { padding: 18px 14px 60px; }
   h1 { font-size: 22px !important; }
@@ -66,6 +111,35 @@ img, svg, canvas, iframe { max-width: 100%; }
   border-radius: 8px;
   padding: 22px 24px;
 }
+
+/* Mapa reactivo a noticias (MarketFlowMap) — aviso que aparece solo cuando
+   un titular real del feed de Telegram menciona una de las zonas vigiladas.
+   Pedido por Esther 06/10/2026. */
+.map-alert {
+  display: block; margin-top: 12px; background: var(--bg-void); border: 1px solid var(--down); border-radius: 8px;
+  padding: 11px 14px; text-decoration: none; animation: map-alert-in 0.4s ease;
+}
+@keyframes map-alert-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+.map-alert-tag { display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 10px; color: var(--down); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+.map-alert-pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--down); animation: map-alert-blink 1.4s infinite; }
+@keyframes map-alert-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+.map-alert-headline { font-family: var(--font-body); font-size: 13px; line-height: 1.45; color: var(--text-primary); white-space: pre-line; }
+
+/* Página de inicio — tarjetas de "qué puedes hacer" y de planes, rediseñadas
+   con icono + algo más de carácter visual (pedido por Esther 06/10/2026).
+   El texto de cada una (título, descripción, nombre y precio del plan) es
+   exactamente el mismo que antes, solo cambia el marco alrededor. */
+.feature-pretty { background: var(--bg-panel-raised); border: 1px solid var(--line); border-radius: 12px; padding: 18px; transition: border-color 0.15s, transform 0.15s; }
+.feature-pretty:hover { transform: translateY(-2px); border-color: var(--violet); }
+.feature-pretty .f-ico { width: 34px; height: 34px; border-radius: 9px; background: var(--violet-dim); display: flex; align-items: center; justify-content: center; font-size: 16px; margin-bottom: 10px; }
+.feature-pretty .f-title { font-family: var(--font-display); font-size: 14.5px; font-weight: 700; margin-bottom: 6px; }
+.feature-pretty .f-desc { font-size: 12px; color: var(--text-muted); line-height: 1.55; margin: 0; }
+
+.plan-pretty { position: relative; overflow: hidden; transition: transform 0.15s, border-color 0.15s; }
+.plan-pretty:hover { transform: translateY(-2px); border-color: var(--line-bright); }
+.plan-pretty::before { content: ""; position: absolute; left: 0; top: 0; right: 0; height: 3px; background: var(--accent, var(--violet)); }
+.plan-pretty-top { display: flex; align-items: center; justify-content: space-between; }
+.plan-pretty .f-ico { margin-bottom: 0; }
 
 .btn {
   display: inline-flex; align-items: center; justify-content: center;
@@ -119,7 +193,15 @@ td { padding: 9px 10px; border-bottom: 1px solid var(--line); color: var(--text-
 /* Sesiones */
 .sessions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 @media (max-width: 900px) { .sessions { grid-template-columns: repeat(2, 1fr); } }
-.session-card { background: var(--bg-panel); border: 1px solid var(--line); border-radius: 6px; padding: 13px 15px; }
+.session-card { background: var(--bg-panel); border: 1px solid var(--line); border-radius: 6px; padding: 13px 15px; text-align: center; transition: border-color 0.15s ease; }
+.session-card.is-open { border-color: rgba(99,168,140,0.35); }
+.clock-face { position: relative; width: 72px; height: 72px; margin: 0 auto 10px; }
+.clock-ring { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 50%; }
+.clock-hand { position: absolute; left: 50%; bottom: 50%; transform-origin: bottom center; border-radius: 2px; }
+.clock-hand.hour { width: 2.5px; height: 18px; margin-left: -1.25px; background: var(--text-primary); }
+.clock-hand.minute { width: 1.5px; height: 24px; margin-left: -0.75px; background: var(--violet-bright); }
+.clock-center { position: absolute; left: 50%; top: 50%; width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px; border-radius: 50%; background: var(--violet-bright); }
+.clock-tick { position: absolute; width: 1.5px; height: 4px; background: var(--line-bright); left: 50%; top: 2px; margin-left: -0.75px; transform-origin: 0.75px 34px; }
 .session-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .session-name { font-family: var(--font-body); font-size: 12.5px; font-weight: 600; }
 .session-badge { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; }
@@ -134,21 +216,43 @@ td { padding: 9px 10px; border-bottom: 1px solid var(--line); color: var(--text-
 .spot-status-desc { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); margin-top: 3px; line-height: 1.5; }
 .source-group-title { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--violet); margin: 0 0 8px 2px; }
 .source-group-note { font-family: var(--font-body); font-size: 12px; color: var(--text-muted); line-height: 1.5; margin: -3px 0 10px 2px; max-width: 720px; }
-.source-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
-.source-card { background: var(--bg-panel); border: 1px solid var(--line); border-radius: 6px; padding: 11px 13px; transition: border-color 0.15s ease, transform 0.15s ease; }
-.source-card:hover { border-color: var(--violet); transform: translateY(-1px); }
-.source-card-label { font-family: var(--font-body); font-size: 11.5px; color: var(--text-muted); line-height: 1.3; margin-bottom: 6px; min-height: 28px; }
-.source-card-value { font-family: var(--font-mono); font-size: 17px; font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; }
-.source-card-meta { display: flex; justify-content: space-between; gap: 8px; margin-top: 7px; font-family: var(--font-mono); font-size: 9.5px; color: var(--text-dim); }
+.source-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+
+/* Tarjetas de datos (Mapa de Fuentes) rediseñadas como "stat-pretty" —
+   barra de color de acento + icono por categoría — pedido por Esther
+   06/10/2026 ("que sea algo chulo no simples recuadros"). El dato en sí
+   (label/value/fecha/fuente) es idéntico al de antes, solo cambia el marco. */
+.stat-pretty {
+  position: relative; background: var(--bg-panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 13px 14px 11px; overflow: hidden; transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+.stat-pretty:hover { transform: translateY(-2px); border-color: var(--line-bright); box-shadow: 0 10px 26px rgba(0,0,0,0.35); }
+.stat-pretty::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--accent, var(--violet)); }
+.stat-pretty-top { display: flex; justify-content: flex-start; margin-bottom: 2px; }
+.stat-ico { width: 26px; height: 26px; border-radius: 7px; background: var(--bg-panel-raised); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; font-size: 13px; }
+.source-card-label { font-family: var(--font-body); font-size: 11.5px; color: var(--text-muted); line-height: 1.3; margin: 6px 0; min-height: 28px; }
+.source-card-value { font-family: var(--font-display); font-size: 17px; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.source-card-meta { display: flex; justify-content: space-between; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); font-family: var(--font-mono); font-size: 9.5px; color: var(--text-dim); }
 .source-card-meta span:last-child { text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* Termómetros */
+/* Termómetros — rediseñados como termómetro real (tubo + bulbo), pedido por
+   Esther 06/10/2026 ("que parezcan termometros dinamicos"). El valor/0-100,
+   el color por nivel y la descripción son exactamente los mismos que antes
+   calculaba mercado/page.tsx — solo cambia la forma en la que se dibuja el
+   relleno (ahora tubo vertical + bulbo circular abajo, como un termómetro de
+   mercurio de verdad, en vez de una simple barra rectangular). */
 .gauges { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; }
 @media (max-width: 900px) { .gauges { grid-template-columns: repeat(2, 1fr); } }
-.gauge-card { background: var(--bg-panel); border: 1px solid var(--line); border-radius: 6px; padding: 16px 14px; text-align: center; }
-.gauge-card .g-name { font-family: var(--font-body); font-size: 11.5px; font-weight: 600; color: var(--text-primary); margin-bottom: 10px; min-height: 28px; }
-.therm { width: 14px; height: 90px; margin: 0 auto 10px; background: var(--bg-panel-raised); border-radius: 8px; border: 1px solid var(--line); position: relative; overflow: hidden; }
-.therm-fill { position: absolute; bottom: 0; left: 0; right: 0; border-radius: 8px; }
+.gauge-card { background: var(--bg-panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 14px; text-align: center; transition: border-color 0.15s, transform 0.15s; }
+.gauge-card:hover { border-color: var(--line-bright); transform: translateY(-2px); }
+.gauge-card .g-name { font-family: var(--font-body); font-size: 11.5px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px; min-height: 28px; }
+.therm { position: relative; width: 26px; height: 110px; margin: 0 auto 10px; }
+.therm-tube { position: absolute; left: 8px; top: 0; width: 10px; height: 88px; border-radius: 6px; background: var(--bg-panel-raised); border: 1px solid var(--line-bright); overflow: hidden; }
+.therm-fill { position: absolute; bottom: 0; left: 0; right: 0; border-radius: 0 0 6px 6px; transition: height 0.6s ease; }
+.therm-ticks { position: absolute; left: 20px; top: 0; height: 88px; width: 6px; }
+.therm-ticks i { position: absolute; left: 0; width: 6px; height: 1px; background: var(--line-bright); }
+.therm-bulb { position: absolute; left: 2px; top: 82px; width: 22px; height: 22px; border-radius: 50%; background: var(--bg-panel-raised); border: 1px solid var(--line-bright); display: flex; align-items: center; justify-content: center; }
+.therm-bulb-fill { width: 14px; height: 14px; border-radius: 50%; }
 .g-value { font-family: var(--font-mono); font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .g-desc { font-family: var(--font-mono); font-size: 9.5px; color: var(--text-dim); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
 
