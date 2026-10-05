@@ -34,6 +34,30 @@ function fmtDateEs(raw: string): string {
 // autoexplicativo a simple vista.
 const GROUP_NOTES: Record<string, string> = {};
 
+// Icono + color de acento por categoría del Mapa de Fuentes (puramente
+// decorativo — rediseño pedido por Esther 06/10/2026, "que sea algo chulo
+// no simples recuadros"). No depende de ningún valor: es siempre el mismo
+// icono/color para "Precios", para "Inflación", etc., así que no cambia ni
+// un dato, solo le da una identidad visual a cada bloque.
+const GROUP_ICON: Record<string, string> = {
+  precios: "💰",
+  tasas: "🏦",
+  inflacion: "📈",
+  liquidez: "💧",
+  empleo: "👷",
+  riesgo: "⚠️",
+  flujos: "🔄",
+};
+const GROUP_ACCENT: Record<string, string> = {
+  precios: "var(--gold-bright)",
+  tasas: "var(--violet)",
+  inflacion: "var(--down)",
+  liquidez: "#5AA7D6",
+  empleo: "var(--up)",
+  riesgo: "var(--down)",
+  flujos: "var(--violet-bright)",
+};
+
 export default async function MercadoPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
@@ -336,7 +360,7 @@ export default async function MercadoPage() {
       />
 
       <div style={{ marginTop: 20, marginBottom: 16 }}>
-        <MarketFlowMap />
+        <MarketFlowMap news={goldNews} />
       </div>
 
       <BiasScorePanel results={biasByTimeframe} isAdmin={isAdmin} />
@@ -352,7 +376,20 @@ export default async function MercadoPage() {
               <div key={g.name} className="gauge-card">
                 <div className="g-name">{g.name}</div>
                 <div className="therm">
-                  <div className="therm-fill" style={{ height: `${g.value}%`, background: g.color }} />
+                  <div className="therm-tube">
+                    <div
+                      className="therm-fill"
+                      style={{ height: `${g.value}%`, background: `linear-gradient(180deg, ${g.color}, ${g.color}99)` }}
+                    />
+                  </div>
+                  <div className="therm-ticks">
+                    {[0, 25, 50, 75, 100].map((t) => (
+                      <i key={t} style={{ bottom: `${t}%` }} />
+                    ))}
+                  </div>
+                  <div className="therm-bulb">
+                    <div className="therm-bulb-fill" style={{ background: g.color }} />
+                  </div>
                 </div>
                 <div className="g-value" style={{ color: g.color }}>
                   {g.value}
@@ -512,7 +549,10 @@ export default async function MercadoPage() {
             {GROUP_NOTES[group.key] && <div className="source-group-note">{GROUP_NOTES[group.key]}</div>}
             <div className="source-grid">
               {group.items.map((s, i) => (
-                <div key={i} className="source-card">
+                <div key={i} className="stat-pretty" style={{ "--accent": GROUP_ACCENT[group.key] } as React.CSSProperties}>
+                  <div className="stat-pretty-top">
+                    <div className="stat-ico">{GROUP_ICON[group.key] ?? "📊"}</div>
+                  </div>
                   <div className="source-card-label">{s.label}</div>
                   <div className="source-card-value">{s.value}</div>
                   <div className="source-card-meta">
