@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { AppNav } from "@/components/AppNav";
@@ -20,20 +19,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <h1 style={{ fontSize: 24, margin: "4px 0 0" }}>Panel de administrador</h1>
         </div>
         <div className="btn-row">
-          <AppNav isAdmin active="admin" />
+          <AppNav isAdmin active="admin" showAdminLinks />
         </div>
       </div>
-      <nav className="btn-row" style={{ marginBottom: 24, borderBottom: "1px solid var(--line)", paddingBottom: 14 }}>
-        <Link href="/admin" className="btn">Resumen</Link>
-        <Link href="/admin/users" className="btn">Usuarios</Link>
-        <Link href="/admin/vantage-clients" className="btn">Clientes Vantage</Link>
-        <Link href="/admin/vantage-inactivity" className="btn">Avisos de inactividad</Link>
-        <Link href="/admin/players" className="btn">Jugadores (Play)</Link>
-        <Link href="/admin/play-config" className="btn">Vantax Play · Config</Link>
-        <Link href="/admin/play-inventory" className="btn">Inventario de cofres</Link>
-        <Link href="/admin/plans" className="btn">Planes</Link>
-        <Link href="/admin/settings" className="btn">Configuración</Link>
-      </nav>
       {children}
     </div>
   );
