@@ -1,7 +1,10 @@
 // Cálculo del Bias Score en base a los datos que la app SÍ puede traer en
 // vivo (FRED + Twelve Data + CFTC pública). El documento de arquitectura
-// original define 4 módulos (Macro 40%, Flujos 25%, Riesgo 15%, Técnico
-// 20%). Macro ya cubre tasas reales y nominales, curva 10Y/2Y y 10Y/3M,
+// original definía 4 módulos con pesos Macro 40%, Flujos 25%, Riesgo 15%,
+// Técnico 20% — reajustados a Macro 25%, Flujos 30%, Riesgo 15%, Técnico
+// 30% (ver nota junto a los pesos de cada módulo más abajo, en la
+// declaración de `modules`, sobre por qué se bajó el peso de Macro).
+// Macro ya cubre tasas reales y nominales, curva 10Y/2Y y 10Y/3M,
 // CPI, Core PCE, PPI y breakeven de inflación 10 años. Riesgo cubre VIX y
 // el diferencial de crédito High Yield (OAS). Quedan dos módulos parciales:
 // Flujos solo usa el posicionamiento de futuros (COT), todavía sin los
@@ -66,7 +69,7 @@ function scoreLabel(score: number): string {
 export function computeBiasScore(snapshot: MarketSnapshot): BiasResult {
   const { macro, technical, risk, flows, prices } = snapshot;
 
-  // --- Módulo Macro & Tasas (peso 40%) ---
+  // --- Módulo Macro & Tasas (peso 25%) ---
   const macroIndicators: BiasIndicator[] = [];
 
   if (macro.us10yTipsReal) {
@@ -160,7 +163,7 @@ export function computeBiasScore(snapshot: MarketSnapshot): BiasResult {
     });
   }
 
-  // --- Módulo Técnico & Microestructura (peso 20%) ---
+  // --- Módulo Técnico & Microestructura (peso 30%) ---
   const tecnicoIndicators: BiasIndicator[] = [];
 
   if (technical.available && technical.ema20 !== null && technical.ema50 !== null && technical.ema200 !== null) {
@@ -196,7 +199,7 @@ export function computeBiasScore(snapshot: MarketSnapshot): BiasResult {
     });
   }
 
-  // --- Módulo Flujos & Posicionamiento (peso 25%) ---
+  // --- Módulo Flujos & Posicionamiento (peso 30%) ---
   // Cubrimos la pata de futuros (COT) con datos públicos y gratuitos de la
   // CFTC. Los ETF (GLD) y las compras oficiales (PBoC) todavía no están
   // conectados — quedan para una siguiente vuelta.
@@ -285,11 +288,22 @@ export function computeBiasScore(snapshot: MarketSnapshot): BiasResult {
     });
   }
 
+  // Pesos reajustados a petición de Esther (05/10/2026): con el peso
+  // original (Macro 40%), en entornos como el de estas semanas — inflación
+  // (CPI/Core PCE) todavía por encima del objetivo Y rendimientos reales
+  // subiendo por esa misma inflación — el módulo Macro salía casi neutro,
+  // porque sus propios indicadores se cancelaban entre sí (TIPS muy
+  // bajista vs. CPI/PCE "bullish por cobertura"), aunque de fondo ambas
+  // cosas sean la MISMA historia bajista para el oro. Con el 40% de peso
+  // eso aplastaba el total aunque Técnico y Flujos sí reflejaran la caída
+  // real del precio. Se baja Macro a 25% y se sube Técnico (20%→30%) y
+  // Flujos (25%→30%), que son los dos módulos que sí responden al
+  // movimiento de precio/posicionamiento actual; Riesgo se deja igual.
   const modules: BiasModule[] = [
     {
       key: "macro",
       name: "Macro & Tasas",
-      weight: 0.4,
+      weight: 0.25,
       available: macroIndicators.length > 0,
       score: average(macroIndicators.map((i) => i.score)),
       unavailableReason: macroIndicators.length === 0 ? "Falta configurar FRED_API_KEY." : undefined,
@@ -298,7 +312,7 @@ export function computeBiasScore(snapshot: MarketSnapshot): BiasResult {
     {
       key: "flujos",
       name: "Flujos & Posicionamiento",
-      weight: 0.25,
+      weight: 0.3,
       available: flujosIndicators.length > 0,
       score: average(flujosIndicators.map((i) => i.score)),
       unavailableReason:
@@ -319,7 +333,7 @@ export function computeBiasScore(snapshot: MarketSnapshot): BiasResult {
     {
       key: "tecnico",
       name: "Técnico & Microestructura",
-      weight: 0.2,
+      weight: 0.3,
       available: tecnicoIndicators.length > 0,
       score: average(tecnicoIndicators.map((i) => i.score)),
       unavailableReason: tecnicoIndicators.length === 0 ? "Falta configurar TWELVE_DATA_API_KEY." : undefined,
