@@ -352,9 +352,9 @@ export default async function MercadoPage() {
               <br />
               de los módulos con datos disponibles
               <br />
-              (pesos originales: 0.40 Macro + 0.25 Flujos
+              (pesos: 0.25 Macro + 0.30 Flujos
               <br />
-              + 0.15 Riesgo + 0.20 Técnico)
+              + 0.15 Riesgo + 0.30 Técnico)
             </div>
           </div>
           <div className="bias-modules">
