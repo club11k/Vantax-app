@@ -7,12 +7,10 @@ import { computeBiasScore } from "@/lib/bias-score";
 import { fetchGoldNewsHeadlines } from "@/lib/telegram-news";
 import { SessionsClock } from "@/components/market/SessionsClock";
 import { BiasScorePanel } from "@/components/market/BiasScorePanel";
-import { MarketFlowMap } from "@/components/market/MarketFlowMap";
 import { TradingViewWidget } from "@/components/market/TradingViewWidget";
 import { AppNav } from "@/components/AppNav";
 import { SourceGroups } from "@/components/market/SourceGroups";
-import { EconCalendar } from "@/components/market/EconCalendar";
-import { fetchUsdCalendar } from "@/lib/econ-calendar";
+import { NewsImage } from "@/components/market/NewsCard";
 
 export const revalidate = 300; // recachea esta página cada 5 minutos
 
@@ -32,6 +30,17 @@ function fmtDateEs(raw: string): string {
   const [, year, month, day] = m;
   return `${day}/${month}/${year}`;
 }
+
+// Precios en vivo de TradingView dentro del apartado "Precios" (pedido el
+// 06/10/2026). Se usan los mismos proveedores que ya funcionan en la cinta
+// de arriba (Capital.com) porque los símbolos TVC: de índices dan "solo
+// disponible en TradingView" en widgets externos.
+const LIVE_QUOTES = [
+  { symbol: "CAPITALCOM:DXY", label: "Índice dólar (DXY)" },
+  { symbol: "COMEX:GC1!", label: "Futuro oro COMEX (GC1!)" },
+  { symbol: "CAPITALCOM:OIL_BRENT", label: "Petróleo Brent (BRNT)" },
+  { symbol: "CAPITALCOM:OIL_CRUDE", label: "Petróleo WTI (USOIL)" },
+];
 
 export default async function MercadoPage() {
   const session = await getServerSession(authOptions);
@@ -69,7 +78,7 @@ export default async function MercadoPage() {
     }
   }
 
-  const [snapshot, goldNews, econ] = await Promise.all([buildMarketSnapshot(), fetchGoldNewsHeadlines(), fetchUsdCalendar()]);
+  const [snapshot, goldNews] = await Promise.all([buildMarketSnapshot(), fetchGoldNewsHeadlines(1)]);
   // Un BiasResult por temporalidad — BiasScorePanel (cliente) guarda en
   // estado cuál pestaña está activa y pinta el que corresponda, sin volver
   // a pedir datos al navegar entre pestañas.
@@ -150,7 +159,6 @@ export default async function MercadoPage() {
       date: "hoy",
       source: "Twelve Data",
     });
-  if (snapshot.prices.dxy) preciosItems.push({ label: "DXY", value: snapshot.prices.dxy.price.toFixed(2), date: "hoy", source: "Twelve Data" });
   if (snapshot.prices.silver)
     preciosItems.push({
       label: "Plata spot (XAG/USD)",
@@ -167,13 +175,6 @@ export default async function MercadoPage() {
       source: "Calculado (oro ÷ plata, Twelve Data)",
     });
   }
-  if (snapshot.prices.wti)
-    preciosItems.push({
-      label: "Petróleo WTI",
-      value: `$${snapshot.prices.wti.price.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-      date: "hoy",
-      source: "Twelve Data",
-    });
 
   if (snapshot.macro.us10yNominal) tasasItems.push({ label: "US 10Y nominal (DGS10)", value: `${snapshot.macro.us10yNominal.value}%`, date: snapshot.macro.us10yNominal.date, source: "FRED — DGS10" });
   if (snapshot.macro.us10yTipsReal) tasasItems.push({ label: "US 10Y TIPS real (DFII10)", value: `${snapshot.macro.us10yTipsReal.value}%`, date: snapshot.macro.us10yTipsReal.date, source: "FRED — DFII10" });
@@ -279,7 +280,7 @@ export default async function MercadoPage() {
     { key: "empleo", title: "Empleo y Actividad", items: empleoItems },
     { key: "riesgo", title: "Riesgo e Intermercado", items: riesgoItems },
     { key: "flujos", title: "Flujos y Posicionamiento", items: flujosItems },
-  ].filter((g) => g.items.length > 0);
+  ].filter((g) => g.items.length > 0 || g.key === "precios");
   const totalSources = sourceGroups.reduce((sum, g) => sum + g.items.length, 0);
 
   return (
@@ -303,9 +304,6 @@ export default async function MercadoPage() {
         <a href="#resumen">Resumen</a>
         <a href="#termometros">Termómetros</a>
         <a href="#graficos">Gráficos</a>
-        <a href="#flujos">Flujos</a>
-        <a href="#calendario">Calendario</a>
-        <a href="#noticias">Noticias</a>
         <a href="#datos">Datos macro</a>
       </nav>
 
@@ -353,15 +351,21 @@ export default async function MercadoPage() {
           <BiasScorePanel results={biasByTimeframe} isAdmin={isAdmin} />
         </div>
         {goldNews[0] ? (
-          <a href={goldNews[0].url} target="_blank" rel="noopener noreferrer" className="panel mk-news-card">
-            <span className="mk-news-tag">
-              <span className="map-alert-pulse" />
-              Última hora{goldNews[0].dateIso ? ` · ${fmtDateEs(goldNews[0].dateIso)}` : ""}
-            </span>
-            <span style={{ fontSize: 15, lineHeight: 1.55, whiteSpace: "pre-line", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 7, WebkitBoxOrient: "vertical" }}>
-              {goldNews[0].text}
-            </span>
-            <span style={{ marginTop: "auto", fontSize: 13, fontWeight: 600, color: "#F9A8D4" }}>Leer en Telegram ↗</span>
+          <a href="/noticias" className="panel mk-news-card" style={{ padding: 0, overflow: "hidden" }}>
+            <NewsImage news={goldNews[0]} height={150} />
+            <div style={{ padding: "16px 20px 20px", display: "flex", flexDirection: "column", gap: 10, flex: 1 }}>
+              <span className="mk-news-tag">
+                <span className="map-alert-pulse" />
+                Última hora{goldNews[0].dateIso ? ` · ${fmtDateEs(goldNews[0].dateIso)}` : ""}
+              </span>
+              <span style={{ fontSize: 16, fontWeight: 700, lineHeight: 1.4 }}>{goldNews[0].title}</span>
+              {goldNews[0].body && (
+                <span style={{ fontSize: 13.5, lineHeight: 1.55, color: "var(--text-muted)", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical" }}>
+                  {goldNews[0].body}
+                </span>
+              )}
+              <span style={{ marginTop: "auto", fontSize: 13, fontWeight: 600, color: "#F9A8D4" }}>Ver todas las noticias →</span>
+            </div>
           </a>
         ) : (
           <div className="panel" style={{ color: "var(--text-dim)", fontSize: 13.5 }}>Sin titulares ahora mismo.</div>
@@ -425,89 +429,6 @@ export default async function MercadoPage() {
         />
       </div>
 
-      <section id="flujos" style={{ marginBottom: 24, scrollMarginTop: 20 }}>
-        <MarketFlowMap news={goldNews} />
-      </section>
-
-      <div id="calendario" className="panel-title" style={{ margin: "4px 0 10px 2px", scrollMarginTop: 20 }}>Calendario Económico (Estados Unidos)</div>
-      <EconCalendar events={econ.events} nextWeekAvailable={econ.nextWeekAvailable} />
-      <div style={{ marginBottom: 24 }} />
-
-      <div id="noticias" className="panel-head" style={{ margin: "4px 0 10px 2px", scrollMarginTop: 20 }}>
-        <span className="panel-title">Feed de Titulares — Club 11K Gold News</span>
-        <a
-          href="https://t.me/s/club11k_news"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="panel-sub"
-          style={{ textDecoration: "underline" }}
-        >
-          Abrir canal en Telegram ↗
-        </a>
-      </div>
-      {/*
-        Antes aquí iba el widget genérico "Timeline" de TradingView
-        (feedMode: market/forex) -- enseñaba GBP/USD, USD/JPY, EUR/USD, no
-        noticias de oro (Esther lo detectó). Como ya existe el canal propio
-        de noticias de oro filtradas con IA (@club11k_news, el bot
-        gold-news-telegram-bot), tiene más sentido mostrar ESO aquí.
-
-        Primer intento (descartado): incrustar t.me/s/club11k_news en un
-        <iframe> -- Telegram bloquea que su página se muestre dentro de un
-        marco (protección anti-framing del navegador), así que salía en
-        blanco/con icono de error. La solución: el SERVIDOR de Vantax
-        descarga esa misma página pública (fetchGoldNewsHeadlines, en
-        src/lib/telegram-news.ts -- eso sí funciona, el bloqueo de framing
-        solo aplica a un <iframe> en el navegador) y la parseamos para
-        renderizar los titulares como HTML propio, no como iframe ajeno.
-      */}
-      {goldNews.length > 0 ? (
-        <div className="panel" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {goldNews.map((n) => (
-            <a
-              key={n.url}
-              href={n.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display: "flex",
-                gap: 12,
-                alignItems: "flex-start",
-                textDecoration: "none",
-                color: "inherit",
-                paddingBottom: 12,
-                borderBottom: "1px solid var(--line)",
-              }}
-            >
-              {n.photoUrl && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={n.photoUrl}
-                  alt=""
-                  width={64}
-                  height={64}
-                  style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 6, flexShrink: 0 }}
-                />
-              )}
-              <div>
-                <div style={{ fontSize: 13.5, whiteSpace: "pre-line" }}>{n.text}</div>
-                {n.dateIso && (
-                  <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>{fmtDateEs(n.dateIso)}</div>
-                )}
-              </div>
-            </a>
-          ))}
-        </div>
-      ) : (
-        <div className="panel" style={{ padding: 20, color: "var(--text-dim)", fontSize: 13.5 }}>
-          No se han podido cargar los titulares del canal ahora mismo —{" "}
-          <a href="https://t.me/s/club11k_news" target="_blank" rel="noopener noreferrer" style={{ textDecoration: "underline" }}>
-            ábrelo directamente en Telegram
-          </a>
-          .
-        </div>
-      )}
-
       <div id="datos" className="panel-head" style={{ margin: "24px 0 10px 2px", scrollMarginTop: 20 }}>
         <span className="panel-title">Mapa de Fuentes — Valores Usados en esta Corrida</span>
         <span className="panel-sub">{totalSources} datos en vivo, agrupados por categoría</span>
@@ -517,7 +438,7 @@ export default async function MercadoPage() {
           Todavía no hay datos en vivo — configura FRED_API_KEY y TWELVE_DATA_API_KEY en Render → Environment.
         </div>
       ) : (
-        <SourceGroups groups={sourceGroups} />
+        <SourceGroups groups={sourceGroups} liveQuotes={LIVE_QUOTES} />
       )}
     </div>
   );

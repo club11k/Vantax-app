@@ -29,6 +29,7 @@ import { useEffect, useRef, useState } from "react";
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Análisis", key: "dashboard", icon: "📊", desc: "informes IA del oro" },
   { href: "/mercado", label: "Centro de mercado", key: "mercado", icon: "📈", desc: "bias score, sesiones" },
+  { href: "/noticias", label: "Noticias y calendario", key: "noticias", icon: "📰", desc: "titulares del oro, agenda macro" },
   { href: "/journal", label: "Journaly", key: "journal", icon: "📓", desc: "diario de operativa" },
   { href: "/riesgo", label: "Calculadora de riesgo", key: "riesgo", icon: "🧮", desc: "tamaño de posición" },
   { href: "/play", label: "Vantax Play", key: "play", icon: "🎮", desc: "V-COIN, cofres, ranking" },

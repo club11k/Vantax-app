@@ -1,7 +1,7 @@
 import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
 
-// Protege /dashboard, /journal, /play, /riesgo, /mercado y /completar-mt5
+// Protege /dashboard, /journal, /play, /riesgo, /mercado, /noticias y /completar-mt5
 // (cualquier usuario logueado) y /admin (solo rol ADMIN). También corta el
 // paso a TODAS estas rutas si el token dice que la cuenta está bloqueada
 // (suspendida a mano, o bloqueada sola por salir del IB de Vantage / 30
@@ -45,6 +45,7 @@ export const config = {
     "/dashboard/:path*",
     "/admin/:path*",
     "/mercado/:path*",
+    "/noticias/:path*",
     "/journal/:path*",
     "/play/:path*",
     "/riesgo/:path*",

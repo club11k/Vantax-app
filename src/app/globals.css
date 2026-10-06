@@ -557,3 +557,25 @@ td { color: var(--text-primary); }
   .menu-item { min-height: 48px; }
   .header-row .btn-row { margin-left: auto; }
 }
+
+/* --- Noticias con imagen y precios en vivo (06/10/2026) --- */
+.nw-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 16px; }
+.nw-card { display: flex; flex-direction: column; background: var(--bg-panel); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; text-decoration: none; color: var(--text-primary); transition: border-color .15s, transform .15s; }
+.nw-card:hover { border-color: var(--violet); transform: translateY(-3px); }
+.nw-featured { grid-column: 1 / -1; }
+@media (min-width: 900px) { .nw-featured { flex-direction: row; } .nw-featured .nw-media { flex: 1.3 1 0; } .nw-featured .nw-body { flex: 1 1 0; justify-content: center; } .nw-featured .nw-title { font-size: 22px; } .nw-featured .nw-img { height: 100% !important; min-height: 260px; } }
+.nw-media { position: relative; }
+.nw-img { display: block; width: 100%; object-fit: cover; background: #110D1E; }
+.nw-illu { position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.nw-illu-grid { position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,.07) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.07) 1px, transparent 1px); background-size: 24px 24px; }
+.nw-illu-icon { position: relative; font-size: 56px; filter: drop-shadow(0 6px 18px rgba(0,0,0,.5)); }
+.nw-tag { position: absolute; left: 12px; top: 12px; padding: 4px 10px; border-radius: 999px; background: rgba(14,10,24,.8); color: var(--violet-bright); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.nw-body { display: flex; flex-direction: column; gap: 8px; padding: 16px 18px 18px; flex: 1; }
+.nw-date { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); }
+.nw-title { font-size: 16px; font-weight: 700; line-height: 1.4; }
+.nw-text { font-size: 13.5px; line-height: 1.55; color: var(--text-muted); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; }
+.nw-more { margin-top: auto; font-size: 13px; font-weight: 600; color: #F9A8D4; }
+.mk-news-card .nw-img { flex: 0 0 auto; }
+.mk-live-quotes { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 10px; margin-bottom: 10px; }
+.mk-live-quote { background: var(--bg-panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 12px 4px; display: flex; flex-direction: column; gap: 4px; }
+.mk-live-quote .panel { padding: 0 !important; border: 0 !important; background: transparent !important; margin: 0 !important; box-shadow: none !important; }

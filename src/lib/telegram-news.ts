@@ -31,7 +31,30 @@ export type GoldNewsHeadline = {
   url: string;
   dateIso: string | null;
   photoUrl: string | null;
+  // Rediseño 06/10/2026: título (primera línea del mensaje) y resto del
+  // texto por separado, y la categoría para elegir una ilustración cuando
+  // el mensaje no trae foto.
+  title: string;
+  body: string;
+  category: NewsCategory;
 };
+
+export type NewsCategory = "fed" | "inflacion" | "empleo" | "geopolitica" | "petroleo" | "oro" | "dolar" | "bolsa" | "general";
+
+// Clasifica la noticia por palabras clave para ponerle una imagen temática
+// cuando el canal no adjunta foto.
+export function categorizeNews(text: string): NewsCategory {
+  const t = text.toLowerCase();
+  if (/\bfed\b|fomc|powell|tipos de inter|bancos? centrales?|bce\b|lagarde|boj\b|reserva federal/.test(t)) return "fed";
+  if (/ipc|inflaci|ipp|\bcpi\b|\bpce\b|precios al consumo/.test(t)) return "inflacion";
+  if (/empleo|desempleo|n[óo]minas|paro\b|nfp|jolts|adp/.test(t)) return "empleo";
+  if (/guerra|ataque|misil|ir[áa]n|israel|rusia|ucrania|china|taiw[áa]n|aranceles|sanciones|otan|militar|trump|elecci/.test(t)) return "geopolitica";
+  if (/petr[óo]leo|crudo|brent|wti|opep|opec|gas natural/.test(t)) return "petroleo";
+  if (/\boro\b|xau|gold|metales? preciosos?|plata/.test(t)) return "oro";
+  if (/d[óo]lar|dxy|divisa|euro\b|yen\b/.test(t)) return "dolar";
+  if (/bolsa|nasdaq|s&p|dow jones|acciones|wall street|nvidia|ia\b|tecnol/.test(t)) return "bolsa";
+  return "general";
+}
 
 function decodeHtmlEntities(s: string): string {
   return s
@@ -82,11 +105,20 @@ export async function fetchGoldNewsHeadlines(limit = 8): Promise<GoldNewsHeadlin
       if (!text) continue;
 
       const timeMatch = /<time[^>]*datetime="([^"]+)"/.exec(block);
-      const photoMatch = /tgme_widget_message_photo_wrap[^"]*"\s+style="[^"]*background-image:url\('([^']+)'\)/.exec(
-        block
-      );
+      // Imagen: foto del mensaje, miniatura de vídeo o imagen de la vista
+      // previa del enlace (lo que haya, en ese orden).
+      const photoMatch =
+        /tgme_widget_message_photo_wrap[^"]*"[^>]*background-image:url\('([^']+)'\)/.exec(block) ||
+        /tgme_widget_message_video_thumb[^"]*"[^>]*background-image:url\('([^']+)'\)/.exec(block) ||
+        /link_preview_(?:right_)?image[^"]*"[^>]*background-image:url\('([^']+)'\)/.exec(block);
 
+      const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+      const title = (lines[0] ?? "").replace(/^[\p{Extended_Pictographic}\p{Regional_Indicator}\uFE0F\u200D\s]+/u, "") || lines[0] || "";
+      const bodyFull = lines.slice(1).join(" ");
       headlines.push({
+        title,
+        body: bodyFull.length > 220 ? bodyFull.slice(0, 220).trimEnd() + "…" : bodyFull,
+        category: categorizeNews(text),
         text: text.length > 280 ? text.slice(0, 280).trimEnd() + "…" : text,
         url: `https://t.me/${posts[i].id}`,
         dateIso: timeMatch ? timeMatch[1] : null,

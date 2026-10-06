@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { TradingViewWidget } from "@/components/market/TradingViewWidget";
 
 // Mapa de Fuentes con filtros por categoría (rediseño 06/10/2026). Recibe
 // exactamente los mismos grupos y datos que calculaba la página antes;
@@ -26,7 +27,9 @@ function fmtDateEs(raw: string): string {
   return `${day}/${month}/${year}`;
 }
 
-export function SourceGroups({ groups }: { groups: SourceGroup[] }) {
+export type LiveQuote = { symbol: string; label: string };
+
+export function SourceGroups({ groups, liveQuotes = [] }: { groups: SourceGroup[]; liveQuotes?: LiveQuote[] }) {
   const [active, setActive] = useState<string>("todos");
   const visible = active === "todos" ? groups : groups.filter((g) => g.key === active);
 
@@ -57,6 +60,20 @@ export function SourceGroups({ groups }: { groups: SourceGroup[] }) {
             <span className="mk-dot" style={{ background: ACCENT[group.key] ?? "#A78BFA" }} />
             {group.title}
           </div>
+          {group.key === "precios" && liveQuotes.length > 0 && (
+            <div className="mk-live-quotes">
+              {liveQuotes.map((q) => (
+                <div key={q.symbol} className="mk-live-quote">
+                  <span className="mk-tile-label" style={{ minHeight: 0 }}>{q.label}</span>
+                  <TradingViewWidget
+                    height={90}
+                    src="https://s3.tradingview.com/external-embedding/embed-widget-single-quote.js"
+                    config={{ symbol: q.symbol, width: "100%", colorTheme: "dark", isTransparent: true, locale: "es" }}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
           <div className="mk-tiles">
             {group.items.map((s, i) => (
               <div key={i} className="mk-tile">
