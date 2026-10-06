@@ -8,8 +8,14 @@
 // - Esta semana: siempre disponible (calType=week).
 // - Próxima semana: se intenta pidiendo el rango de fechas; si Investing no lo
 //   devuelve, la pestaña lo avisa y enlaza a Investing.
+// - Investing bloquea las IPs de Render (HTTP 403, visto el 06/10/2026), así
+//   que si la petición directa falla se reintenta por el proxy del droplet
+//   de DigitalOcean (VANTAGE_PROXY_URL, el mismo que ya usa Vantage).
 // - Se guarda en memoria 5 minutos para no pedir de más; si falla, se sigue
 //   mostrando el último dato bueno.
+
+import https from "node:https";
+import { HttpsProxyAgent } from "https-proxy-agent";
 
 export type InvImportance = 1 | 2 | 3;
 
@@ -96,31 +102,61 @@ export function parseInvestingWidget(html: string): InvDay[] {
   return days.filter((d) => d.events.length > 0);
 }
 
-async function fetchWidget(extra: Record<string, string>): Promise<InvDay[] | null> {
-  const qs = new URLSearchParams({ ...COMMON, ...extra }).toString();
-  try {
-    const res = await fetch(`${BASE}?${qs}`, {
-      cache: "no-store",
-      headers: {
-        Accept: "text/html,*/*",
-        "Accept-Language": "es-ES,es;q=0.9",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36",
-      },
+const BROWSER_HEADERS: Record<string, string> = {
+  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  "Accept-Language": "es-ES,es;q=0.9",
+  "Accept-Encoding": "identity",
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36",
+  Referer: "https://es.investing.com/",
+};
+
+// Petición directa desde Render.
+async function getDirect(url: string): Promise<{ status: number; body: string }> {
+  const res = await fetch(url, { cache: "no-store", headers: BROWSER_HEADERS });
+  return { status: res.status, body: await res.text() };
+}
+
+// Misma petición, pero saliendo por el proxy del droplet (IP fija).
+function getViaProxy(url: string): Promise<{ status: number; body: string }> {
+  const proxyUrl = process.env.VANTAGE_PROXY_URL;
+  if (!proxyUrl) return Promise.reject(new Error("sin VANTAGE_PROXY_URL"));
+  return new Promise((resolve, reject) => {
+    const req = https.request(url, { method: "GET", agent: new HttpsProxyAgent(proxyUrl), headers: BROWSER_HEADERS, timeout: 20000 }, (res) => {
+      let raw = "";
+      res.setEncoding("utf8");
+      res.on("data", (c) => (raw += c));
+      res.on("end", () => resolve({ status: res.statusCode ?? 0, body: raw }));
     });
-    if (!res.ok) {
-      console.warn(`[investing-calendar] HTTP ${res.status}`);
-      return null;
+    req.on("timeout", () => req.destroy(new Error("tiempo de espera agotado")));
+    req.on("error", reject);
+    req.end();
+  });
+}
+
+async function fetchWidget(extra: Record<string, string>): Promise<InvDay[] | null> {
+  const url = `${BASE}?${new URLSearchParams({ ...COMMON, ...extra }).toString()}`;
+  const attempts: [string, (u: string) => Promise<{ status: number; body: string }>][] = [
+    ["directo", getDirect],
+    ["proxy", getViaProxy],
+  ];
+  for (const [name, fn] of attempts) {
+    try {
+      const { status, body } = await fn(url);
+      if (status < 200 || status >= 300) {
+        console.warn(`[investing-calendar] ${name}: HTTP ${status}`);
+        continue;
+      }
+      if (!/ecEventsTable|eventRowId/.test(body)) {
+        console.warn(`[investing-calendar] ${name}: respuesta sin tabla de eventos (${body.slice(0, 80)})`);
+        continue;
+      }
+      console.log(`[investing-calendar] ${name}: OK`);
+      return parseInvestingWidget(body);
+    } catch (err: any) {
+      console.warn(`[investing-calendar] ${name}: error ${err?.message ?? err}`);
     }
-    const html = await res.text();
-    if (!/ecEventsTable|eventRowId/.test(html)) {
-      console.warn(`[investing-calendar] respuesta sin tabla de eventos (${html.slice(0, 80)})`);
-      return null;
-    }
-    return parseInvestingWidget(html);
-  } catch (err) {
-    console.warn("[investing-calendar] error", err);
-    return null;
   }
+  return null;
 }
 
 function ymd(d: Date): string {
