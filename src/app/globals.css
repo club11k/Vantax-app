@@ -537,3 +537,9 @@ td { color: var(--text-primary); }
 .mk-tile-value { font-family: var(--font-mono); font-size: 18px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
 .mk-tile-meta { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 640px) { .mk-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* --- Calendario económico con pestañas (06/10/2026) --- */
+.ec-day { font-size: 14px; font-weight: 700; margin: 0 0 8px 2px; color: var(--violet-bright); }
+.ec-table { min-width: 560px; }
+.ec-table td { vertical-align: middle; }
+.ec-impact { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
