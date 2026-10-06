@@ -88,7 +88,7 @@ def report_play_result(account_id, balance, equity, lots_this_month, profit_amou
     return resp.json()
 
 
-def report_journal_result(account_id, result_amount):
+def report_journal_result(account_id, result_amount, balance=None):
     resp = requests.post(
         f"{VANTAX_API_BASE}/api/mt5-orchestrator/report",
         headers=HEADERS,
@@ -96,6 +96,10 @@ def report_journal_result(account_id, result_amount):
             "kind": "journal",
             "accountId": account_id,
             "resultAmount": result_amount,
+            # Saldo real de la cuenta: Vantax lo usa para fijar el saldo
+            # inicial de Journaly la primera vez (antes no se enviaba y el
+            # saldo se quedaba en "Esperando el primer saldo real de MT5").
+            "balance": balance,
         },
         timeout=30,
     )
@@ -169,8 +173,8 @@ def sync_once():
                 mt5.shutdown()
 
             if kind == "journal":
-                result = report_journal_result(account_id, data["profit_today"])
-                log.info("%s -> resultado_hoy=%.2f | %s", label, data["profit_today"], result)
+                result = report_journal_result(account_id, data["profit_today"], data["balance"])
+                log.info("%s -> resultado_hoy=%.2f saldo=%.2f | %s", label, data["profit_today"], data["balance"], result)
             else:
                 result = report_play_result(
                     account_id, data["balance"], data["equity"], data["lots_xauusd_month"], data["profit_month"]
