@@ -13,6 +13,9 @@
 // - si una petición falla, se sigue mostrando el último dato bueno;
 // - se prueban los dos dominios del feed (nfs. y cdn-nfs.).
 
+import https from "node:https";
+import { HttpsProxyAgent } from "https-proxy-agent";
+
 export type EconEvent = {
   title: string;
   dateIso: string; // fecha y hora con zona horaria, tal cual la da el feed
@@ -24,7 +27,7 @@ export type EconEvent = {
 
 const HOSTS = ["https://nfs.faireconomy.media", "https://cdn-nfs.faireconomy.media"];
 const TTL_MS = 30 * 60 * 1000;
-const RETRY_MS = 5 * 60 * 1000;
+const RETRY_MS = 60 * 1000;
 
 type WeekCache = { events: EconEvent[]; fetchedAt: number; lastTryAt: number };
 const cache: Record<"this" | "next", WeekCache> = {
@@ -112,27 +115,62 @@ function translateTitle(title: string): string {
   return title;
 }
 
+// Petición directa o, si falla, por el proxy del droplet (IP fija). Así, si
+// ForexFactory corta temporalmente a la IP de Render, se sigue leyendo.
+async function getDirect(url: string): Promise<{ status: number; body: string }> {
+  const res = await fetch(url, {
+    cache: "no-store",
+    headers: { "User-Agent": "Mozilla/5.0 (compatible; VANTAX/1.0)", Accept: "application/json" },
+  });
+  return { status: res.status, body: await res.text() };
+}
+
+function getViaProxy(url: string): Promise<{ status: number; body: string }> {
+  const proxyUrl = process.env.VANTAGE_PROXY_URL;
+  if (!proxyUrl) return Promise.reject(new Error("sin VANTAGE_PROXY_URL"));
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      url,
+      {
+        method: "GET",
+        agent: new HttpsProxyAgent(proxyUrl),
+        headers: { "User-Agent": "Mozilla/5.0 (compatible; VANTAX/1.0)", Accept: "application/json", "Accept-Encoding": "identity" },
+        timeout: 20000,
+      },
+      (res) => {
+        let raw = "";
+        res.setEncoding("utf8");
+        res.on("data", (c) => (raw += c));
+        res.on("end", () => resolve({ status: res.statusCode ?? 0, body: raw }));
+      }
+    );
+    req.on("timeout", () => req.destroy(new Error("tiempo de espera agotado")));
+    req.on("error", reject);
+    req.end();
+  });
+}
+
 async function fetchWeekFresh(week: "this" | "next"): Promise<EconEvent[] | null> {
   const file = week === "this" ? "ff_calendar_thisweek.json" : "ff_calendar_nextweek.json";
-  for (const host of HOSTS) {
+  const attempts: [string, (u: string) => Promise<{ status: number; body: string }>][] = [];
+  for (const host of HOSTS) attempts.push([`directo ${host}`, (u) => getDirect(u.replace("{H}", host))]);
+  for (const host of HOSTS) attempts.push([`proxy ${host}`, (u) => getViaProxy(u.replace("{H}", host))]);
+  for (const [name, fn] of attempts) {
     try {
-      const res = await fetch(`${host}/${file}`, {
-        cache: "no-store",
-        headers: { "User-Agent": "Mozilla/5.0 (compatible; VANTAX/1.0)", Accept: "application/json" },
-      });
-      if (!res.ok) {
-        console.warn(`[econ-calendar] ${host}/${file} → HTTP ${res.status}`);
+      const { status, body } = await fn(`{H}/${file}`);
+      if (status < 200 || status >= 300) {
+        console.warn(`[econ-calendar] ${file} ${name} → HTTP ${status}`);
         continue;
       }
-      const text = await res.text();
       let data: unknown;
       try {
-        data = JSON.parse(text);
+        data = JSON.parse(body);
       } catch {
-        console.warn(`[econ-calendar] ${host}/${file} → respuesta no es JSON (${text.slice(0, 80)})`);
+        console.warn(`[econ-calendar] ${file} ${name} → no es JSON (${body.slice(0, 80)})`);
         continue;
       }
       if (!Array.isArray(data)) continue;
+      console.log(`[econ-calendar] ${file} ${name} → OK (${data.length} eventos)`);
       return data
         .filter((e: any) => e && String(e.country ?? "").toUpperCase() === "USD" && typeof e.date === "string")
         .map((e: any) => {
@@ -140,16 +178,16 @@ async function fetchWeekFresh(week: "this" | "next"): Promise<EconEvent[] | null
           const ffImpact = normalizeImpact(e.impact);
           const boosted = ffImpact !== "Holiday" && HIGH_KEYWORDS.some((re) => re.test(rawTitle));
           return {
-          title: translateTitle(rawTitle),
-          dateIso: String(e.date),
-          impact: boosted ? ("High" as const) : ffImpact,
-          forecast: String(e.forecast ?? ""),
-          previous: String(e.previous ?? ""),
-          week,
+            title: translateTitle(rawTitle),
+            dateIso: String(e.date),
+            impact: boosted ? ("High" as const) : ffImpact,
+            forecast: String(e.forecast ?? ""),
+            previous: String(e.previous ?? ""),
+            week,
           };
         });
-    } catch (err) {
-      console.warn(`[econ-calendar] ${host}/${file} → error`, err);
+    } catch (err: any) {
+      console.warn(`[econ-calendar] ${file} ${name} → error ${err?.message ?? err}`);
     }
   }
   return null;
