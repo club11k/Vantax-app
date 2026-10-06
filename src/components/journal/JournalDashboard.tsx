@@ -446,6 +446,8 @@ export function JournalDashboard({ initialAccounts }: { initialAccounts: Account
   const [manualAmount, setManualAmount] = useState("");
   const [manualLoading, setManualLoading] = useState(false);
   const [manualError, setManualError] = useState<string | null>(null);
+  // Panel único "Registrar resultado": pestaña a mano / desde foto.
+  const [entryMode, setEntryMode] = useState<"manual" | "photo">("manual");
 
   async function saveEntry(date: string, amount: number, source: Source, imageNote?: string) {
     if (!account) return;
@@ -645,6 +647,7 @@ export function JournalDashboard({ initialAccounts }: { initialAccounts: Account
     setManualDate(dateStr);
     setManualAmount(entry ? String(entry.resultAmount) : "");
     setManualError(null);
+    setEntryMode("manual");
     manualFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
@@ -653,14 +656,14 @@ export function JournalDashboard({ initialAccounts }: { initialAccounts: Account
       {accounts.map((a) => (
         <button
           key={a.id}
-          className="btn"
-          style={{ fontSize: 12.5, ...(a.id === activeId && !formMode ? { borderColor: "var(--violet)" } : {}) }}
+          className={`btn journal-acc-tab${a.id === activeId && !formMode ? " active" : ""}`}
           onClick={() => switchAccount(a.id)}
         >
-          {a.accountUid}
+          <span style={{ fontFamily: "var(--font-mono)" }}>{a.accountUid}</span>
+          {a.currency === "CENT" && <span className="journal-acc-tag">Cent</span>}
         </button>
       ))}
-      <button className="btn" style={{ fontSize: 12.5 }} onClick={openCreateForm}>
+      <button className="btn journal-acc-add" onClick={openCreateForm}>
         + Añadir cuenta
       </button>
     </div>
@@ -809,262 +812,431 @@ export function JournalDashboard({ initialAccounts }: { initialAccounts: Account
     return <div>{accountTabs}</div>;
   }
 
+  // --- Indicadores rápidos (rediseño 06/10/2026): todo sale de los mismos
+  // resultados registrados, no se inventa nada. ---
+  const daysTraded = sortedEntries.length;
+  const daysPositive = sortedEntries.filter((e) => e.resultAmount > 0).length;
+  const bestDay = sortedEntries.reduce<Entry | null>((best, e) => (!best || e.resultAmount > best.resultAmount ? e : best), null);
+  const avgPerDay = daysTraded > 0 ? totalResult / daysTraded : 0;
+  const maxAbsInMonth = Math.max(
+    1,
+    ...sortedEntries.filter((e) => e.date.startsWith(calendarMonthKey)).map((e) => Math.abs(e.resultAmount))
+  );
+  const weekTotals = Array.from({ length: calendarCells.length / 7 }, (_, w) => {
+    const days = calendarCells.slice(w * 7, w * 7 + 7).filter((d): d is string => !!d);
+    const withData = days.filter((d) => entriesByDate.has(d));
+    return {
+      label: days.length ? `${parseInt(days[0].slice(8, 10), 10)}–${parseInt(days[days.length - 1].slice(8, 10), 10)}` : "",
+      total: withData.reduce((sum, d) => sum + (entriesByDate.get(d)?.resultAmount ?? 0), 0),
+      has: withData.length > 0,
+    };
+  });
+  const selectedEntry = entriesByDate.get(manualDate);
+  const chartColor = isUp ? "#A78BFA" : "#F472B6";
+  const areaPath =
+    chartCoords.length > 1
+      ? `${chartPath} L ${chartCoords[chartCoords.length - 1].x.toFixed(1)},${chartHeight - chartPadding} L ${chartCoords[0].x.toFixed(1)},${chartHeight - chartPadding} Z`
+      : "";
+
+  function shortMoney(n: number): string {
+    const a = Math.abs(n);
+    const sign = n < 0 ? "−" : "+";
+    if (a >= 1000) return `${sign}${(a / 1000).toLocaleString("es-ES", { maximumFractionDigits: 1 })}k`;
+    return `${sign}${Math.round(a)}`;
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       {accountTabs}
 
-      <div className="panel" style={{ display: "flex", flexWrap: "wrap", gap: 24, justifyContent: "space-between" }}>
-        <div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-dim)", textTransform: "uppercase" }}>
-            Cuenta {account.accountUid}
-          </div>
-          {account.mt5Connected && (
-            <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 2 }}>
-              MT5 conectado · Sincronizada {formatLastSync(account.lastSyncedAt)}
-            </div>
-          )}
-          <div style={{ fontSize: 24, fontFamily: "var(--font-mono)", marginTop: 4 }}>
+      {/* Saldo protagonista + indicadores */}
+      <div className="panel journal-hero">
+        <div style={{ flex: "1 1 280px", display: "flex", flexDirection: "column", gap: 6 }}>
+          <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
+            Saldo actual · cuenta {account.accountUid}
+          </span>
+          <span className="journal-balance">
             {currentBalance !== null ? formatMoney(currentBalance, account.currency) : "—"}
-          </div>
+          </span>
           {currentBalance !== null ? (
-            <div style={{ fontSize: 12.5, color: totalResult >= 0 ? "var(--up)" : "var(--down)", marginTop: 2 }}>
-              {totalResult >= 0 ? "+" : ""}
-              {formatMoney(totalResult, account.currency)}
-              {pctChange !== null && ` (${pctChange >= 0 ? "+" : ""}${pctChange.toFixed(1)}%)`} desde el saldo inicial
-            </div>
+            <span style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, fontSize: 14 }}>
+              {pctChange !== null && (
+                <span className={`journal-pct ${totalResult >= 0 ? "up" : "down"}`}>
+                  {pctChange >= 0 ? "+" : ""}
+                  {pctChange.toLocaleString("es-ES", { maximumFractionDigits: 1 })} %
+                </span>
+              )}
+              <span style={{ color: "var(--text-muted)" }}>
+                {totalResult >= 0 ? "+" : ""}
+                {formatMoney(totalResult, account.currency)} desde{" "}
+                {account.initialBalance != null ? formatMoney(account.initialBalance, account.currency) : "el saldo inicial"}
+              </span>
+            </span>
           ) : (
-            <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginTop: 2 }}>
+            <span style={{ fontSize: 12.5, color: "var(--text-dim)" }}>
               Esperando el primer saldo real de MT5 (puede tardar hasta 15 min desde que conectaste la cuenta)
-            </div>
+            </span>
+          )}
+          {account.mt5Connected && (
+            <span style={{ fontSize: 12, color: "var(--text-dim)" }}>
+              MT5 conectado · Sincronizada {formatLastSync(account.lastSyncedAt)}
+            </span>
           )}
         </div>
-        <div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-dim)", textTransform: "uppercase" }}>
-            Saldo inicial
+        <div className="journal-kpis">
+          <div className="calc-mini">
+            <span>Días operados</span>
+            <b>{daysTraded}</b>
           </div>
-          <div style={{ fontSize: 16, marginTop: 4 }}>
-            {account.initialBalance != null ? formatMoney(account.initialBalance, account.currency) : "Pendiente"}
+          <div className="calc-mini">
+            <span>Días en positivo</span>
+            <b>
+              {daysPositive} de {daysTraded}
+            </b>
+          </div>
+          <div className="calc-mini">
+            <span>Mejor día</span>
+            <b>{bestDay ? formatMoney(bestDay.resultAmount, account.currency) : "—"}</b>
+          </div>
+          <div className="calc-mini">
+            <span>Media por día</span>
+            <b>{daysTraded > 0 ? formatMoney(avgPerDay, account.currency) : "—"}</b>
           </div>
         </div>
-        <button className="btn" style={{ alignSelf: "center", fontSize: 12.5 }} onClick={openEditForm}>
-          Editar esta cuenta
+        <button className="btn" style={{ alignSelf: "center" }} onClick={openEditForm}>
+          Editar cuenta
         </button>
       </div>
 
-      <div className="panel">
-        <div className="panel-head" style={{ marginBottom: 6 }}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-dim)", textTransform: "uppercase" }}>
-            Progreso
-          </div>
-          <div className="btn-row">
-            {(["day", "week", "month"] as ChartPeriod[]).map((p) => (
-              <button
-                key={p}
-                className="btn"
-                style={{ fontSize: 12, padding: "5px 12px", ...(chartPeriod === p ? { borderColor: "var(--violet)" } : {}) }}
-                onClick={() => selectPeriod(p)}
-              >
-                {p === "day" ? "Días" : p === "week" ? "Semanas" : "Meses"}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {chartPoints.length > 1 ? (
-          <>
-            <svg
-              viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-              style={{ width: "100%", height: "auto", display: "block" }}
-              onMouseLeave={() => setHoverIndex(null)}
-            >
-              <path
-                d={chartPath}
-                fill="none"
-                stroke={isUp ? "var(--up)" : "var(--down)"}
-                strokeWidth={2}
-                strokeLinejoin="round"
-                strokeLinecap="round"
-              />
-              {chartCoords.map((c, i) => (
-                <circle
-                  key={chartPoints[i].key}
-                  cx={c.x}
-                  cy={c.y}
-                  r={safeHoverIndex === i ? 5 : 3}
-                  fill={isUp ? "var(--up)" : "var(--down)"}
-                  stroke="var(--bg-panel)"
-                  strokeWidth={1}
-                  style={{ cursor: "pointer" }}
-                  onMouseEnter={() => setHoverIndex(i)}
-                  onClick={() => setHoverIndex(i)}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 20 }}>
+        {/* Gráfico de progreso */}
+        <div className="panel" style={{ flex: "2 1 520px", minWidth: 0 }}>
+          <div className="panel-head" style={{ marginBottom: 10 }}>
+            <h2 style={{ fontSize: 18, margin: 0 }}>Progreso</h2>
+            <div className="calc-tabs" role="tablist" aria-label="Periodo">
+              {(["day", "week", "month"] as ChartPeriod[]).map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  role="tab"
+                  aria-selected={chartPeriod === p}
+                  className={`calc-tab ${chartPeriod === p ? "active" : ""}`}
+                  onClick={() => selectPeriod(p)}
                 >
-                  <title>{`${chartPoints[i].label}: ${formatMoney(chartPoints[i].value, account.currency)}`}</title>
-                </circle>
+                  {p === "day" ? "Días" : p === "week" ? "Semanas" : "Meses"}
+                </button>
               ))}
-            </svg>
-            {activePoint && (
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--text-muted)", marginTop: 8 }}>
-                {activePoint.label}: <strong style={{ color: "var(--text-primary)" }}>{formatMoney(activePoint.value, account.currency)}</strong>
-              </div>
-            )}
-          </>
-        ) : (
-          <p style={{ color: "var(--text-muted)", fontSize: 13, margin: 0 }}>
-            Registra al menos un día para ver tu progreso en el gráfico.
-          </p>
-        )}
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20 }}>
-        <div className="panel" style={{ display: "flex", flexDirection: "column", gap: 10 }} ref={manualFormRef}>
-          <h3 style={{ fontSize: 14, margin: 0 }}>Registrar resultado a mano</h3>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <input
-              type="date"
-              value={manualDate}
-              onChange={(e) => setManualDate(e.target.value)}
-              style={{ ...inputStyle, flex: "1 1 140px" }}
-            />
-            <input
-              type="text"
-              inputMode="decimal"
-              placeholder="Ej: 45.50 o -20"
-              value={manualAmount}
-              onChange={(e) => setManualAmount(e.target.value)}
-              style={{ ...inputStyle, flex: "1 1 140px" }}
-            />
+            </div>
           </div>
-          <p style={{ fontSize: 11.5, color: "var(--text-dim)", margin: 0 }}>
-            Un resultado por día — si ya existe uno para esa fecha, se actualiza. También puedes hacer clic en un día
-            del calendario de abajo para editarlo aquí.
-          </p>
-          {manualError && <div className="error-msg">{manualError}</div>}
-          <button className="btn btn-primary" onClick={handleManualSubmit} disabled={manualLoading}>
-            {manualLoading ? "Guardando…" : "Guardar resultado"}
-          </button>
+
+          {chartPoints.length > 1 ? (
+            <>
+              <svg
+                viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+                style={{ width: "100%", height: "auto", display: "block" }}
+                onMouseLeave={() => setHoverIndex(null)}
+              >
+                <defs>
+                  <linearGradient id="journalArea" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stopColor={chartColor} stopOpacity="0.3" />
+                    <stop offset="1" stopColor={chartColor} stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+                <g stroke="var(--line)" strokeWidth={1}>
+                  <line x1={chartPadding} y1={chartPadding} x2={chartWidth - chartPadding} y2={chartPadding} />
+                  <line x1={chartPadding} y1={chartHeight / 2} x2={chartWidth - chartPadding} y2={chartHeight / 2} />
+                  <line x1={chartPadding} y1={chartHeight - chartPadding} x2={chartWidth - chartPadding} y2={chartHeight - chartPadding} />
+                </g>
+                <path d={areaPath} fill="url(#journalArea)" />
+                {safeHoverIndex !== null && chartCoords[safeHoverIndex] && (
+                  <line
+                    x1={chartCoords[safeHoverIndex].x}
+                    y1={chartPadding}
+                    x2={chartCoords[safeHoverIndex].x}
+                    y2={chartHeight - chartPadding}
+                    stroke="var(--line-bright)"
+                    strokeDasharray="4 4"
+                  />
+                )}
+                <path d={chartPath} fill="none" stroke={chartColor} strokeWidth={3} strokeLinejoin="round" strokeLinecap="round" />
+                {chartCoords.map((c, i) => (
+                  <circle
+                    key={chartPoints[i].key}
+                    cx={c.x}
+                    cy={c.y}
+                    r={safeHoverIndex === i ? 6 : 4}
+                    fill={safeHoverIndex === i ? chartColor : "var(--bg-void)"}
+                    stroke={chartColor}
+                    strokeWidth={2}
+                    style={{ cursor: "pointer" }}
+                    onMouseEnter={() => setHoverIndex(i)}
+                    onClick={() => setHoverIndex(i)}
+                  >
+                    <title>{`${chartPoints[i].label}: ${formatMoney(chartPoints[i].value, account.currency)}`}</title>
+                  </circle>
+                ))}
+              </svg>
+              {activePoint && (
+                <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 8 }}>
+                  {activePoint.label}:{" "}
+                  <strong style={{ color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>
+                    {formatMoney(activePoint.value, account.currency)}
+                  </strong>
+                </div>
+              )}
+            </>
+          ) : (
+            <p style={{ color: "var(--text-muted)", fontSize: 13, margin: 0 }}>
+              Registra al menos un día para ver tu progreso en el gráfico.
+            </p>
+          )}
         </div>
 
-        <div className="panel" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <h3 style={{ fontSize: 14, margin: 0 }}>Subir foto del resultado</h3>
-          <p style={{ fontSize: 11.5, color: "var(--text-dim)", margin: 0 }}>
-            La IA propone una cifra a partir de la foto — siempre la revisas y confirmas antes de que se guarde.
-          </p>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => selectPhoto(e.target.files?.[0] ?? null)}
-            style={{ fontSize: 12 }}
-          />
-          {photoPreview && (
-            <img src={photoPreview} alt="Captura" style={{ maxHeight: 140, borderRadius: 6, border: "1px solid var(--line)" }} />
-          )}
-          {photoFile && !proposal && (
-            <button className="btn" onClick={readPhoto} disabled={photoLoading}>
-              {photoLoading ? "Leyendo…" : "Leer resultado con IA"}
+        {/* Registrar resultado: a mano o desde foto, en un solo panel */}
+        <div className="panel" style={{ flex: "1 1 320px", minWidth: 0, display: "flex", flexDirection: "column", gap: 14 }} ref={manualFormRef}>
+          <h2 style={{ fontSize: 18, margin: 0 }}>Registrar resultado</h2>
+          <div className="calc-tabs" role="tablist" aria-label="Método" style={{ alignSelf: "stretch" }}>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={entryMode === "manual"}
+              className={`calc-tab ${entryMode === "manual" ? "active" : ""}`}
+              style={{ flex: 1 }}
+              onClick={() => setEntryMode("manual")}
+            >
+              A mano
             </button>
-          )}
-          {photoError && <div className="error-msg">{photoError}</div>}
-          {proposal && (
-            <div style={{ borderTop: "1px solid var(--line)", paddingTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
-              <div style={{ fontSize: 12.5, color: "var(--text-muted)" }}>
-                La IA leyó: <strong>{proposal.note || "resultado del día"}</strong>{" "}
-                (confianza {proposal.confidence === "alta" ? "alta" : "media"}). Revisa la cifra antes de guardar.
+            <button
+              type="button"
+              role="tab"
+              aria-selected={entryMode === "photo"}
+              className={`calc-tab ${entryMode === "photo" ? "active" : ""}`}
+              style={{ flex: 1 }}
+              onClick={() => setEntryMode("photo")}
+            >
+              Desde foto
+            </button>
+          </div>
+
+          {entryMode === "manual" ? (
+            <>
+              <div>
+                <label>Fecha</label>
+                <input type="date" value={manualDate} onChange={(e) => setManualDate(e.target.value)} style={{ colorScheme: "dark" }} />
               </div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <input
-                  type="date"
-                  value={proposalDate}
-                  onChange={(e) => setProposalDate(e.target.value)}
-                  style={{ ...inputStyle, flex: "1 1 140px" }}
-                />
+              <div>
+                <label>Resultado ({CURRENCY_SYMBOL[account.currency]})</label>
                 <input
                   type="text"
                   inputMode="decimal"
-                  value={proposalAmountText}
-                  onChange={(e) => setProposalAmountText(e.target.value)}
-                  style={{ ...inputStyle, flex: "1 1 140px" }}
+                  placeholder="Ej: 45,50 o -20"
+                  value={manualAmount}
+                  onChange={(e) => setManualAmount(e.target.value)}
+                  style={{ fontFamily: "var(--font-mono)", fontSize: 20, minHeight: 52 }}
                 />
               </div>
-              <div className="btn-row">
-                <button className="btn btn-primary" onClick={confirmProposal} disabled={confirmLoading}>
-                  {confirmLoading ? "Guardando…" : "Confirmar y guardar"}
+              {manualError && <div className="error-msg">{manualError}</div>}
+              <button className="btn btn-primary" style={{ minHeight: 52 }} onClick={handleManualSubmit} disabled={manualLoading}>
+                {manualLoading ? "Guardando…" : "Guardar resultado"}
+              </button>
+              <p style={{ fontSize: 12, color: "var(--text-dim)", margin: 0, lineHeight: 1.5 }}>
+                Un resultado por día — si ya existe uno para esa fecha, se actualiza. También puedes tocar un día del
+                calendario para editarlo aquí.
+              </p>
+            </>
+          ) : (
+            <>
+              <label className="journal-drop">
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#C4B5FD" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="3" y="5" width="18" height="15" rx="3" />
+                  <circle cx="12" cy="12.5" r="3.5" />
+                  <path d="M8 5l1.5-2h5L16 5" />
+                </svg>
+                <span style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", textTransform: "none", letterSpacing: 0, fontFamily: "var(--font-body)" }}>
+                  {photoFile ? photoFile.name : "Sube una captura del resultado"}
+                </span>
+                <span style={{ fontSize: 12, color: "var(--text-dim)", textTransform: "none", letterSpacing: 0, fontFamily: "var(--font-body)" }}>
+                  PNG o JPG de MT5
+                </span>
+                <input type="file" accept="image/*" onChange={(e) => selectPhoto(e.target.files?.[0] ?? null)} style={{ display: "none" }} />
+              </label>
+              {photoPreview && (
+                <img src={photoPreview} alt="Captura" style={{ maxHeight: 160, borderRadius: 12, border: "1px solid var(--line)", objectFit: "contain" }} />
+              )}
+              {photoFile && !proposal && (
+                <button className="btn btn-primary" onClick={readPhoto} disabled={photoLoading}>
+                  {photoLoading ? "Leyendo…" : "Leer resultado con IA"}
                 </button>
-                <button
-                  className="btn"
-                  onClick={() => {
-                    setProposal(null);
-                    setPhotoFile(null);
-                    setPhotoPreview(null);
-                  }}
-                  disabled={confirmLoading}
-                >
-                  Descartar
-                </button>
-              </div>
-            </div>
+              )}
+              {photoError && <div className="error-msg">{photoError}</div>}
+              {proposal && (
+                <div style={{ borderTop: "1px solid var(--line)", paddingTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
+                    La IA leyó: <strong>{proposal.note || "resultado del día"}</strong> (confianza{" "}
+                    {proposal.confidence === "alta" ? "alta" : "media"}). Revisa la cifra antes de guardar.
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <input type="date" value={proposalDate} onChange={(e) => setProposalDate(e.target.value)} style={{ flex: "1 1 140px", colorScheme: "dark" }} />
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={proposalAmountText}
+                      onChange={(e) => setProposalAmountText(e.target.value)}
+                      style={{ flex: "1 1 140px", fontFamily: "var(--font-mono)" }}
+                    />
+                  </div>
+                  <div className="btn-row">
+                    <button className="btn btn-primary" onClick={confirmProposal} disabled={confirmLoading}>
+                      {confirmLoading ? "Guardando…" : "Confirmar y guardar"}
+                    </button>
+                    <button
+                      className="btn"
+                      onClick={() => {
+                        setProposal(null);
+                        setPhotoFile(null);
+                        setPhotoPreview(null);
+                      }}
+                      disabled={confirmLoading}
+                    >
+                      Descartar
+                    </button>
+                  </div>
+                </div>
+              )}
+              <p style={{ fontSize: 12, color: "var(--text-dim)", margin: 0, lineHeight: 1.5 }}>
+                La IA propone una cifra a partir de la foto — siempre la revisas y confirmas antes de que se guarde.
+              </p>
+            </>
           )}
         </div>
       </div>
 
-      <div className="panel journal-calendar">
-        <div className="journal-calendar-head">
-          <h3 style={{ fontSize: 14, margin: 0 }}>Calendario de resultados</h3>
-          <div className="btn-row" style={{ alignItems: "center" }}>
-            <button className="btn" style={{ fontSize: 12, padding: "5px 10px" }} onClick={() => shiftMonth(-1)}>
-              ←
-            </button>
-            <div className="journal-calendar-title">
-              {capitalize(MONTH_NAMES_ES[calendarCursor.month])} {calendarCursor.year}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 20 }}>
+        {/* Calendario tipo mapa de calor */}
+        <div className="panel journal-calendar" style={{ flex: "2 1 520px", minWidth: 0 }}>
+          <div className="journal-calendar-head">
+            <div>
+              <h2 style={{ fontSize: 18, margin: 0 }}>Calendario</h2>
+              <div className="journal-calendar-total" style={{ marginTop: 4 }}>
+                Total del mes:{" "}
+                <strong style={{ color: calendarMonthTotal >= 0 ? "var(--up)" : "var(--down)", fontFamily: "var(--font-mono)" }}>
+                  {calendarMonthTotal >= 0 ? "+" : ""}
+                  {formatMoney(calendarMonthTotal, account.currency)}
+                </strong>
+              </div>
             </div>
-            <button className="btn" style={{ fontSize: 12, padding: "5px 10px" }} onClick={() => shiftMonth(1)}>
-              →
-            </button>
-            <button className="btn" style={{ fontSize: 12, padding: "5px 10px" }} onClick={goToCurrentMonth}>
-              Hoy
-            </button>
+            <div className="btn-row" style={{ alignItems: "center" }}>
+              <button className="btn" aria-label="Mes anterior" style={{ width: 44, padding: 0 }} onClick={() => shiftMonth(-1)}>
+                ‹
+              </button>
+              <div className="journal-calendar-title">
+                {capitalize(MONTH_NAMES_ES[calendarCursor.month])} {calendarCursor.year}
+              </div>
+              <button className="btn" aria-label="Mes siguiente" style={{ width: 44, padding: 0 }} onClick={() => shiftMonth(1)}>
+                ›
+              </button>
+              <button className="btn" onClick={goToCurrentMonth}>
+                Hoy
+              </button>
+            </div>
+          </div>
+
+          <div className="cal-weekdays">
+            {WEEKDAY_NAMES_ES.map((w) => (
+              <div key={w} className="cal-weekday">
+                {w}
+              </div>
+            ))}
+          </div>
+          <div className="cal-grid">
+            {calendarCells.map((dateStr, idx) => {
+              if (!dateStr) return <div key={`empty-${idx}`} className="cal-cell cal-cell-empty" />;
+              const entry = entriesByDate.get(dateStr);
+              const dayNum = parseInt(dateStr.slice(8, 10), 10);
+              const isToday = dateStr === todayStr();
+              const isSelected = dateStr === manualDate;
+              let bg: string | undefined;
+              if (entry) {
+                const t = 0.18 + 0.5 * Math.min(1, Math.abs(entry.resultAmount) / maxAbsInMonth);
+                bg = entry.resultAmount > 0 ? `rgba(167,139,250,${t.toFixed(2)})` : entry.resultAmount < 0 ? `rgba(244,114,182,${t.toFixed(2)})` : "var(--bg-panel-hover)";
+              }
+              return (
+                <button
+                  key={dateStr}
+                  type="button"
+                  className={`cal-cell${isToday ? " cal-cell-today" : ""}${isSelected ? " cal-cell-selected" : ""}`}
+                  style={bg ? { background: bg } : undefined}
+                  onClick={() => selectDay(dateStr)}
+                  aria-label={`${dayNum} de ${MONTH_NAMES_ES[calendarCursor.month]}${entry ? `, ${formatMoney(entry.resultAmount, account.currency)}` : ""}`}
+                >
+                  <span className="cal-day-num">{dayNum}</span>
+                  {entry && (
+                    <>
+                      <span className="cal-cell-amount cal-amt-full" style={{ color: entry.resultAmount >= 0 ? "#E4DCFF" : "#FBCFE8" }}>
+                        {entry.resultAmount >= 0 ? "+" : ""}
+                        {formatMoney(entry.resultAmount, account.currency)}
+                      </span>
+                      <span className="cal-cell-amount cal-amt-short" style={{ color: entry.resultAmount >= 0 ? "#E4DCFF" : "#FBCFE8" }}>
+                        {shortMoney(entry.resultAmount)}
+                      </span>
+                    </>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 14, fontSize: 12, color: "var(--text-dim)", marginTop: 4 }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ width: 12, height: 12, borderRadius: 4, background: "rgba(167,139,250,0.6)" }} />
+              Ganancia
+            </span>
+            <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ width: 12, height: 12, borderRadius: 4, background: "rgba(244,114,182,0.6)" }} />
+              Pérdida
+            </span>
+            <span>Más intenso = mayor resultado</span>
           </div>
         </div>
-        <div className="journal-calendar-total">
-          Total del mes:{" "}
-          <strong style={{ color: calendarMonthTotal >= 0 ? "var(--up)" : "var(--down)" }}>
-            {calendarMonthTotal >= 0 ? "+" : ""}
-            {formatMoney(calendarMonthTotal, account.currency)}
-          </strong>
-        </div>
 
-        <div className="cal-weekdays">
-          {WEEKDAY_NAMES_ES.map((w) => (
-            <div key={w} className="cal-weekday">
-              {w}
-            </div>
-          ))}
-        </div>
-        <div className="cal-grid">
-          {calendarCells.map((dateStr, idx) => {
-            if (!dateStr) return <div key={`empty-${idx}`} className="cal-cell cal-cell-empty" />;
-            const entry = entriesByDate.get(dateStr);
-            const dayNum = parseInt(dateStr.slice(8, 10), 10);
-            const isToday = dateStr === todayStr();
-            return (
-              <button
-                key={dateStr}
-                type="button"
-                className={`cal-cell${isToday ? " cal-cell-today" : ""}`}
-                onClick={() => selectDay(dateStr)}
-              >
-                <span className="cal-day-num">{dayNum}</span>
-                {entry && (
-                  <span
-                    className="cal-cell-amount"
-                    style={{ color: entry.resultAmount >= 0 ? "var(--up)" : "var(--down)" }}
-                  >
-                    {entry.resultAmount >= 0 ? "+" : ""}
-                    {formatMoney(entry.resultAmount, account.currency)}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+        <div style={{ flex: "1 1 280px", minWidth: 0, display: "flex", flexDirection: "column", gap: 20 }}>
+          <div className="panel" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <span style={{ fontSize: 13, color: "var(--text-muted)" }}>Día seleccionado</span>
+            <span style={{ fontSize: 17, fontWeight: 700 }}>
+              {manualDate ? formatDayLabel(manualDate) : "—"}
+            </span>
+            <span
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 28,
+                fontWeight: 600,
+                color: !selectedEntry ? "var(--text-dim)" : selectedEntry.resultAmount >= 0 ? "var(--up)" : "var(--down)",
+              }}
+            >
+              {selectedEntry
+                ? `${selectedEntry.resultAmount >= 0 ? "+" : ""}${formatMoney(selectedEntry.resultAmount, account.currency)}`
+                : "Sin registro"}
+            </span>
+            <span style={{ fontSize: 12, color: "var(--text-dim)" }}>Toca un día del calendario para verlo y editarlo.</span>
+          </div>
+          <div className="panel" style={{ display: "flex", flexDirection: "column" }}>
+            <h2 style={{ fontSize: 16, margin: "0 0 8px" }}>Por semanas</h2>
+            {weekTotals.map((w, i) => (
+              <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderTop: "1px solid var(--line)", fontSize: 14 }}>
+                <span style={{ color: "var(--text-muted)" }}>
+                  {w.label} {MONTH_NAMES_ES[calendarCursor.month].slice(0, 3)}
+                </span>
+                <span
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontWeight: 600,
+                    color: !w.has ? "var(--text-dim)" : w.total >= 0 ? "var(--up)" : "var(--down)",
+                  }}
+                >
+                  {w.has ? `${w.total >= 0 ? "+" : ""}${formatMoney(w.total, account.currency)}` : "—"}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>

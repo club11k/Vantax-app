@@ -483,3 +483,28 @@ td { color: var(--text-primary); }
 .calc-scroll th { position: sticky; top: 0; background: var(--bg-panel); z-index: 1; }
 .calc-rr { display: flex; height: 18px; border-radius: 999px; overflow: hidden; }
 .calc-rr span { display: block; height: 100%; }
+
+/* --- Journaly: rediseño fase 2 (06/10/2026) --- */
+.journal-acc-tab { display: inline-flex; align-items: center; gap: 8px; }
+.journal-acc-tab.active { border-color: var(--violet); background: #2B2540; color: var(--text-primary); }
+.journal-acc-tag { font-size: 11px; padding: 2px 7px; border-radius: 6px; background: #3D3060; color: var(--violet-bright); font-family: var(--font-body); }
+.journal-acc-add { border-style: dashed; color: var(--violet-bright); background: transparent; }
+.journal-hero { display: flex; flex-wrap: wrap; gap: 24px; align-items: center; }
+.journal-balance { font-family: var(--font-mono); font-size: clamp(32px, 5vw, 46px); font-weight: 600; line-height: 1.1; }
+.journal-pct { padding: 4px 10px; border-radius: 999px; font-family: var(--font-mono); font-weight: 600; }
+.journal-pct.up { background: rgba(167,139,250,0.18); color: var(--up); }
+.journal-pct.down { background: rgba(244,114,182,0.16); color: var(--down); }
+.journal-kpis { flex: 2 1 420px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 130px), 1fr)); gap: 10px; }
+.journal-drop {
+  min-height: 180px; border: 2px dashed var(--line-bright); border-radius: 16px; background: var(--bg-panel-raised);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 20px; text-align: center; cursor: pointer; margin: 0;
+}
+.journal-drop:hover { border-color: var(--violet); }
+.cal-cell { justify-content: space-between; min-width: 0; }
+.cal-cell-selected { outline: 2px solid var(--violet); outline-offset: 1px; }
+.cal-cell-amount { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal-amt-short { display: none; }
+@media (max-width: 640px) {
+  .cal-amt-full { display: none; }
+  .cal-amt-short { display: inline; }
+}
