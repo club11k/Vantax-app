@@ -12,6 +12,7 @@ import { TradingViewWidget } from "@/components/market/TradingViewWidget";
 import { AppNav } from "@/components/AppNav";
 import { SourceGroups } from "@/components/market/SourceGroups";
 import { EconCalendar } from "@/components/market/EconCalendar";
+import { getInvestingCalendar } from "@/lib/investing-calendar";
 
 export const revalidate = 300; // recachea esta página cada 5 minutos
 
@@ -68,7 +69,7 @@ export default async function MercadoPage() {
     }
   }
 
-  const [snapshot, goldNews] = await Promise.all([buildMarketSnapshot(), fetchGoldNewsHeadlines()]);
+  const [snapshot, goldNews, investingCal] = await Promise.all([buildMarketSnapshot(), fetchGoldNewsHeadlines(), getInvestingCalendar()]);
   // Un BiasResult por temporalidad — BiasScorePanel (cliente) guarda en
   // estado cuál pestaña está activa y pinta el que corresponda, sin volver
   // a pedir datos al navegar entre pestañas.
@@ -429,7 +430,7 @@ export default async function MercadoPage() {
       </section>
 
       <div id="calendario" className="panel-title" style={{ margin: "4px 0 10px 2px", scrollMarginTop: 20 }}>Calendario Económico (Estados Unidos)</div>
-      <EconCalendar />
+      <EconCalendar ok={investingCal.ok} thisWeek={investingCal.thisWeek} nextWeek={investingCal.nextWeek} />
       <div style={{ marginBottom: 24 }} />
 
       <div id="noticias" className="panel-head" style={{ margin: "4px 0 10px 2px", scrollMarginTop: 20 }}>
