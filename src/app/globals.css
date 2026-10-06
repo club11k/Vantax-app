@@ -544,3 +544,16 @@ td { color: var(--text-primary); }
 .ec-table { min-width: 560px; }
 .ec-table td { vertical-align: middle; }
 .ec-impact { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+
+/* --- Menú en móvil (06/10/2026): en pantallas estrechas el desplegable se
+   salía por la izquierda al quedar el botón a la izquierda. Ahora se abre
+   como panel a lo ancho de la pantalla, por encima de todo. --- */
+@media (max-width: 640px) {
+  .menu-dropdown {
+    position: fixed; left: 12px; right: 12px; top: 76px; width: auto;
+    max-height: calc(100vh - 96px); z-index: 1000; border-radius: 16px;
+    background: #110D1E; box-shadow: 0 20px 60px rgba(0,0,0,0.75);
+  }
+  .menu-item { min-height: 48px; }
+  .header-row .btn-row { margin-left: auto; }
+}
