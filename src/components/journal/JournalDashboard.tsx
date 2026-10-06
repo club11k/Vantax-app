@@ -611,14 +611,18 @@ export function JournalDashboard({ initialAccounts }: { initialAccounts: Account
   }
 
   // --- Calendario mensual (clic en un día = editar/añadir ese resultado) ---
+  // Siempre arranca en el mes actual (antes abría el mes del último resultado
+  // registrado, y al recargar volvía a septiembre — cambio del 06/10/2026).
   const [calendarCursor, setCalendarCursor] = useState<{ year: number; month: number }>(() => {
-    if (initialAccounts[0]?.entries.length) {
-      const [y, m] = initialAccounts[0].entries[initialAccounts[0].entries.length - 1].date.split("-").map(Number);
-      return { year: y, month: m - 1 };
-    }
     const now = new Date();
     return { year: now.getFullYear(), month: now.getMonth() };
   });
+  // Por si el servidor está en otra zona horaria y cae justo en cambio de mes:
+  // al cargar en el navegador se ajusta al mes real del usuario.
+  useEffect(() => {
+    const now = new Date();
+    setCalendarCursor({ year: now.getFullYear(), month: now.getMonth() });
+  }, []);
 
   const calendarCells = useMemo(
     () => buildMonthGrid(calendarCursor.year, calendarCursor.month),
@@ -1242,5 +1246,6 @@ export function JournalDashboard({ initialAccounts }: { initialAccounts: Account
     </div>
   );
 }
+
 
 
