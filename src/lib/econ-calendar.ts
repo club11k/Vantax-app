@@ -26,6 +26,23 @@ const URLS: { week: "this" | "next"; url: string }[] = [
   { week: "next", url: "https://nfs.faireconomy.media/ff_calendar_nextweek.json" },
 ];
 
+// El feed no siempre escribe el impacto igual ("High", "high", "High Impact
+// Expected", "H"…). Se normaliza a uno de estos cuatro valores para que el
+// color y el filtro "Solo impacto alto" funcionen siempre.
+function normalizeImpact(raw: unknown): "High" | "Medium" | "Low" | "Holiday" {
+  const s = String(raw ?? "").trim().toLowerCase();
+  // ForexFactory también usa colores: rojo = alto, naranja = medio, amarillo = bajo, gris = festivo.
+  if (s.includes("red")) return "High";
+  if (s.includes("ora")) return "Medium";
+  if (s.includes("gra") || s.includes("gre")) return "Holiday";
+  if (s.includes("yel")) return "Low";
+  if (s.startsWith("h") && !s.startsWith("hol")) return "High";
+  if (s.includes("high") || s.includes("alto") || s === "3") return "High";
+  if (s.startsWith("m") || s.includes("medium") || s.includes("medio") || s === "2") return "Medium";
+  if (s.startsWith("hol") || s.includes("non-economic") || s.includes("festivo")) return "Holiday";
+  return "Low";
+}
+
 async function fetchWeek(week: "this" | "next", url: string): Promise<EconEvent[]> {
   try {
     const res = await fetch(url, { next: { revalidate: 1800 }, headers: { "User-Agent": "Mozilla/5.0 (VANTAX)" } });
@@ -37,7 +54,7 @@ async function fetchWeek(week: "this" | "next", url: string): Promise<EconEvent[
       .map((e) => ({
         title: String(e.title ?? ""),
         dateIso: String(e.date),
-        impact: String(e.impact ?? ""),
+        impact: normalizeImpact(e.impact),
         forecast: String(e.forecast ?? ""),
         previous: String(e.previous ?? ""),
         week,
