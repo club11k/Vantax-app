@@ -10,6 +10,7 @@ import { BiasScorePanel } from "@/components/market/BiasScorePanel";
 import { MarketFlowMap } from "@/components/market/MarketFlowMap";
 import { TradingViewWidget } from "@/components/market/TradingViewWidget";
 import { AppNav } from "@/components/AppNav";
+import { SourceGroups } from "@/components/market/SourceGroups";
 
 export const revalidate = 300; // recachea esta página cada 5 minutos
 
@@ -29,34 +30,6 @@ function fmtDateEs(raw: string): string {
   const [, year, month, day] = m;
   return `${day}/${month}/${year}`;
 }
-
-// Notas explicativas breves para categorías de datos cuyo nombre no es
-// autoexplicativo a simple vista.
-const GROUP_NOTES: Record<string, string> = {};
-
-// Icono + color de acento por categoría del Mapa de Fuentes (puramente
-// decorativo — rediseño pedido por Esther 06/10/2026, "que sea algo chulo
-// no simples recuadros"). No depende de ningún valor: es siempre el mismo
-// icono/color para "Precios", para "Inflación", etc., así que no cambia ni
-// un dato, solo le da una identidad visual a cada bloque.
-const GROUP_ICON: Record<string, string> = {
-  precios: "💰",
-  tasas: "🏦",
-  inflacion: "📈",
-  liquidez: "💧",
-  empleo: "👷",
-  riesgo: "⚠️",
-  flujos: "🔄",
-};
-const GROUP_ACCENT: Record<string, string> = {
-  precios: "var(--gold-bright)",
-  tasas: "var(--violet)",
-  inflacion: "var(--down)",
-  liquidez: "#5AA7D6",
-  empleo: "var(--up)",
-  riesgo: "var(--down)",
-  flujos: "var(--violet-bright)",
-};
 
 export default async function MercadoPage() {
   const session = await getServerSession(authOptions);
@@ -323,6 +296,18 @@ export default async function MercadoPage() {
         </div>
       </div>
 
+      {/* Accesos rápidos a cada sección (rediseño 06/10/2026) */}
+      <nav className="mk-nav" aria-label="Secciones">
+        <a href="#resumen">Resumen</a>
+        <a href="#sesgo">Sesgo</a>
+        <a href="#termometros">Termómetros</a>
+        <a href="#graficos">Gráficos</a>
+        <a href="#flujos">Flujos</a>
+        <a href="#calendario">Calendario</a>
+        <a href="#noticias">Noticias</a>
+        <a href="#datos">Datos macro</a>
+      </nav>
+
       {/*
         Este ticker-tape es un widget de TradingView independiente: pide los
         precios directamente al feed de TradingView desde el navegador, no
@@ -359,50 +344,133 @@ export default async function MercadoPage() {
         }}
       />
 
-      <div style={{ marginTop: 20, marginBottom: 16 }}>
-        <MarketFlowMap news={goldNews} />
-      </div>
+      {/* Resumen de un vistazo: sesgo diario, precios clave y última hora */}
+      <section id="resumen" className="mk-summary">
+        {(() => {
+          const total = biasByTimeframe["1day"].total;
+          const s = total === null ? 0 : Math.max(-100, Math.min(100, total));
+          const color = total === null ? "var(--text-dim)" : s > 8 ? "var(--up)" : s < -8 ? "var(--down)" : "var(--text-muted)";
+          const theta = ((90 - s * 0.9) * Math.PI) / 180;
+          const ax = 100 + 80 * Math.cos(theta);
+          const ay = 100 - 80 * Math.sin(theta);
+          const nx = 100 + 72 * Math.cos(theta);
+          const ny = 100 - 72 * Math.sin(theta);
+          return (
+            <div className="panel mk-bias-card">
+              <div style={{ alignSelf: "stretch", display: "flex", justifyContent: "space-between", fontSize: 13, color: "var(--text-muted)" }}>
+                <span>Bias Score · oro</span>
+                <span style={{ fontFamily: "var(--font-mono)" }}>Diario</span>
+              </div>
+              <svg viewBox="0 0 200 116" style={{ width: "100%", maxWidth: 240, height: "auto" }} aria-hidden="true">
+                <path d="M20 100 A80 80 0 0 1 180 100" fill="none" stroke="var(--line)" strokeWidth={14} strokeLinecap="round" />
+                {total !== null && Math.abs(s) > 0.5 && (
+                  <path d={`M100 20 A80 80 0 0 ${s > 0 ? 1 : 0} ${ax.toFixed(1)} ${ay.toFixed(1)}`} fill="none" stroke={color} strokeWidth={14} strokeLinecap="round" />
+                )}
+                <line x1="100" y1="100" x2={nx.toFixed(1)} y2={ny.toFixed(1)} stroke="var(--text-primary)" strokeWidth={3} strokeLinecap="round" />
+                <circle cx="100" cy="100" r="6" fill="var(--text-primary)" />
+                <text x="20" y="116" fill="var(--text-dim)" fontSize="10" textAnchor="middle" fontFamily="IBM Plex Mono, monospace">−100</text>
+                <text x="180" y="116" fill="var(--text-dim)" fontSize="10" textAnchor="middle" fontFamily="IBM Plex Mono, monospace">+100</text>
+              </svg>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 48, fontWeight: 600, lineHeight: 1, color }}>
+                {total === null ? "—" : `${s > 0 ? "+" : ""}${Math.round(s)}`}
+              </span>
+              <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>{biasByTimeframe["1day"].label}</span>
+              <a href="#sesgo" style={{ fontSize: 13, fontWeight: 600 }}>
+                Ver por temporalidad →
+              </a>
+            </div>
+          );
+        })()}
 
-      <BiasScorePanel results={biasByTimeframe} isAdmin={isAdmin} />
+        <div className="panel" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <span style={{ fontSize: 13, color: "var(--text-muted)" }}>Precios clave</span>
+          {snapshot.prices.gold && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 4, paddingBottom: 14, borderBottom: "1px solid var(--line)" }}>
+              <span style={{ display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 600 }}>
+                Oro spot (XAU/USD)
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, color: snapshot.prices.gold.percentChange >= 0 ? "var(--up)" : "var(--down)" }}>
+                  {fmtPct(snapshot.prices.gold.percentChange)}
+                </span>
+              </span>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 32, fontWeight: 600, color: "#E8B84A" }}>
+                ${snapshot.prices.gold.price.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </div>
+          )}
+          <div className="calc-mini-grid">
+            {snapshot.prices.dxy && (
+              <div className="calc-mini">
+                <span>Índice dólar (DXY)</span>
+                <b>{snapshot.prices.dxy.price.toFixed(2)}</b>
+                <small>{fmtPct(snapshot.prices.dxy.percentChange)} hoy</small>
+              </div>
+            )}
+            {snapshot.risk.vix && (
+              <div className="calc-mini">
+                <span>VIX</span>
+                <b>{snapshot.risk.vix.value.toFixed(2)}</b>
+              </div>
+            )}
+            {snapshot.macro.us10yTipsReal && (
+              <div className="calc-mini">
+                <span>US 10Y real (TIPS)</span>
+                <b>{snapshot.macro.us10yTipsReal.value}%</b>
+              </div>
+            )}
+            {snapshot.macro.fedFundsRate && (
+              <div className="calc-mini">
+                <span>Fed Funds</span>
+                <b>{snapshot.macro.fedFundsRate.value}%</b>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {goldNews[0] ? (
+          <a href={goldNews[0].url} target="_blank" rel="noopener noreferrer" className="panel mk-news-card">
+            <span className="mk-news-tag">
+              <span className="map-alert-pulse" />
+              Última hora{goldNews[0].dateIso ? ` · ${fmtDateEs(goldNews[0].dateIso)}` : ""}
+            </span>
+            <span style={{ fontSize: 15, lineHeight: 1.55, whiteSpace: "pre-line", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 7, WebkitBoxOrient: "vertical" }}>
+              {goldNews[0].text}
+            </span>
+            <span style={{ marginTop: "auto", fontSize: 13, fontWeight: 600, color: "#F9A8D4" }}>Leer en Telegram ↗</span>
+          </a>
+        ) : (
+          <div className="panel" style={{ color: "var(--text-dim)", fontSize: 13.5 }}>Sin titulares ahora mismo.</div>
+        )}
+      </section>
+
+      <section id="sesgo" style={{ scrollMarginTop: 20 }}>
+        <BiasScorePanel results={biasByTimeframe} isAdmin={isAdmin} />
+      </section>
 
       <div className="panel-title" style={{ margin: "4px 0 10px 2px" }}>Sesiones de Mercado (hora real, UTC)</div>
       <SessionsClock />
 
       {gauges.length > 0 && (
-        <>
+        <section id="termometros" style={{ scrollMarginTop: 20 }}>
           <div className="panel-title" style={{ margin: "20px 0 10px 2px" }}>Termómetros de Temperatura Económica</div>
-          <div className="gauges" style={{ marginBottom: 24 }}>
+          <div className="mk-gauges" style={{ marginBottom: 24 }}>
             {gauges.map((g) => (
-              <div key={g.name} className="gauge-card">
-                <div className="g-name">{g.name}</div>
-                <div className="therm">
-                  <div className="therm-tube">
-                    <div
-                      className="therm-fill"
-                      style={{ height: `${g.value}%`, background: `linear-gradient(180deg, ${g.color}, ${g.color}99)` }}
-                    />
-                  </div>
-                  <div className="therm-ticks">
-                    {[0, 25, 50, 75, 100].map((t) => (
-                      <i key={t} style={{ bottom: `${t}%` }} />
-                    ))}
-                  </div>
-                  <div className="therm-bulb">
-                    <div className="therm-bulb-fill" style={{ background: g.color }} />
-                  </div>
-                </div>
-                <div className="g-value" style={{ color: g.color }}>
-                  {g.value}
-                  <span style={{ fontSize: 11, color: "var(--text-dim)" }}>/100</span>
-                </div>
-                <div className="g-desc">{g.label}</div>
+              <div key={g.name} className="mk-gauge">
+                <span className="mk-gauge-name">{g.name}</span>
+                <span style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 28, fontWeight: 600, color: g.color }}>{g.value}</span>
+                  <span style={{ fontSize: 13, color: "var(--text-dim)" }}>/100</span>
+                </span>
+                <span className="mk-gauge-track">
+                  <span style={{ width: `${g.value}%`, background: g.color }} />
+                </span>
+                <span className="g-desc">{g.label}</span>
               </div>
             ))}
           </div>
-        </>
+        </section>
       )}
 
-      <div className="grid-even" style={{ marginBottom: 16 }}>
+      <div id="graficos" className="grid-even" style={{ marginBottom: 16, scrollMarginTop: 20 }}>
         <TradingViewWidget
           height={420}
           src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js"
@@ -435,7 +503,11 @@ export default async function MercadoPage() {
         />
       </div>
 
-      <div className="panel-title" style={{ margin: "4px 0 10px 2px" }}>Calendario Económico (Estados Unidos)</div>
+      <section id="flujos" style={{ marginBottom: 24, scrollMarginTop: 20 }}>
+        <MarketFlowMap news={goldNews} />
+      </section>
+
+      <div id="calendario" className="panel-title" style={{ margin: "4px 0 10px 2px", scrollMarginTop: 20 }}>Calendario Económico (Estados Unidos)</div>
       <TradingViewWidget
         height={420}
         src="https://s3.tradingview.com/external-embedding/embed-widget-events.js"
@@ -459,7 +531,7 @@ export default async function MercadoPage() {
       />
       <div style={{ marginBottom: 24 }} />
 
-      <div className="panel-head" style={{ margin: "4px 0 10px 2px" }}>
+      <div id="noticias" className="panel-head" style={{ margin: "4px 0 10px 2px", scrollMarginTop: 20 }}>
         <span className="panel-title">Feed de Titulares — Club 11K Gold News</span>
         <a
           href="https://t.me/s/club11k_news"
@@ -534,7 +606,7 @@ export default async function MercadoPage() {
         </div>
       )}
 
-      <div className="panel-head" style={{ margin: "4px 0 10px 2px" }}>
+      <div id="datos" className="panel-head" style={{ margin: "24px 0 10px 2px", scrollMarginTop: 20 }}>
         <span className="panel-title">Mapa de Fuentes — Valores Usados en esta Corrida</span>
         <span className="panel-sub">{totalSources} datos en vivo, agrupados por categoría</span>
       </div>
@@ -543,27 +615,7 @@ export default async function MercadoPage() {
           Todavía no hay datos en vivo — configura FRED_API_KEY y TWELVE_DATA_API_KEY en Render → Environment.
         </div>
       ) : (
-        sourceGroups.map((group) => (
-          <div key={group.key} style={{ marginBottom: 20 }}>
-            <div className="source-group-title">{group.title}</div>
-            {GROUP_NOTES[group.key] && <div className="source-group-note">{GROUP_NOTES[group.key]}</div>}
-            <div className="source-grid">
-              {group.items.map((s, i) => (
-                <div key={i} className="stat-pretty" style={{ "--accent": GROUP_ACCENT[group.key] } as React.CSSProperties}>
-                  <div className="stat-pretty-top">
-                    <div className="stat-ico">{GROUP_ICON[group.key] ?? "📊"}</div>
-                  </div>
-                  <div className="source-card-label">{s.label}</div>
-                  <div className="source-card-value">{s.value}</div>
-                  <div className="source-card-meta">
-                    <span>{fmtDateEs(s.date)}</span>
-                    <span>{s.source}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))
+        <SourceGroups groups={sourceGroups} />
       )}
     </div>
   );
