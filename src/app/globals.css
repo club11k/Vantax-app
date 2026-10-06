@@ -579,3 +579,9 @@ td { color: var(--text-primary); }
 .mk-live-quotes { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 10px; margin-bottom: 10px; }
 .mk-live-quote { background: var(--bg-panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 12px 4px; display: flex; flex-direction: column; gap: 4px; }
 .mk-live-quote .panel { padding: 0 !important; border: 0 !important; background: transparent !important; margin: 0 !important; box-shadow: none !important; }
+
+/* --- Filtros de Datos macro sin barra de desplazamiento (06/10/2026):
+   botones más pequeños que pasan a otra línea en vez de deslizarse. --- */
+.mk-chips { flex-wrap: wrap; overflow: visible; gap: 6px; padding-bottom: 0; }
+.mk-chip { min-height: 36px; padding: 0 12px; font-size: 13px; gap: 6px; }
+.mk-chip .mk-dot { width: 7px; height: 7px; flex-basis: 7px; }

@@ -37,7 +37,6 @@ function fmtDateEs(raw: string): string {
 // disponible en TradingView" en widgets externos.
 const LIVE_QUOTES = [
   { symbol: "CAPITALCOM:DXY", label: "Índice dólar (DXY)" },
-  { symbol: "COMEX:GC1!", label: "Futuro oro COMEX (GC1!)" },
   { symbol: "CAPITALCOM:OIL_BRENT", label: "Petróleo Brent (BRNT)" },
   { symbol: "CAPITALCOM:OIL_CRUDE", label: "Petróleo WTI (USOIL)" },
 ];
