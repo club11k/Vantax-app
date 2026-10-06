@@ -1,13 +1,17 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 // Fondo animado de toda la web (rediseño visual pedido por Esther, 06/10/2026).
 // - En todas las páginas: cuadrícula lila con casillas que se iluminan y haces
 //   de luz que salen de un punto central y avanzan por las líneas.
 // - En /play: escena arcade retro (estrellas, sol a rayas, suelo en
 //   perspectiva) con naves que se disparan.
+// En móviles (pantalla estrecha o táctil) se pinta una versión LIGERA: menos
+// piezas animadas y sin el brillo difuminado, que es lo que más cuesta
+// redibujar y hacía que la web fuera a tirones (06/10/2026). Por defecto se
+// arranca en ligero y, si es un ordenador, se pasa a la versión completa.
 // Es solo decoración: va fijo detrás de todo (z-index 0, aria-hidden, sin
 // eventos de ratón). Los datos se generan con una semilla fija, así que el
 // servidor y el navegador pintan exactamente lo mismo (sin errores de
@@ -29,7 +33,7 @@ const H = 1080;
 
 /* ---------------- Cuadrícula con haces ---------------- */
 
-function GridScene() {
+function GridScene({ lite }: { lite: boolean }) {
   const { tiles, beams } = useMemo(() => {
     const r = rng(7);
     const C = 40;
@@ -68,8 +72,8 @@ function GridScene() {
         delay: (r() * dur).toFixed(1),
       };
     });
-    return { tiles, beams };
-  }, []);
+    return lite ? { tiles: tiles.slice(0, 22), beams: beams.slice(0, 10) } : { tiles, beams };
+  }, [lite]);
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid slice" shapeRendering="crispEdges" className="vx-bg-svg" style={{ opacity: 0.55 }}>
@@ -99,11 +103,11 @@ function GridScene() {
           strokeWidth={3}
           strokeLinecap="square"
           strokeDasharray="70 1000"
-          filter="url(#vxGlow)"
+          filter={lite ? undefined : "url(#vxGlow)"}
           style={{ strokeDashoffset: 70, animation: `vx-beam ${b.dur}s ${b.delay}s linear infinite` }}
         />
       ))}
-      <rect x={952} y={552} width={16} height={16} fill="#C4B5FD" filter="url(#vxGlow)" style={{ animation: "vx-node 2s ease-in-out infinite" }} />
+      <rect x={952} y={552} width={16} height={16} fill="#C4B5FD" filter={lite ? undefined : "url(#vxGlow)"} style={{ animation: "vx-node 2s ease-in-out infinite" }} />
     </svg>
   );
 }
@@ -135,7 +139,7 @@ const UFO_P: Pal = { M: "#F472B6", Y: "#FACC15" };
 const BOOM = ["Y...Y...Y", ".Y..Y..Y.", "..Y.Y.Y..", "...WWW...", "YYYWWWYYY", "...WWW...", "..Y.Y.Y..", ".Y..Y..Y.", "Y...Y...Y"];
 const BOOM_P: Pal = { Y: "#FACC15", W: "#FFFFFF" };
 
-function ArcadeScene() {
+function ArcadeScene({ lite }: { lite: boolean }) {
   const HZ = 600;
   const CX = 960;
   const data = useMemo(() => {
@@ -160,12 +164,14 @@ function ArcadeScene() {
       }
     }
     const drops = [700, 804, 908, 1012, 1116, 1220].map((x) => ({ x, on: r() < 0.7, delay: (r() * 3).toFixed(1) }));
-    return { stars, vlines, beams, drops };
-  }, []);
+    return lite
+      ? { stars: stars.slice(0, 30), vlines, beams: [] as typeof beams, drops: drops.map((d) => ({ ...d, on: false })) }
+      : { stars, vlines, beams, drops };
+  }, [lite]);
 
   // Duelos nave-enemigo: el láser sale de la nave, llega al enemigo, este
   // explota y reaparece. Mismo ciclo de 2,4 s para que todo cuadre.
-  const duels = [
+  const allDuels = [
     { x: 420, delay: 0, yo: 0 },
     { x: 1500, delay: 1.2, yo: 0 },
     { x: 150, delay: 0.6, yo: 0 },
@@ -173,12 +179,14 @@ function ArcadeScene() {
     { x: 260, delay: 1.5, yo: 120 },
     { x: 1660, delay: 0.3, yo: 120 },
   ];
-  const divers = [
+  const duels = lite ? allDuels.slice(0, 2) : allDuels;
+  const allDivers = [
     { x: 60, delay: 0, dur: 7 },
     { x: 1840, delay: 3.5, dur: 7 },
     { x: 330, delay: 2, dur: 9 },
     { x: 1590, delay: 5.5, dur: 9 },
   ];
+  const divers = lite ? [] : allDivers;
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid slice" className="vx-bg-svg" style={{ opacity: 0.6 }}>
@@ -217,8 +225,8 @@ function ArcadeScene() {
         {data.vlines.map((l, i) => (
           <line key={`v${i}`} x1={l.x0} y1={HZ} x2={l.xb} y2={H} stroke="#A78BFA" strokeWidth={2.5} />
         ))}
-        {Array.from({ length: 8 }, (_, k) => (
-          <line key={`h${k}`} x1="0" y1={HZ} x2={W} y2={HZ} stroke="#A78BFA" strokeWidth={2.5} style={{ animation: `vx-floor 4s cubic-bezier(0.55, 0, 1, 0.45) ${-k * 0.5}s infinite` }} />
+        {Array.from({ length: lite ? 4 : 8 }, (_, k) => (
+          <line key={`h${k}`} x1="0" y1={HZ} x2={W} y2={HZ} stroke="#A78BFA" strokeWidth={2.5} style={{ animation: `vx-floor 4s cubic-bezier(0.55, 0, 1, 0.45) ${-k * (lite ? 1 : 0.5)}s infinite` }} />
         ))}
         {data.beams.map((b, i) => (
           <line
@@ -236,7 +244,7 @@ function ArcadeScene() {
           />
         ))}
       </g>
-      <line x1="0" y1={HZ} x2={W} y2={HZ} stroke="#F0ABFC" strokeWidth={4} filter="url(#vxArGlow)" />
+      <line x1="0" y1={HZ} x2={W} y2={HZ} stroke="#F0ABFC" strokeWidth={4} filter={lite ? undefined : "url(#vxArGlow)"} />
 
       <g shapeRendering="crispEdges">
         {duels.map((d) => (
@@ -263,9 +271,9 @@ function ArcadeScene() {
           ))}
         </g>
 
-        <g style={{ animation: "vx-ufo 14s linear infinite" }}>
+        {!lite && <g style={{ animation: "vx-ufo 14s linear infinite" }}>
           <Sprite rows={UFO} pal={UFO_P} x={0} y={40} />
-        </g>
+        </g>}
 
         {divers.map((d) => (
           <g key={`dv${d.x}`} style={{ opacity: 0, animation: `vx-dive ${d.dur}s ${d.delay}s linear infinite` }}>
@@ -281,9 +289,27 @@ function ArcadeScene() {
 export function AnimatedBackground() {
   const pathname = usePathname() || "";
   const arcade = pathname.startsWith("/play");
+  // Ligero por defecto (también en el HTML del servidor); en ordenador se
+  // activa la versión completa en cuanto carga la página.
+  const [lite, setLite] = useState(true);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 820px), (pointer: coarse)");
+    const update = () => setLite(mq.matches);
+    update();
+    mq.addEventListener?.("change", update);
+    return () => mq.removeEventListener?.("change", update);
+  }, []);
+  // Pausa las animaciones cuando la pestaña no se ve (ahorra batería).
+  const [hidden, setHidden] = useState(false);
+  useEffect(() => {
+    const onVis = () => setHidden(document.hidden);
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, []);
   return (
-    <div aria-hidden="true" className="vx-bg">
-      {arcade ? <ArcadeScene /> : <GridScene />}
+    <div aria-hidden="true" className={`vx-bg${hidden ? " vx-paused" : ""}`}>
+      {arcade ? <ArcadeScene lite={lite} /> : <GridScene lite={lite} />}
     </div>
   );
 }
+
