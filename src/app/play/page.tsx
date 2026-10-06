@@ -19,14 +19,6 @@ export default async function PlayPage() {
     <div className="container" style={{ paddingTop: 40 }}>
       <div className="header-row" style={{ marginBottom: 24 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
-          {/* Avatar pixel art de Vantax (rediseño 06/10/2026) */}
-          <img
-            src="/vantax-avatar.jpg"
-            alt="Vantax"
-            width={88}
-            height={88}
-            style={{ width: 88, height: 88, borderRadius: 12, border: "3px solid #A78BFA", boxShadow: "0 0 24px rgba(167,139,250,0.45), 5px 5px 0 #07050C", objectFit: "cover", flexShrink: 0 }}
-          />
           <div>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.14em", color: "var(--violet)", textTransform: "uppercase" }}>
             VANTAX

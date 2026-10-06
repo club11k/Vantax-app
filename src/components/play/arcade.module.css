@@ -5,7 +5,7 @@
    chocar con las clases globales .btn/.card/.tag que usa el resto de VANTAX
    fuera de Vantax Play. */
 
-@import url("https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&family=Silkscreen:wght@400;700&display=swap");
 
 .root {
   --void: #0a0a12;
@@ -701,4 +701,151 @@
   align-items: center;
   justify-content: center;
   padding: 20px;
+}
+
+
+/* ==========================================================================
+   REDISEÑO VISUAL FASE 2 (Esther, 06/10/2026) — mismo contenido y misma
+   lógica, nueva piel calcada de la maqueta: tarjetas con sombra dura tipo
+   arcade, fuente pixel Silkscreen para títulos/pestañas/cifras, Sora para el
+   texto, ficha de jugador arriba, cofres con halo, podio en ranking. Los
+   cofres en CSS que pasó Esther (.pix-chest y sus tramos) no se tocan.
+   ========================================================================== */
+
+.root {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  font-family: "Sora", "Segoe UI", system-ui, sans-serif;
+  font-size: 15px;
+}
+.pixel { font-family: "Silkscreen", monospace; }
+
+/* Ficha de jugador */
+.hero {
+  position: relative; overflow: hidden; background: #150F27; border: 2px solid #5B3FA8; border-radius: 12px;
+  box-shadow: 8px 8px 0 #07050C; padding: 24px; margin-bottom: 18px; display: flex; flex-wrap: wrap; align-items: center; gap: 22px;
+}
+.hero::before {
+  content: ""; position: absolute; right: -80px; top: -120px; width: 360px; height: 360px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(167,139,250,0.28), rgba(167,139,250,0) 70%); pointer-events: none;
+}
+.hero > * { position: relative; }
+.heroAvatar {
+  width: 108px; height: 108px; flex: 0 0 108px; border: 3px solid #A78BFA; border-radius: 10px; background: #0B0814;
+  overflow: hidden; animation: heroPulse 3s infinite;
+}
+.heroAvatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+@keyframes heroPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(167,139,250,0); } 50% { box-shadow: 0 0 30px 4px rgba(167,139,250,0.5); } }
+.heroInfo { flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.heroLabel { font-size: 13px; color: var(--textDim); }
+.heroName { margin: 0; font-family: "Silkscreen", monospace; font-size: clamp(26px, 4.5vw, 40px); line-height: 1; color: #F2EFF8; text-shadow: 3px 3px 0 #5B3FA8; overflow-wrap: anywhere; }
+.heroBadges { display: flex; flex-wrap: wrap; gap: 8px; }
+.heroBadge { font-family: "Silkscreen", monospace; font-size: 13px; padding: 5px 10px; border: 2px solid #A78BFA; border-radius: 4px; background: #241C3B; color: #C4B5FD; }
+.heroCoin {
+  display: flex; align-items: center; gap: 14px; padding: 16px 20px; background: #0B0814; border: 2px solid #CA8A04;
+  border-radius: 10px; box-shadow: 4px 4px 0 #3A2A05;
+}
+.heroCoinVal { font-family: "Silkscreen", monospace; font-size: 40px; line-height: 1; color: #FACC15; text-shadow: 3px 3px 0 #713F12; }
+.coinSpin { animation: coinSpin 2.4s ease-in-out infinite; }
+@keyframes coinSpin { 0%,100% { transform: scaleX(1); } 50% { transform: scaleX(0.15); } }
+.musicBtn {
+  min-height: 44px; padding: 0 14px; border-radius: 6px; cursor: pointer; font-family: "Silkscreen", monospace; font-size: 14px;
+  border: 2px solid #3D3060; background: #241C3B; color: #A39DB3;
+}
+.musicBtn[aria-pressed="true"] { border-color: #A78BFA; background: #2B2540; color: #F2EFF8; }
+
+/* Estadísticas con icono */
+.stat {
+  display: flex; align-items: center; gap: 14px; text-align: left; background: #150F27; border: 2px solid #33285A;
+  border-radius: 10px; box-shadow: 5px 5px 0 #07050C; padding: 16px;
+}
+.statVal { font-family: "Silkscreen", monospace; font-size: 22px; text-shadow: none; }
+.statLab { font-size: 12px; margin-top: 2px; }
+
+/* Pestañas */
+.tabs { gap: 10px; flex-wrap: nowrap; overflow-x: auto; padding: 4px 8px 10px 4px; margin-bottom: 14px; }
+.tabBtn {
+  flex: 0 0 auto; font-family: "Silkscreen", monospace; font-size: 15px; min-height: 48px; padding: 0 20px; border-radius: 6px;
+  background: #150F27; border: 2px solid #3D3060; color: #C4B5FD; box-shadow: 3px 3px 0 #07050C;
+}
+.tabBtn.active { background: #A78BFA; color: #0E0A18; border-color: #E9E3FF; box-shadow: 4px 4px 0 #3B2A78; transform: translateY(-2px); }
+
+/* Tarjetas */
+.card { background: #150F27; border: 2px solid #33285A; border-radius: 10px; box-shadow: 6px 6px 0 #07050C; padding: 22px; margin-bottom: 20px; }
+.sectionTitle { font-family: "Silkscreen", monospace; font-size: 20px; font-weight: 400; color: #C4B5FD; border-left: none; padding-left: 0; }
+
+/* Barra de progreso */
+.progressTrack { flex: 1; min-width: 0; position: relative; height: 34px; border: 3px solid #3D3060; border-radius: 6px; background: #0B0814; overflow: hidden; }
+.progressFill { position: absolute; left: 0; top: 0; bottom: 0; transition: width 0.6s ease; }
+.progressShine {
+  position: absolute; left: 0; top: 0; bottom: 0; background-image: linear-gradient(90deg, transparent, rgba(255,255,255,0.45), transparent);
+  background-size: 200px 100%; background-repeat: no-repeat; animation: progressShine 2.4s linear infinite;
+}
+@keyframes progressShine { 0% { background-position: -300px 0; } 100% { background-position: 600px 0; } }
+.progressFoot { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; margin-top: 12px; }
+.motivation { padding: 10px 14px; background: #241C3B; border-radius: 6px; font-size: 14px; font-weight: 700; color: #F2EFF8; }
+.road { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-top: 14px; }
+.roadStep { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; font-family: "Silkscreen", monospace; font-size: 12px; color: #6B6385; }
+.roadBar { align-self: stretch; height: 8px; border-radius: 2px; background: #241C3B; }
+
+/* Cofres */
+.chest-card {
+  background: #110D1E; border-radius: 10px; box-shadow: 5px 5px 0 #07050C; min-height: 240px; justify-content: flex-end;
+  overflow: hidden; padding: 24px 16px;
+}
+.chest-card::before {
+  content: ""; position: absolute; left: 50%; top: 40%; width: 170px; height: 170px; transform: translate(-50%, -50%); border-radius: 50%;
+  background: radial-gradient(circle, rgba(167,139,250,0.22), transparent 70%); pointer-events: none;
+}
+.chest-card > * { position: relative; }
+.chest-card.legendario { background: #24163F; border-color: #A855F7; box-shadow: 6px 6px 0 #3B1D5E; }
+.chest-card.legendario::before { width: 230px; height: 230px; background: radial-gradient(circle, rgba(168,85,247,0.35), transparent 70%); }
+.chest-card h4 { font-family: "Silkscreen", monospace; font-size: 18px; font-weight: 400; text-shadow: 2px 2px 0 #0B0814; }
+.chest-card small { display: inline-flex !important; align-items: center; gap: 6px; padding: 5px 10px; border: 1px solid #33285A; border-radius: 4px; background: #0B0814; font-size: 12px; }
+
+/* Botones e inputs */
+.btn { border-radius: 6px; min-height: 44px; box-shadow: 4px 4px 0 #3B2A78; }
+.input { border-radius: 6px; min-height: 46px; }
+
+/* Cuentas vinculadas */
+.accRow { background: #110D1E; border: 1px solid #2E2447; border-radius: 8px; padding: 16px; }
+.led { border-radius: 2px; }
+.led.on { background: #A78BFA; box-shadow: 0 0 10px #A78BFA; }
+.led.off { background: #FACC15; box-shadow: 0 0 10px #FACC15; }
+.accStats { display: flex; gap: 18px; }
+.accStats span { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--textDim); }
+.accStats b { font-family: "IBM Plex Mono", monospace; font-size: 15px; color: #F2EFF8; }
+.secureNote { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; background: #1E1638; border-radius: 8px; font-size: 13px; line-height: 1.5; color: #DCD6E8; margin-bottom: 14px; }
+
+/* V-COIN: pasos */
+.steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 14px; margin: 16px 0; }
+.step { background: #110D1E; border: 2px solid #33285A; border-radius: 8px; padding: 18px; display: flex; flex-direction: column; gap: 10px; }
+.stepNum { width: 40px; height: 40px; border-radius: 6px; background: #241C3B; border: 2px solid #A78BFA; display: flex; align-items: center; justify-content: center; font-family: "Silkscreen", monospace; font-size: 18px; color: #C4B5FD; }
+.stepTitle { font-family: "Silkscreen", monospace; font-size: 16px; color: #F2EFF8; }
+.stepText { font-size: 14px; line-height: 1.5; color: var(--textDim); }
+.warnBox { display: flex; gap: 12px; align-items: flex-start; padding: 16px 18px; border: 2px dashed #FACC15; border-radius: 8px; background: #221B0A; font-size: 14px; line-height: 1.5; }
+
+/* Ranking */
+.leagueTabs { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 120px), 1fr)); gap: 8px; margin-bottom: 18px; }
+.leagueBtn {
+  min-height: 58px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border-radius: 6px; cursor: pointer;
+  border: 2px solid #3D3060; background: #110D1E; color: #A39DB3; font-family: "Sora", sans-serif;
+}
+.leagueBtn b { font-family: "Silkscreen", monospace; font-size: 15px; font-weight: 400; }
+.leagueBtn span { font-size: 11px; opacity: 0.85; }
+.leagueBtn.active { border-color: #A78BFA; background: #2B2540; color: #F2EFF8; box-shadow: 4px 4px 0 #3B2A78; }
+.podium { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; align-items: end; max-width: 560px; margin: 8px auto 20px; }
+.podiumCol { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; min-width: 0; }
+.podiumName { font-family: "Silkscreen", monospace; font-size: 14px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.podiumEmpty { font-size: 13px; color: var(--textDim); }
+.podiumBlock { align-self: stretch; border-radius: 6px 6px 0 0; display: flex; align-items: center; justify-content: center; font-family: "Silkscreen", monospace; }
+.crown { animation: crownFloat 2.2s ease-in-out infinite; }
+@keyframes crownFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+.emptyLeague { padding: 32px 16px; border: 2px dashed #3D3060; border-radius: 8px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.table tr.me { background: #2B2540; }
+.meTag { font-size: 11px; color: #0E0A18; background: #C4B5FD; border-radius: 3px; padding: 1px 6px; margin-left: 6px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .heroAvatar, .coinSpin, .progressShine, .crown { animation: none; }
 }

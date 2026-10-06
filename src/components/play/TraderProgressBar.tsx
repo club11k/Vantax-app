@@ -1,7 +1,8 @@
 "use client";
 
 import styles from "@/components/play/arcade.module.css";
-import { TIER_LABEL, tierClassKey, type PlayTierValue } from "@/components/play/tierStyles";
+import { TIER_LABEL, TIER_ORDER, tierClassKey, type PlayTierValue } from "@/components/play/tierStyles";
+import { TrophyIcon } from "@/components/play/PixelIcons";
 
 export type PlayProgress = {
   tier: PlayTierValue;
@@ -26,32 +27,25 @@ export function TraderProgressBar({ progress }: { progress: PlayProgress }) {
         <span className={`${styles.tier} ${styles[tierKey]}`}>{TIER_LABEL[progress.tier]}</span>
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <div
-          style={{
-            flex: 1,
-            height: 18,
-            background: "var(--void)",
-            border: "2px solid var(--line)",
-            position: "relative",
-            overflow: "hidden",
-          }}
-        >
+      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        {/* Barra gruesa con brillo que la recorre (rediseño 06/10/2026) */}
+        <div className={styles.progressTrack}>
           <div
+            className={styles.progressFill}
             style={{
-              height: "100%",
               width: `${progress.barFillPercent}%`,
-              transition: "width 0.6s ease",
-              background:
+              backgroundColor: "#7C5CE0",
+              backgroundImage:
                 tierKey === "legendario"
-                  ? "linear-gradient(90deg, #8a6d1a, var(--gold))"
+                  ? "repeating-linear-gradient(90deg, #FACC15 0 14px, #EAB308 14px 16px)"
                   : tierKey === "epico"
-                  ? "linear-gradient(90deg, var(--lilaDim, #5b3f8a), var(--lilaGlow))"
+                  ? "repeating-linear-gradient(90deg, #EC4899 0 14px, #DB2777 14px 16px)"
                   : tierKey === "intermedio"
-                  ? "linear-gradient(90deg, #1f6b45, var(--teal))"
-                  : "linear-gradient(90deg, #3d4966, #9ab0ff)",
+                  ? "repeating-linear-gradient(90deg, #2DD4BF 0 14px, #14B8A6 14px 16px)"
+                  : "repeating-linear-gradient(90deg, #A78BFA 0 14px, #8B6CF0 14px 16px)",
             }}
           />
+          <div className={styles.progressShine} style={{ width: `${progress.barFillPercent}%` }} />
         </div>
         <div className={styles["tp-end-chest"]} title="Cofre misterioso al final del recorrido">
           <div className={styles["chest-stage"]}>
@@ -65,13 +59,27 @@ export function TraderProgressBar({ progress }: { progress: PlayProgress }) {
         </div>
       </div>
 
-      <p style={{ margin: "10px 0 0", fontSize: 15, color: "var(--textDim)" }}>Opera cada día y consigue tu recompensa.</p>
+      <div className={styles.progressFoot}>
+        <span className={styles.motivation} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <TrophyIcon size={20} />
+          {progress.aheadOfCount > 0
+            ? `Vas por delante de ${progress.aheadOfCount} persona${progress.aheadOfCount === 1 ? "" : "s"} · ¡Sigue así!`
+            : "¡Sé el primero en subir de tramo esta vez!"}
+        </span>
+        <span style={{ fontSize: 14, color: "var(--textDim)" }}>Opera cada día y consigue tu recompensa.</span>
+      </div>
 
-      <p style={{ margin: "6px 0 0", fontSize: 15, color: "var(--text)" }}>
-        {progress.aheadOfCount > 0
-          ? `Vas por delante de ${progress.aheadOfCount} persona${progress.aheadOfCount === 1 ? "" : "s"} · ¡Sigue así!`
-          : "¡Sé el primero en subir de tramo esta vez!"}
-      </p>
+      <div className={styles.road}>
+        {TIER_ORDER.map((t, i) => {
+          const done = i <= progress.tierIndex;
+          return (
+            <div key={t} className={styles.roadStep} style={done ? { color: "#C4B5FD" } : undefined}>
+              <span className={styles.roadBar} style={done ? { background: "#A78BFA", boxShadow: "0 0 10px #A78BFA" } : undefined} />
+              {TIER_LABEL[t as PlayTierValue]}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

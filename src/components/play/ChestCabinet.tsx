@@ -5,6 +5,7 @@ import { ChestOpenModal } from "@/components/play/ChestOpenModal";
 import styles from "@/components/play/arcade.module.css";
 import { TIER_ORDER, TIER_LABEL, tierClassKey, type PlayTierValue } from "@/components/play/tierStyles";
 import type { PlayProgress } from "@/components/play/TraderProgressBar";
+import { LockIcon } from "@/components/play/PixelIcons";
 
 // El armario de cofres, dibujado en CSS exactamente como el mockup original
 // de Vantax Play (cofre = caja "lid" + "body" + "lock" + "band" coloreada
@@ -69,13 +70,15 @@ function ChestTile({
         </div>
       )}
       {state === "locked" && (
-        <small style={{ display: "block", marginTop: 8 }}>🔒 Bloqueado</small>
+        <small style={{ marginTop: 8 }}>
+          <LockIcon /> Bloqueado
+        </small>
       )}
       {state === "current" && (
-        <small style={{ display: "block", marginTop: 8 }}>En curso…</small>
+        <small style={{ marginTop: 8, color: "#FDBA74" }}>En curso…</small>
       )}
       {state === "cleared" && (
-        <small style={{ display: "block", marginTop: 8, color: "var(--green)" }}>Superado</small>
+        <small style={{ marginTop: 8, color: "#C4B5FD" }}>Superado</small>
       )}
     </div>
   );

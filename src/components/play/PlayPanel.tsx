@@ -7,6 +7,8 @@ import { ChestCabinet } from "@/components/play/ChestCabinet";
 import { RankingBoard } from "@/components/play/RankingBoard";
 import { Mt5ServerField } from "@/components/Mt5ServerField";
 import { isArcadeMusicOn, stopArcadeMusic, toggleArcadeMusic } from "@/components/play/arcadeMusic";
+import { TIER_LABEL, LEAGUE_LABEL } from "@/components/play/tierStyles";
+import { CoinIcon, ShieldIcon, TrophyIcon, MonitorIcon, LockIcon } from "@/components/play/PixelIcons";
 
 // Vantax Play, con la piel arcade del Vantax Play original (vcoin.html):
 // tabs con glow, HUD de stats en pixel font, cofres dibujados en CSS. Todo
@@ -278,220 +280,9 @@ export function PlayPanel() {
 
   const effectiveTab: Tab = profile.registered ? tab : "perfil";
 
-  return (
-    <div className={styles.root}>
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
-        <button
-          type="button"
-          className={`${styles.btn} ${styles.btnGhost}`}
-          style={{ marginTop: 0 }}
-          onClick={handleToggleMusic}
-          aria-pressed={musicOn}
-        >
-          {musicOn ? "♪ MÚSICA: ON" : "♪ MÚSICA: OFF"}
-        </button>
-      </div>
-      <div className={`${styles.grid} ${styles.cols4}`}>
-        <div className={styles.stat}>
-          <div className={styles.statVal}>{profile.vCoinBalance}</div>
-          <div className={styles.statLab}>V-COIN</div>
-        </div>
-        <div className={styles.stat}>
-          <div className={styles.statVal} style={{ fontSize: 12 }}>
-            {profile.progress ? profile.progress.tier : "—"}
-          </div>
-          <div className={styles.statLab}>Tramo actual</div>
-        </div>
-        <div className={styles.stat}>
-          <div className={styles.statVal}>{profile.progress && profile.progress.aheadOfCount >= 0 ? `#${profile.progress.aheadOfCount + 1}` : "—"}</div>
-          <div className={styles.statLab}>Ranking (aprox.)</div>
-        </div>
-        <div className={styles.stat}>
-          <div className={styles.statVal}>{profile.accounts.filter((a) => a.ibActive).length}</div>
-          <div className={styles.statLab}>Cuentas activas</div>
-        </div>
-      </div>
-
-      <div className={styles.tabs}>
-        {(Object.keys(TAB_LABEL) as Tab[]).map((t) => (
-          <button
-            key={t}
-            className={`${styles.tabBtn} ${effectiveTab === t ? styles.active : ""}`}
-            disabled={t !== "perfil" && !profile.registered}
-            onClick={() => setTab(t)}
-          >
-            {TAB_LABEL[t]}
-          </button>
-        ))}
-      </div>
-      {!profile.registered && (
-        <p style={{ fontSize: 14, color: "var(--textDim)", marginTop: -8, marginBottom: 16 }}>
-          Completa tu registro en "PERFIL" para desbloquear Progreso, V-COIN y Tienda.
-        </p>
-      )}
-
-      {effectiveTab === "progreso" && profile.progress && (
-        <>
-          <TraderProgressBar progress={profile.progress} />
-          <ChestCabinet progress={profile.progress} onChanged={load} />
-        </>
-      )}
-
-      {effectiveTab === "ranking" && <RankingBoard />}
-
-      {effectiveTab === "vcoin" && (
-        <div className={styles.card}>
-          <h3 className={styles.sectionTitle}>¿QUÉ ES V-COIN?</h3>
-          <div className={styles.pix} style={{ fontSize: 26, color: "var(--gold)", textShadow: "0 0 8px #facc1580" }}>
-            {profile.vCoinBalance} V-COIN
-          </div>
-          <p style={{ fontSize: 15, color: "var(--textDim)", marginTop: 10 }}>
-            V-COIN es la moneda de cashback de Vantax Play. Cada vez que operas con tu cuenta MT5 vinculada, el
-            sistema mide cuántos lotes has movido y te recompensa por ello: cuantos más lotes operes, más V-COIN
-            acumulas. Lo ganas tanto por el lotaje en XAUUSD de cualquier cuenta vinculada, como por la comisión que
-            generas si esa cuenta es de Vantage con el IB activo — todo se sincroniza solo, sin que tengas que hacer
-            nada más que vincular tu MT5 una vez en la pestaña "PERFIL". Ese saldo es el que abre los cofres de
-            "PROGRESO" y, más adelante, se podrá canjear en la "TIENDA".
-          </p>
-          <div
-            style={{
-              border: "1px dashed var(--gold)",
-              background: "#facc1512",
-              padding: "10px 12px",
-              marginTop: 14,
-              fontSize: 14,
-              color: "var(--text)",
-            }}
-          >
-            ⚠️ Importante: solo cuentan los lotes operados en XAUUSD. Operaciones en otros pares no generan V-COIN ni
-            avanzan tu barra de progreso.
-          </div>
-        </div>
-      )}
-
-      {effectiveTab === "tienda" && (
-        <div className={styles.card}>
-          <h3 className={styles.sectionTitle}>TIENDA</h3>
-          <p style={{ fontSize: 15, color: "var(--textDim)" }}>
-            Muy pronto vas a poder canjear tu V-COIN por artículos del catálogo directamente aquí. De momento, los
-            artículos solo se consiguen como premio extra al abrir un cofre.
-          </p>
-          <span className={styles.tag}>Próximamente</span>
-        </div>
-      )}
-
-      {effectiveTab === "perfil" && (
-        <>
-          <div className={styles.card}>
-            <h3 className={styles.sectionTitle}>
-              {profile.registered ? "TU PERFIL DE JUGADOR" : "COMPLETA TU REGISTRO"}
-            </h3>
-            {!profile.registered && (
-              <p style={{ fontSize: 15, color: "var(--textDim)" }}>
-                Elige un ID público (es lo que se va a ver en los rankings de Vantax Play, nunca tu nombre real) y, si
-                quieres, tus datos para cobrar V-COIN en cripto. Puedes completar la wallet más adelante.
-              </p>
-            )}
-            <form onSubmit={handleProfileSubmit}>
-              <label className={styles.label}>ID público</label>
-              <input
-                className={styles.input}
-                type="text"
-                placeholder="Ej: trader_esther"
-                value={publicId}
-                onChange={(e) => setPublicId(e.target.value)}
-                disabled={savingProfile}
-              />
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <div style={{ flex: 1, minWidth: 200 }}>
-                  <label className={styles.label}>Wallet de cobro (USDT)</label>
-                  <input
-                    className={styles.input}
-                    type="text"
-                    placeholder="Opcional"
-                    value={payoutWallet}
-                    onChange={(e) => setPayoutWallet(e.target.value)}
-                    disabled={savingProfile}
-                  />
-                </div>
-                <div>
-                  <label className={styles.label}>Red</label>
-                  <select
-                    className={styles.input}
-                    value={payoutNetwork}
-                    onChange={(e) => setPayoutNetwork(e.target.value as "TRC20" | "BEP20")}
-                    disabled={savingProfile}
-                  >
-                    <option value="TRC20">TRC20</option>
-                    <option value="BEP20">BEP20</option>
-                  </select>
-                </div>
-              </div>
-              <button className={styles.btn} type="submit" disabled={savingProfile || !publicId.trim()}>
-                {savingProfile ? "GUARDANDO…" : "GUARDAR PERFIL"}
-              </button>
-            </form>
-            {profileError && <div className={styles.errorMsg}>{profileError}</div>}
-          </div>
-
-          <div className={styles.card}>
-            <h3 className={styles.sectionTitle}>VINCULAR CUENTA MT5</h3>
-            <p style={{ fontSize: 15, color: "var(--textDim)" }}>
-              Un solo paso: indica el broker, el número de cuenta y conecta MT5 con la contraseña <b>investor</b> (solo
-              lectura, nunca la de trading). Con eso ya está — tu saldo, el lotaje de XAUUSD y (si es una cuenta de
-              Vantage) tu comisión de IB se sincronizan solos cada 15 minutos, sin nada más que vincular en ningún
-              otro sitio.
-            </p>
-            <form onSubmit={handleAccountSubmit}>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <div style={{ flex: 1, minWidth: 150 }}>
-                  <label className={styles.label}>Broker</label>
-                  <input className={styles.input} type="text" placeholder="Ej: Vantage" value={brokerName} onChange={(e) => setBrokerName(e.target.value)} disabled={savingAccount} />
-                </div>
-                <div style={{ flex: 1, minWidth: 150 }}>
-                  <label className={styles.label}>Número de cuenta</label>
-                  <input className={styles.input} type="text" value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} disabled={savingAccount} />
-                </div>
-                <div>
-                  <label className={styles.label}>Tipo</label>
-                  <select className={styles.input} value={accountType} onChange={(e) => setAccountType(e.target.value as "NORMAL" | "CENT")} disabled={savingAccount}>
-                    <option value="NORMAL">Normal</option>
-                    <option value="CENT">Cent</option>
-                  </select>
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <div style={{ flex: 1, minWidth: 150 }}>
-                  <label className={styles.label}>Servidor MT5</label>
-                  <Mt5ServerField brokerName={brokerName} value={mt5Server} onChange={setMt5Server} disabled={savingAccount} className={styles.input} />
-                </div>
-                <div style={{ flex: 1, minWidth: 150 }}>
-                  <label className={styles.label}>Login investor</label>
-                  <input className={styles.input} type="text" value={investorLogin} onChange={(e) => setInvestorLogin(e.target.value)} disabled={savingAccount} />
-                </div>
-                <div style={{ flex: 1, minWidth: 150 }}>
-                  <label className={styles.label}>Contraseña investor</label>
-                  <input className={styles.input} type="password" value={investorPassword} onChange={(e) => setInvestorPassword(e.target.value)} disabled={savingAccount} />
-                </div>
-              </div>
-              {brokerName.trim().toLowerCase() !== "vantage" && (
-                <div style={{ fontSize: 11.5, color: "var(--text-dim)", marginTop: -6 }}>
-                  El "Servidor MT5" tiene que ser EXACTAMENTE igual que en tu terminal (mayúsculas y espacios
-                  incluidos) — lo ves en la pantalla de login de MT5 o en el correo de bienvenida de tu broker. Si no
-                  coincide letra por letra, la cuenta no se sincroniza y no avisa del motivo.
-                </div>
-              )}
-              <button
-                className={styles.btn}
-                type="submit"
-                disabled={savingAccount || !brokerName.trim() || !accountNumber.trim() || !investorLogin.trim() || !investorPassword || !mt5Server.trim()}
-              >
-                {savingAccount ? "VINCULANDO…" : "VINCULAR CUENTA"}
-              </button>
-            </form>
-            {accountError && <div className={styles.errorMsg}>{accountError}</div>}
-          </div>
-
+  // Tarjeta de cuentas vinculadas: se muestra arriba del todo en Perfil si ya
+  // hay cuentas (rediseño 06/10/2026), o al final si todavía no hay ninguna.
+  const accountsCard = (
           <div className={styles.card}>
             <h3 className={styles.sectionTitle}>TUS CUENTAS VINCULADAS</h3>
             {profile.accounts.length === 0 && <p style={{ color: "var(--textDim)" }}>Todavía no vinculaste ninguna cuenta.</p>}
@@ -504,10 +295,17 @@ export function PlayPanel() {
                       {a.broker.name} · {a.accountNumber}
                     </b>
                     <small>
-                      Saldo: {a.balance.toFixed(2)} · Equity: {a.equity.toFixed(2)}
-                      {a.mt5Server ? ` · Servidor: ${a.mt5Server}` : ""}
+                      {a.mt5Server ? `Servidor: ${a.mt5Server}` : "Sin servidor MT5"}
                       {a.mt5Connected ? ` · ${formatLastSync(a.lastSyncedAt)}` : ""}
                     </small>
+                  </div>
+                  <div className={styles.accStats}>
+                    <span>
+                      Saldo<b>{a.balance.toFixed(2)}</b>
+                    </span>
+                    <span>
+                      Equity<b>{a.equity.toFixed(2)}</b>
+                    </span>
                   </div>
                   <span className={`${styles.tag} ${a.accountType === "CENT" ? styles.cent : ""}`}>{a.accountType === "CENT" ? "CENT" : "NORMAL"}</span>
                   {!a.ibActive && <span className={styles.tag}>Pendiente</span>}
@@ -590,6 +388,284 @@ export function PlayPanel() {
               </div>
             ))}
           </div>
+  );
+
+  return (
+    <div className={styles.root}>
+      {/* Ficha de jugador (rediseño 06/10/2026) */}
+      <div className={styles.hero}>
+        <div className={styles.heroAvatar}>
+          <img src="/vantax-avatar.jpg" alt="Vantax" width={108} height={108} />
+        </div>
+        <div className={styles.heroInfo}>
+          <span className={styles.heroLabel}>Jugador</span>
+          <h2 className={styles.heroName}>{profile.publicId || "Nuevo jugador"}</h2>
+          <div className={styles.heroBadges}>
+            {profile.progress && <span className={styles.heroBadge}>Tramo {TIER_LABEL[profile.progress.tier]}</span>}
+            {profile.progress && <span className={styles.heroBadge}>Liga {LEAGUE_LABEL[profile.progress.tier]}</span>}
+            {profile.progress && profile.progress.aheadOfCount >= 0 && (
+              <span className={styles.heroBadge}>#{profile.progress.aheadOfCount + 1} en tu liga</span>
+            )}
+          </div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 10 }}>
+          <button type="button" className={styles.musicBtn} onClick={handleToggleMusic} aria-pressed={musicOn}>
+            {musicOn ? "♪ MÚSICA ON" : "♪ MÚSICA OFF"}
+          </button>
+          <div className={styles.heroCoin}>
+            <CoinIcon size={44} className={styles.coinSpin} />
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span style={{ fontSize: 12, color: "var(--textDim)" }}>Saldo V-COIN</span>
+              <span className={styles.heroCoinVal}>{profile.vCoinBalance}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className={`${styles.grid} ${styles.cols4}`}>
+        <div className={styles.stat}>
+          <CoinIcon />
+          <div>
+            <div className={styles.statVal} style={{ color: "#FACC15" }}>{profile.vCoinBalance}</div>
+            <div className={styles.statLab}>V-COIN</div>
+          </div>
+        </div>
+        <div className={styles.stat}>
+          <ShieldIcon />
+          <div>
+            <div className={styles.statVal} style={{ color: "#FDBA74" }}>
+              {profile.progress ? TIER_LABEL[profile.progress.tier] : "—"}
+            </div>
+            <div className={styles.statLab}>Tramo actual</div>
+          </div>
+        </div>
+        <div className={styles.stat}>
+          <TrophyIcon />
+          <div>
+            <div className={styles.statVal} style={{ color: "#C4B5FD" }}>
+              {profile.progress && profile.progress.aheadOfCount >= 0 ? `#${profile.progress.aheadOfCount + 1}` : "—"}
+            </div>
+            <div className={styles.statLab}>Ranking (aprox.)</div>
+          </div>
+        </div>
+        <div className={styles.stat}>
+          <MonitorIcon />
+          <div>
+            <div className={styles.statVal} style={{ color: "#F2EFF8" }}>{profile.accounts.filter((a) => a.ibActive).length}</div>
+            <div className={styles.statLab}>Cuentas activas</div>
+          </div>
+        </div>
+      </div>
+
+      <div className={styles.tabs}>
+        {(Object.keys(TAB_LABEL) as Tab[]).map((t) => (
+          <button
+            key={t}
+            className={`${styles.tabBtn} ${effectiveTab === t ? styles.active : ""}`}
+            disabled={t !== "perfil" && !profile.registered}
+            onClick={() => setTab(t)}
+          >
+            {TAB_LABEL[t]}
+          </button>
+        ))}
+      </div>
+      {!profile.registered && (
+        <p style={{ fontSize: 14, color: "var(--textDim)", marginTop: -8, marginBottom: 16 }}>
+          Completa tu registro en "PERFIL" para desbloquear Progreso, V-COIN y Tienda.
+        </p>
+      )}
+
+      {effectiveTab === "progreso" && profile.progress && (
+        <>
+          <TraderProgressBar progress={profile.progress} />
+          <ChestCabinet progress={profile.progress} onChanged={load} />
+        </>
+      )}
+
+      {effectiveTab === "ranking" && <RankingBoard />}
+
+      {effectiveTab === "vcoin" && (
+        <div className={styles.card}>
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 20 }}>
+            <CoinIcon size={72} className={styles.coinSpin} />
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <span style={{ fontSize: 13, color: "var(--textDim)" }}>Tu saldo</span>
+              <span className={styles.pixel} style={{ fontSize: "clamp(32px, 6vw, 52px)", lineHeight: 1, color: "#FACC15", textShadow: "3px 3px 0 #713F12" }}>
+                {profile.vCoinBalance} V-COIN
+              </span>
+              <span style={{ fontSize: 14, color: "var(--textDim)" }}>La moneda de cashback de Vantax Play.</span>
+            </div>
+          </div>
+          <div className={styles.steps}>
+            <div className={styles.step}>
+              <span className={styles.stepNum}>1</span>
+              <span className={styles.stepTitle}>Vincula tu MT5</span>
+              <span className={styles.stepText}>Una sola vez, desde la pestaña Perfil, con tu contraseña investor.</span>
+            </div>
+            <div className={styles.step}>
+              <span className={styles.stepNum}>2</span>
+              <span className={styles.stepTitle}>Opera XAUUSD</span>
+              <span className={styles.stepText}>
+                Cada lote que mueves en oro suma. Si tu cuenta es de Vantage con el IB activo, también sumas por comisión.
+              </span>
+            </div>
+            <div className={styles.step}>
+              <span className={styles.stepNum}>3</span>
+              <span className={styles.stepTitle}>Gana V-COIN</span>
+              <span className={styles.stepText}>Cuantos más lotes operes, más V-COIN acumulas. Se sincroniza solo.</span>
+            </div>
+            <div className={styles.step}>
+              <span className={styles.stepNum}>4</span>
+              <span className={styles.stepTitle}>Canjéalos</span>
+              <span className={styles.stepText}>Tu saldo abre los cofres de Progreso y, más adelante, se podrá canjear en la Tienda.</span>
+            </div>
+          </div>
+          <div className={styles.warnBox}>
+            <span aria-hidden="true">⚠️</span>
+            <span>
+              <b style={{ color: "#FACC15" }}>Importante:</b> solo cuentan los lotes operados en XAUUSD. Operaciones en otros
+              pares no generan V-COIN ni avanzan tu barra de progreso.
+            </span>
+          </div>
+        </div>
+      )}
+
+      {effectiveTab === "tienda" && (
+        <div className={styles.card}>
+          <h3 className={styles.sectionTitle}>TIENDA</h3>
+          <p style={{ fontSize: 15, color: "var(--textDim)" }}>
+            Muy pronto vas a poder canjear tu V-COIN por artículos del catálogo directamente aquí. De momento, los
+            artículos solo se consiguen como premio extra al abrir un cofre.
+          </p>
+          <span className={styles.tag}>Próximamente</span>
+        </div>
+      )}
+
+      {effectiveTab === "perfil" && (
+        <>
+          {profile.registered && profile.accounts.length > 0 && (
+            <>
+          {accountsCard}
+            </>
+          )}
+          <div className={styles.card}>
+            <h3 className={styles.sectionTitle}>
+              {profile.registered ? "TU PERFIL DE JUGADOR" : "COMPLETA TU REGISTRO"}
+            </h3>
+            {!profile.registered && (
+              <p style={{ fontSize: 15, color: "var(--textDim)" }}>
+                Elige un ID público (es lo que se va a ver en los rankings de Vantax Play, nunca tu nombre real) y, si
+                quieres, tus datos para cobrar V-COIN en cripto. Puedes completar la wallet más adelante.
+              </p>
+            )}
+            <form onSubmit={handleProfileSubmit}>
+              <label className={styles.label}>ID público</label>
+              <input
+                className={styles.input}
+                type="text"
+                placeholder="Ej: trader_esther"
+                value={publicId}
+                onChange={(e) => setPublicId(e.target.value)}
+                disabled={savingProfile}
+              />
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <div style={{ flex: 1, minWidth: 200 }}>
+                  <label className={styles.label}>Wallet de cobro (USDT)</label>
+                  <input
+                    className={styles.input}
+                    type="text"
+                    placeholder="Opcional"
+                    value={payoutWallet}
+                    onChange={(e) => setPayoutWallet(e.target.value)}
+                    disabled={savingProfile}
+                  />
+                </div>
+                <div>
+                  <label className={styles.label}>Red</label>
+                  <select
+                    className={styles.input}
+                    value={payoutNetwork}
+                    onChange={(e) => setPayoutNetwork(e.target.value as "TRC20" | "BEP20")}
+                    disabled={savingProfile}
+                  >
+                    <option value="TRC20">TRC20</option>
+                    <option value="BEP20">BEP20</option>
+                  </select>
+                </div>
+              </div>
+              <button className={styles.btn} type="submit" disabled={savingProfile || !publicId.trim()}>
+                {savingProfile ? "GUARDANDO…" : "GUARDAR PERFIL"}
+              </button>
+            </form>
+            {profileError && <div className={styles.errorMsg}>{profileError}</div>}
+          </div>
+
+          <div className={styles.card}>
+            <h3 className={styles.sectionTitle}>VINCULAR CUENTA MT5</h3>
+            <div className={styles.secureNote}>
+              <LockIcon size={18} />
+              <span>
+                Un solo paso: indica el broker, el número de cuenta y conecta MT5 con la contraseña <b>investor</b> (solo
+                lectura, nunca la de trading). Con eso ya está — tu saldo, el lotaje de XAUUSD y (si es una cuenta de
+                Vantage) tu comisión de IB se sincronizan solos cada 15 minutos, sin nada más que vincular en ningún
+                otro sitio.
+              </span>
+            </div>
+            <form onSubmit={handleAccountSubmit}>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <div style={{ flex: 1, minWidth: 150 }}>
+                  <label className={styles.label}>Broker</label>
+                  <input className={styles.input} type="text" placeholder="Ej: Vantage" value={brokerName} onChange={(e) => setBrokerName(e.target.value)} disabled={savingAccount} />
+                </div>
+                <div style={{ flex: 1, minWidth: 150 }}>
+                  <label className={styles.label}>Número de cuenta</label>
+                  <input className={styles.input} type="text" value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} disabled={savingAccount} />
+                </div>
+                <div>
+                  <label className={styles.label}>Tipo</label>
+                  <select className={styles.input} value={accountType} onChange={(e) => setAccountType(e.target.value as "NORMAL" | "CENT")} disabled={savingAccount}>
+                    <option value="NORMAL">Normal</option>
+                    <option value="CENT">Cent</option>
+                  </select>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <div style={{ flex: 1, minWidth: 150 }}>
+                  <label className={styles.label}>Servidor MT5</label>
+                  <Mt5ServerField brokerName={brokerName} value={mt5Server} onChange={setMt5Server} disabled={savingAccount} className={styles.input} />
+                </div>
+                <div style={{ flex: 1, minWidth: 150 }}>
+                  <label className={styles.label}>Login investor</label>
+                  <input className={styles.input} type="text" value={investorLogin} onChange={(e) => setInvestorLogin(e.target.value)} disabled={savingAccount} />
+                </div>
+                <div style={{ flex: 1, minWidth: 150 }}>
+                  <label className={styles.label}>Contraseña investor</label>
+                  <input className={styles.input} type="password" value={investorPassword} onChange={(e) => setInvestorPassword(e.target.value)} disabled={savingAccount} />
+                </div>
+              </div>
+              {brokerName.trim().toLowerCase() !== "vantage" && (
+                <div style={{ fontSize: 11.5, color: "var(--text-dim)", marginTop: -6 }}>
+                  El "Servidor MT5" tiene que ser EXACTAMENTE igual que en tu terminal (mayúsculas y espacios
+                  incluidos) — lo ves en la pantalla de login de MT5 o en el correo de bienvenida de tu broker. Si no
+                  coincide letra por letra, la cuenta no se sincroniza y no avisa del motivo.
+                </div>
+              )}
+              <button
+                className={styles.btn}
+                type="submit"
+                disabled={savingAccount || !brokerName.trim() || !accountNumber.trim() || !investorLogin.trim() || !investorPassword || !mt5Server.trim()}
+              >
+                {savingAccount ? "VINCULANDO…" : "VINCULAR CUENTA"}
+              </button>
+            </form>
+            {accountError && <div className={styles.errorMsg}>{accountError}</div>}
+          </div>
+
+          {(!profile.registered || profile.accounts.length === 0) && (
+            <>
+          {accountsCard}
+            </>
+          )}
         </>
       )}
     </div>
