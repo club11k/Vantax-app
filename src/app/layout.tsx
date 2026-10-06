@@ -3,6 +3,7 @@ import "./globals.css";
 import { Footer } from "@/components/Footer";
 import { InactivityWarningBanner } from "@/components/InactivityWarningBanner";
 import { Providers } from "@/components/Providers";
+import { AnimatedBackground } from "@/components/AnimatedBackground";
 
 export const metadata: Metadata = {
   title: "VANTAX — Análisis de XAU/USD y DXY",
@@ -13,6 +14,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="es">
       <body style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+        <AnimatedBackground />
         <Providers>
           {/* Aparece solo, en cualquier página, mientras el usuario tenga un
               aviso de inactividad pendiente — ver el propio componente. */}

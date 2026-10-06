@@ -1,4 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap');
 
 :root {
   --bg-void: #0A0714;
@@ -361,3 +362,90 @@ details.indicators[open] summary::before { content: '▾ '; }
 /* --- Calculadora de riesgo: filas de botones tipo "píldora" --- */
 .pill-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .pill-row .btn { font-size: 12.5px; }
+
+
+/* ==========================================================================
+   REDISEÑO VISUAL "LILA" (pedido por Esther, 06/10/2026)
+   Capa de estilo que se aplica encima de todo lo anterior: paleta lila más
+   profunda, tipografía Sora, tarjetas y botones más redondeados, y el fondo
+   animado (componente AnimatedBackground). No cambia ningún dato ni ninguna
+   lógica: solo el aspecto. Para volver atrás basta con borrar este bloque y
+   quitar <AnimatedBackground /> de layout.tsx.
+   ========================================================================== */
+
+:root {
+  --bg-void: #0E0A18;
+  --bg-panel: #17122A;
+  --bg-panel-raised: #110D1E;
+  --bg-panel-hover: #241C3B;
+  --line: #2E2447;
+  --line-bright: #3D3060;
+  --gold: #A78BFA;
+  --gold-bright: #C4B5FD;
+  --violet: #A78BFA;
+  --violet-bright: #C4B5FD;
+  --violet-dim: rgba(167,139,250,0.18);
+  --text-primary: #F2EFF8;
+  --text-muted: #A39DB3;
+  --text-dim: #7E7796;
+  --up: #C4B5FD;
+  --down: #F472B6;
+  --font-display: 'Sora', 'Segoe UI', system-ui, sans-serif;
+  --font-body: 'Sora', 'Segoe UI', system-ui, sans-serif;
+}
+
+/* Fondo animado fijo detrás de todo */
+.vx-bg { position: fixed !important; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+.vx-bg-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+body > *:not(.vx-bg) { position: relative; z-index: 1; }
+
+@keyframes vx-tile { 0%,100% { opacity: 0; } 40%,60% { opacity: .45; } }
+@keyframes vx-beam { from { stroke-dashoffset: 70; } to { stroke-dashoffset: -1000; } }
+@keyframes vx-node { 0%,100% { opacity: .4; } 50% { opacity: 1; } }
+@keyframes vx-twinkle { 0%,100% { opacity: 1; } 50% { opacity: .15; } }
+@keyframes vx-floor { 0% { transform: translateY(0); opacity: 0; } 10% { opacity: .9; } 100% { transform: translateY(480px); opacity: 1; } }
+@keyframes vx-arbeam { from { stroke-dashoffset: 140; } to { stroke-dashoffset: -1000; } }
+@keyframes vx-laser { 0% { transform: translateY(0); opacity: 1; } 33% { transform: translateY(-320px); opacity: 1; } 34%,100% { transform: translateY(-320px); opacity: 0; } }
+@keyframes vx-hit { 0%,33% { opacity: 1; } 34%,75% { opacity: 0; } 76%,100% { opacity: 1; } }
+@keyframes vx-boom { 0%,32% { opacity: 0; transform: scale(.3); } 36% { opacity: 1; transform: scale(1); } 50% { opacity: 0; transform: scale(1.5); } 100% { opacity: 0; } }
+@keyframes vx-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+@keyframes vx-flick { 0% { opacity: 1; } 50% { opacity: .3; } }
+@keyframes vx-drift { 0%,100% { transform: translateX(-90px); } 50% { transform: translateX(90px); } }
+@keyframes vx-drop { 0% { transform: translateY(0); opacity: 1; } 80% { opacity: 1; } 100% { transform: translateY(260px); opacity: 0; } }
+@keyframes vx-ufo { 0% { transform: translateX(-300px); } 100% { transform: translateX(2300px); } }
+@keyframes vx-dive { 0% { transform: translate(0,0); opacity: 1; } 25% { transform: translate(40px,250px); } 50% { transform: translate(-40px,500px); } 75% { transform: translate(40px,750px); } 100% { transform: translate(0,1150px); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .vx-bg * { animation: none !important; } }
+
+/* Tarjetas */
+.panel { border-radius: 20px; padding: 24px; border-color: var(--line); }
+.session-card, .gauge-card, .bias-score-box, .spot-status { border-radius: 16px; }
+.stat-pretty { border-radius: 14px; }
+.stat-pretty::before { left: 0; right: 0; top: 0; bottom: auto; width: auto; height: 3px; }
+.feature-pretty { border-radius: 16px; }
+.cal-cell { border-radius: 10px; min-height: 64px; }
+.menu-dropdown { border-radius: 16px; }
+.menu-item { border-radius: 10px; }
+
+/* Botones e inputs */
+.btn { border-radius: 12px; min-height: 44px; font-weight: 600; border-color: var(--line-bright); }
+.btn-primary { background: var(--violet); border-color: var(--violet); color: #0E0A18; }
+.btn-primary:hover { opacity: 1; background: var(--violet-bright); border-color: var(--violet-bright); }
+.menu-btn { border-radius: 12px; min-height: 44px; }
+input, select, textarea { border-radius: 12px; min-height: 44px; border-color: var(--line-bright); background: var(--bg-panel-raised); }
+textarea { min-height: 90px; }
+.bias-tf-tabs { border-radius: 12px; padding: 4px; }
+.bias-tf-tab { border-radius: 9px; padding: 8px 14px; }
+.bias-tf-tab.active { background: var(--violet); color: #0E0A18; }
+
+/* Etiquetas positivo/negativo con la paleta nueva */
+.tag { border-radius: 999px; padding: 3px 10px; }
+.tag.pos, .session-badge.open { color: var(--up); background: rgba(167,139,250,0.16); border-color: rgba(167,139,250,0.4); }
+.tag.neg { color: var(--down); background: rgba(244,114,182,0.14); border-color: rgba(244,114,182,0.4); }
+.session-badge { border-radius: 999px; }
+.session-card.is-open, .spot-status.open { border-color: rgba(167,139,250,0.55); }
+.session-bar, .bias-mod-track { border-radius: 999px; }
+.session-bar-fill, .bias-mod-fill { border-radius: 999px; }
+
+/* Tablas */
+th { color: var(--text-muted); }
+td { color: var(--text-primary); }
