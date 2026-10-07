@@ -585,3 +585,29 @@ td { color: var(--text-primary); }
 .mk-chips { flex-wrap: wrap; overflow: visible; gap: 6px; padding-bottom: 0; }
 .mk-chip { min-height: 36px; padding: 0 12px; font-size: 13px; gap: 6px; }
 .mk-chip .mk-dot { width: 7px; height: 7px; flex-basis: 7px; }
+
+/* --- Campanita de avisos del admin (07/10/2026) --- */
+.nav-cluster { display: flex; align-items: center; gap: 8px; }
+.bell-btn {
+  position: relative; display: flex; align-items: center; justify-content: center; width: 44px; min-height: 44px;
+  background: var(--bg-panel-raised); border: 1px solid var(--line-bright); color: var(--text-dim);
+  border-radius: 12px; cursor: pointer; transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.bell-btn:hover, .bell-btn[aria-expanded="true"] { border-color: var(--violet); color: var(--violet-bright); }
+.bell-btn.has-alerts { color: var(--violet-bright); border-color: var(--violet); }
+.bell-btn.has-alerts svg { animation: bellRing 2.4s ease-in-out infinite; transform-origin: 50% 2px; }
+.bell-badge {
+  position: absolute; top: -7px; right: -7px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px;
+  background: #F472B6; color: #1A0B14; font-family: var(--font-mono); font-size: 11px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; border: 2px solid var(--bg-panel, #110D1E);
+}
+.bell-count {
+  min-width: 24px; height: 22px; padding: 0 7px; border-radius: 999px; background: rgba(244,114,182,0.16);
+  color: #F472B6; font-family: var(--font-mono); font-size: 12px; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+@keyframes bellRing {
+  0%, 80%, 100% { transform: rotate(0); }
+  84% { transform: rotate(14deg); } 88% { transform: rotate(-12deg); } 92% { transform: rotate(8deg); } 96% { transform: rotate(-4deg); }
+}
+@media (prefers-reduced-motion: reduce) { .bell-btn.has-alerts svg { animation: none; } }

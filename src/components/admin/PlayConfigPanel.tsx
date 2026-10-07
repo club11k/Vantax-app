@@ -46,9 +46,9 @@ type PayoutRow = {
 };
 type ShopOrderRow = { id: string; userEmail: string; userName: string | null; articleName: string; price: number; createdAt: string };
 
-function Section({ title, help, children }: { title: string; help?: string; children: React.ReactNode }) {
+function Section({ id, title, help, children }: { id?: string; title: string; help?: string; children: React.ReactNode }) {
   return (
-    <div className="panel" style={{ marginTop: 18 }}>
+    <div id={id} className="panel" style={{ marginTop: 18, scrollMarginTop: 20 }}>
       <h3 style={{ marginTop: 0, fontSize: 15 }}>{title}</h3>
       {help && <p style={{ fontSize: 12.5, color: "var(--text-muted)", marginTop: -6 }}>{help}</p>}
       {children}
@@ -567,7 +567,7 @@ function PayoutRowItem({ payout }: { payout: PayoutRow }) {
           <button
             className="btn btn-primary"
             disabled={isPending}
-            onClick={() => startTransition(() => markPayoutPaid(payout.id, txHash))}
+            onClick={() => startTransition(async () => { await markPayoutPaid(payout.id, txHash); window.dispatchEvent(new Event("admin-notifications-refresh")); })}
           >
             {isPending ? "…" : "Marcar pagado"}
           </button>
@@ -591,7 +591,7 @@ function ShopOrderRowItem({ order }: { order: ShopOrderRow }) {
       <td>{Math.round(order.price)} V-COIN</td>
       <td>{new Date(order.createdAt).toLocaleDateString("es-ES")}</td>
       <td>
-        <button className="btn btn-primary" disabled={isPending} onClick={() => startTransition(() => markShopOrderDelivered(order.id))}>
+        <button className="btn btn-primary" disabled={isPending} onClick={() => startTransition(async () => { await markShopOrderDelivered(order.id); window.dispatchEvent(new Event("admin-notifications-refresh")); })}>
           {isPending ? "…" : order.articleName.endsWith(" · pago por broker") ? "Marcar pagado" : "Marcar entregado"}
         </button>
       </td>
@@ -671,7 +671,7 @@ export function PlayConfigPanel({
         </table>
       </Section>
 
-      <Section title={`Pagos pendientes (${payoutsPending.length})`} help="Canjes de Cashback de la Tienda esperando pago manual. «Pagar» indica lo que hay que enviar; «Forma de pago» y «Destino», cómo quiere cobrarlo el jugador (wallet USDT o a través del broker con su UID).">
+      <Section id="pagos" title={`Pagos pendientes (${payoutsPending.length})`} help="Canjes de Cashback de la Tienda esperando pago manual. «Pagar» indica lo que hay que enviar; «Forma de pago» y «Destino», cómo quiere cobrarlo el jugador (wallet USDT o a través del broker con su UID).">
         <table>
           <thead>
             <tr>
@@ -698,7 +698,7 @@ export function PlayConfigPanel({
         </table>
       </Section>
 
-      <Section title={`Pedidos de la tienda (${shopOrders.length})`} help="Artículos de Merch o Mentoría que falta entregar, y Cashback de jugadores sin wallet (marcados «pago por broker») que hay que pagar a través del broker. El V-COIN ya se ha descontado al jugador.">
+      <Section id="pedidos" title={`Pedidos de la tienda (${shopOrders.length})`} help="Artículos de Merch o Mentoría que falta entregar. El V-COIN ya se ha descontado al jugador.">
         <table>
           <thead>
             <tr>

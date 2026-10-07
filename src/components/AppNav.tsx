@@ -75,6 +75,8 @@ export function AppNav({
   }, []);
 
   return (
+    <div className="nav-cluster">
+      {isAdmin && <AdminBell />}
     <div className="menu-wrap" ref={wrapRef}>
       <button type="button" className="menu-btn" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
         Menú
@@ -136,6 +138,86 @@ export function AppNav({
         )}
       </div>
     </div>
+    </div>
   );
 }
 
+
+// Campanita de avisos del admin (07/10/2026): al lado del Menú, con el número
+// de cosas pendientes de atender (pagos, pedidos, usuarios nuevos). Se
+// actualiza sola cada minuto y al volver a la pestaña.
+type BellItem = { key: string; icon: string; label: string; count: number; href: string };
+
+function AdminBell() {
+  const [data, setData] = useState<{ total: number; items: BellItem[] } | null>(null);
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let alive = true;
+    async function load() {
+      try {
+        const res = await fetch("/api/admin/notifications", { cache: "no-store" });
+        if (!res.ok) return;
+        const json = await res.json();
+        if (alive) setData(json);
+      } catch {
+        /* sin red: se reintenta en el siguiente ciclo */
+      }
+    }
+    load();
+    const t = setInterval(load, 60_000);
+    const onVis = () => document.visibilityState === "visible" && load();
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("admin-notifications-refresh", load);
+    function onDocClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => {
+      alive = false;
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("admin-notifications-refresh", load);
+      document.removeEventListener("mousedown", onDocClick);
+    };
+  }, []);
+
+  const total = data?.total ?? 0;
+
+  return (
+    <div className="menu-wrap" ref={ref}>
+      <button
+        type="button"
+        className={`bell-btn${total > 0 ? " has-alerts" : ""}`}
+        aria-expanded={open}
+        aria-label={total > 0 ? `${total} avisos pendientes` : "Sin avisos pendientes"}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+          <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+        </svg>
+        {total > 0 && <span className="bell-badge">{total > 99 ? "99+" : total}</span>}
+      </button>
+      <div className={`menu-dropdown${open ? " open" : ""}`} role="menu">
+        <div className="menu-section-label">Avisos pendientes</div>
+        {data && data.items.length > 0 ? (
+          data.items.map((item) => (
+            <Link key={item.key} href={item.href} className="menu-item" role="menuitem" onClick={() => setOpen(false)}>
+              <div className="ico">{item.icon}</div>
+              <div style={{ flex: 1 }}>
+                <div className="label">{item.label}</div>
+              </div>
+              <span className="bell-count">{item.count}</span>
+            </Link>
+          ))
+        ) : (
+          <div style={{ padding: "10px 12px 14px", fontSize: 13, color: "var(--text-dim)" }}>
+            {data ? "Todo al día. No hay nada pendiente. ✅" : "Cargando…"}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
