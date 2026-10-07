@@ -540,13 +540,21 @@ model PlayTournament {
 }
 
 // Pagos manuales en cripto (USDT TRC20 / BEP20) al canjear V-COIN.
+enum PlayPayoutMethod {
+  WALLET
+  BROKER
+}
+
 model PlayPayout {
   id          String            @id @default(cuid())
   userId      String
   user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   amountVCoin Float
-  network     PlayPayoutNetwork
-  wallet      String
+  // Cómo quiere cobrar el jugador: en su wallet USDT o a través del broker.
+  method      PlayPayoutMethod  @default(WALLET)
+  network     PlayPayoutNetwork?
+  wallet      String?
+  brokerUid   String?
   status      PlayPayoutStatus  @default(PENDIENTE)
   txHash      String?
   // Qué se canjeó (p. ej. "100 USDT"), para que el admin sepa cuánto pagar.

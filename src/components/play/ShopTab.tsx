@@ -11,7 +11,7 @@ import { CoinIcon, LockIcon } from "@/components/play/PixelIcons";
 type Category = "MERCH" | "MENTORIA" | "CASHBACK";
 type Article = { id: string; name: string; category: Category; price: number; imageUrl: string | null };
 type HistoryRow = { id: string; name: string; price: number; status: string; done: boolean; date: string };
-type ShopData = { balance: number; hasWallet: boolean; articles: Article[]; history: HistoryRow[] };
+type ShopData = { balance: number; wallet: string; network: "TRC20" | "BEP20"; articles: Article[]; history: HistoryRow[] };
 
 const CAT: Record<Category, { label: string; icon: string; from: string; to: string }> = {
   CASHBACK: { label: "Cashback", icon: "💵", from: "#065F46", to: "#1E1B4B" },
@@ -29,6 +29,13 @@ export function ShopTab({ onBalanceChange, onGoProfile }: { onBalanceChange?: ()
   const [busyId, setBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [filter, setFilter] = useState<"ALL" | Category>("ALL");
+  // Ventana de canje: para cashback, el jugador elige dónde cobrarlo.
+  const [pending, setPending] = useState<Article | null>(null);
+  const [method, setMethod] = useState<"WALLET" | "BROKER" | null>(null);
+  const [wallet, setWallet] = useState("");
+  const [network, setNetwork] = useState<"TRC20" | "BEP20">("TRC20");
+  const [uid, setUid] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
 
   async function load() {
     try {
@@ -49,39 +56,57 @@ export function ShopTab({ onBalanceChange, onGoProfile }: { onBalanceChange?: ()
     load();
   }, []);
 
-  async function redeem(a: Article) {
+  function openRedeem(a: Article) {
     if (!data) return;
-    const extra =
-      a.category === "CASHBACK"
-        ? data.hasWallet
-          ? " Te lo pagaremos en USDT a la wallet de tu perfil."
-          : " Te lo pagaremos a través del broker."
-        : " Nos pondremos en contacto contigo para la entrega.";
-    if (!confirm(`¿Canjear «${a.name}» por ${fmt(a.price)} V-COIN?${extra}`)) return;
-    setBusyId(a.id);
+    setPending(a);
+    setMethod(null);
+    setWallet(data.wallet ?? "");
+    setNetwork(data.network ?? "TRC20");
+    setUid("");
+    setFormError(null);
     setMessage(null);
+  }
+
+  async function confirmRedeem() {
+    const a = pending;
+    if (!a || !data) return;
+    let payment: any = undefined;
+    if (a.category === "CASHBACK") {
+      if (!method) return setFormError("Elige dónde quieres recibir tu cashback.");
+      if (method === "WALLET") {
+        const w = wallet.trim();
+        if (w.length < 20 || /\s/.test(w)) return setFormError("Escribe una dirección de wallet válida.");
+        payment = { method, wallet: w, network };
+      } else {
+        if (!uid.trim()) return setFormError("Escribe tu UID del broker.");
+        payment = { method, uid: uid.trim() };
+      }
+    }
+    setFormError(null);
+    setBusyId(a.id);
     try {
       const res = await fetch("/api/play/shop/redeem", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ articleId: a.id }),
+        body: JSON.stringify({ articleId: a.id, payment }),
       });
       const json = await res.json();
       if (!res.ok) {
-        setMessage({ ok: false, text: json.error ?? "No se pudo completar el canje." });
-      } else {
-        setMessage({
-          ok: true,
-          text:
-            a.category === "CASHBACK"
-              ? `¡Canje hecho! «${a.name}» queda pendiente de pago ${data.hasWallet ? "a tu wallet" : "a través del broker"}.`
-              : `¡Canje hecho! «${a.name}» queda pendiente de entrega.`,
-        });
-        onBalanceChange?.();
+        setFormError(json.error ?? "No se pudo completar el canje.");
+        return;
       }
+      setPending(null);
+      setMessage({
+        ok: true,
+        text:
+          a.category === "CASHBACK"
+            ? `¡Canje hecho! Te pagaremos «${a.name}» ${method === "WALLET" ? "en tu wallet" : "a través del broker"} lo antes posible.`
+            : `¡Canje hecho! «${a.name}» queda pendiente de entrega. Nos pondremos en contacto contigo.`,
+      });
+      onBalanceChange?.();
       await load();
     } catch {
-      setMessage({ ok: false, text: "No se pudo completar el canje. Prueba de nuevo." });
+      setFormError("No se pudo completar el canje. Prueba de nuevo.");
     } finally {
       setBusyId(null);
     }
@@ -140,7 +165,6 @@ export function ShopTab({ onBalanceChange, onGoProfile }: { onBalanceChange?: ()
               const c = CAT[a.category];
               const missing = Math.max(0, Math.round(a.price) - data.balance);
               const affordable = missing === 0;
-              const viaBroker = a.category === "CASHBACK" && !data.hasWallet;
               const pct = Math.min(100, (data.balance / Math.max(1, a.price)) * 100);
               return (
                 <div key={a.id} className={`${styles.shopCard} ${affordable ? styles.shopAffordable : ""}`}>
@@ -167,21 +191,12 @@ export function ShopTab({ onBalanceChange, onGoProfile }: { onBalanceChange?: ()
                         <span style={{ fontSize: 12, color: "var(--textDim)" }}>Te faltan {fmt(missing)} V-COIN</span>
                       </div>
                     )}
-                    {viaBroker && affordable && (
-                      <span style={{ fontSize: 12, color: "var(--textDim)" }}>
-                        Se paga a través del broker. Si prefieres cobrar en USDT, añade tu wallet en{" "}
-                        <button type="button" onClick={onGoProfile} style={{ background: "none", border: 0, padding: 0, color: "#C4B5FD", textDecoration: "underline", cursor: "pointer", font: "inherit" }}>
-                          Perfil
-                        </button>
-                        .
-                      </span>
-                    )}
                     <button
                       type="button"
                       className={styles.btn}
                       style={{ marginTop: "auto", width: "100%" }}
                       disabled={!affordable || busyId !== null}
-                      onClick={() => redeem(a)}
+                      onClick={() => openRedeem(a)}
                     >
                       {busyId === a.id ? "CANJEANDO…" : affordable ? "CANJEAR" : (
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
@@ -196,6 +211,88 @@ export function ShopTab({ onBalanceChange, onGoProfile }: { onBalanceChange?: ()
           </div>
         )}
       </div>
+
+      {pending && (
+        <div className={styles.overlay} role="dialog" aria-modal="true" onClick={() => busyId === null && setPending(null)}>
+          <div className={`${styles.card} ${styles.shopModal}`} onClick={(e) => e.stopPropagation()}>
+            <h3 className={styles.sectionTitle} style={{ marginTop: 0 }}>CANJEAR</h3>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 14 }}>
+              <span className={styles.shopName}>{pending.name}</span>
+              <span className={styles.shopPrice}>
+                <CoinIcon size={18} />
+                {fmt(pending.price)}
+              </span>
+            </div>
+
+            {pending.category === "CASHBACK" ? (
+              <>
+                <p style={{ margin: "0 0 10px", fontSize: 15 }}>¿Dónde quieres recibir tu cashback?</p>
+                <div className={styles.shopMethods}>
+                  <button
+                    type="button"
+                    className={`${styles.shopMethod} ${method === "WALLET" ? styles.active : ""}`}
+                    onClick={() => setMethod("WALLET")}
+                  >
+                    <b>💳 Wallet USDT</b>
+                    <span>Te lo enviamos a tu dirección</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`${styles.shopMethod} ${method === "BROKER" ? styles.active : ""}`}
+                    onClick={() => setMethod("BROKER")}
+                  >
+                    <b>🏦 A través del broker</b>
+                    <span>Te lo ingresamos en tu cuenta</span>
+                  </button>
+                </div>
+
+                {method === "WALLET" && (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+                    <div style={{ flex: 1, minWidth: 200 }}>
+                      <label className={styles.label}>Dirección de tu wallet</label>
+                      <input className={styles.input} type="text" placeholder="Pega aquí tu dirección USDT" value={wallet} onChange={(e) => setWallet(e.target.value)} />
+                    </div>
+                    <div>
+                      <label className={styles.label}>Red</label>
+                      <select className={styles.input} value={network} onChange={(e) => setNetwork(e.target.value as "TRC20" | "BEP20")}>
+                        <option value="TRC20">TRC20</option>
+                        <option value="BEP20">BEP20</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+                {method === "BROKER" && (
+                  <div style={{ marginTop: 12 }}>
+                    <label className={styles.label}>Tu UID del broker</label>
+                    <input className={styles.input} type="text" placeholder="Ej: 12345678" value={uid} onChange={(e) => setUid(e.target.value)} />
+                  </div>
+                )}
+              </>
+            ) : (
+              <p style={{ margin: 0, fontSize: 15, color: "var(--textDim)" }}>
+                Se descontarán {fmt(pending.price)} V-COIN de tu saldo y nos pondremos en contacto contigo para la entrega.
+              </p>
+            )}
+
+            {formError && <div className={styles.errorMsg} style={{ marginTop: 12 }}>{formError}</div>}
+
+            <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+              <button type="button" className={`${styles.btn} ${styles.btnGhost}`} style={{ flex: 1 }} disabled={busyId !== null} onClick={() => setPending(null)}>
+                CANCELAR
+              </button>
+              <button
+                type="button"
+                className={styles.btn}
+                style={{ flex: 1 }}
+                disabled={busyId !== null || (pending.category === "CASHBACK" && !method)}
+                onClick={confirmRedeem}
+              >
+                {busyId ? "CANJEANDO…" : "CONFIRMAR"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {data.history.length > 0 && (
         <div className={styles.card}>

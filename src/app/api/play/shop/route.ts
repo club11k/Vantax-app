@@ -44,7 +44,8 @@ export async function GET() {
 
   return NextResponse.json({
     balance: user?.vCoinBalance ?? 0,
-    hasWallet: !!(user?.payoutWallet && user?.payoutNetwork),
+    wallet: user?.payoutWallet ?? "",
+    network: user?.payoutNetwork ?? "TRC20",
     articles: articles.map((a) => ({ id: a.id, name: a.name, category: a.category, price: a.price, imageUrl: a.imageUrl })),
     history,
   });

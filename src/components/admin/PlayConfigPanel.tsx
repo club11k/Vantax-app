@@ -35,8 +35,10 @@ type PayoutRow = {
   userEmail: string;
   userName: string | null;
   amountVCoin: number;
-  network: "TRC20" | "BEP20";
-  wallet: string;
+  method: "WALLET" | "BROKER";
+  network: "TRC20" | "BEP20" | null;
+  wallet: string | null;
+  brokerUid: string | null;
   requestedAt?: string;
   txHash?: string | null;
   paidAt?: string | null;
@@ -505,6 +507,34 @@ function ArticleRow({ article }: { article: Article }) {
 
 // --- Pagos pendientes ---
 
+function PayoutMethodCell({ payout }: { payout: PayoutRow }) {
+  return payout.method === "BROKER" ? (
+    <span className="tag neu">🏦 Broker</span>
+  ) : (
+    <span className="tag pos">💳 Wallet {payout.network ?? ""}</span>
+  );
+}
+
+function PayoutDestCell({ payout }: { payout: PayoutRow }) {
+  const value = payout.method === "BROKER" ? payout.brokerUid : payout.wallet;
+  return (
+    <td style={{ fontFamily: "var(--font-mono)", fontSize: 11, wordBreak: "break-all", maxWidth: 240 }}>
+      <div style={{ fontFamily: "inherit", color: "var(--text-dim)", fontSize: 10 }}>{payout.method === "BROKER" ? "UID" : "Dirección"}</div>
+      {value || "—"}
+      {value && (
+        <button
+          type="button"
+          className="btn"
+          style={{ marginLeft: 6, padding: "2px 8px", fontSize: 11 }}
+          onClick={() => navigator.clipboard?.writeText(value)}
+        >
+          Copiar
+        </button>
+      )}
+    </td>
+  );
+}
+
 function PayoutRowItem({ payout }: { payout: PayoutRow }) {
   const [txHash, setTxHash] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -519,14 +549,16 @@ function PayoutRowItem({ payout }: { payout: PayoutRow }) {
         {payout.note && <div style={{ fontWeight: 600 }}>Pagar: {payout.note}</div>}
         <div style={{ color: payout.note ? "var(--text-dim)" : undefined, fontSize: payout.note ? 11 : undefined }}>{payout.amountVCoin} V-COIN</div>
       </td>
-      <td>{payout.network}</td>
-      <td style={{ fontFamily: "var(--font-mono)", fontSize: 11, wordBreak: "break-all", maxWidth: 220 }}>{payout.wallet}</td>
+      <td>
+        <PayoutMethodCell payout={payout} />
+      </td>
+      <PayoutDestCell payout={payout} />
       <td>{payout.requestedAt ? new Date(payout.requestedAt).toLocaleDateString("es-ES") : "—"}</td>
       <td>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           <input
             type="text"
-            placeholder="Hash de la tx (opcional)"
+            placeholder={payout.method === "BROKER" ? "Referencia (opcional)" : "Hash de la tx (opcional)"}
             value={txHash}
             onChange={(e) => setTxHash(e.target.value)}
             disabled={isPending}
@@ -612,7 +644,7 @@ export function PlayConfigPanel({
         ))}
       </Section>
 
-      <Section title="Catálogo de artículos" help="Los artículos activos aparecen en la Tienda de Vantax Play y se canjean con V-COIN; también pueden salir como premio extra de un cofre. Los Cashback se pagan en USDT si el jugador tiene wallet (Pagos pendientes) o por broker si no la tiene (Pedidos de la tienda); Merch y Mentoría van a Pedidos de la tienda.">
+      <Section title="Catálogo de artículos" help="Los artículos activos aparecen en la Tienda de Vantax Play y se canjean con V-COIN; también pueden salir como premio extra de un cofre. Al canjear un Cashback el jugador elige cobrarlo en su wallet USDT o a través del broker (con su UID) y sale en Pagos pendientes; Merch y Mentoría van a Pedidos de la tienda.">
         <ArticleForm />
         <table>
           <thead>
@@ -639,14 +671,14 @@ export function PlayConfigPanel({
         </table>
       </Section>
 
-      <Section title={`Pagos pendientes (${payoutsPending.length})`} help="Canjes de Cashback de la Tienda (y solicitudes de V-COIN por USDT) esperando pago manual en TRC20/BEP20. «Pagar» indica lo que hay que enviar.">
+      <Section title={`Pagos pendientes (${payoutsPending.length})`} help="Canjes de Cashback de la Tienda esperando pago manual. «Pagar» indica lo que hay que enviar; «Forma de pago» y «Destino», cómo quiere cobrarlo el jugador (wallet USDT o a través del broker con su UID).">
         <table>
           <thead>
             <tr>
               <th>Jugador</th>
-              <th>Cantidad</th>
-              <th>Red</th>
-              <th>Wallet</th>
+              <th>Pagar</th>
+              <th>Forma de pago</th>
+              <th>Destino</th>
               <th>Pedido</th>
               <th>Acción</th>
             </tr>
@@ -698,10 +730,11 @@ export function PlayConfigPanel({
             <thead>
               <tr>
                 <th>Jugador</th>
-                <th>Cantidad</th>
-                <th>Red</th>
-                <th>Hash</th>
                 <th>Pagado</th>
+                <th>Forma de pago</th>
+                <th>Destino</th>
+                <th>Hash / ref.</th>
+                <th>Fecha</th>
               </tr>
             </thead>
             <tbody>
@@ -709,7 +742,12 @@ export function PlayConfigPanel({
                 <tr key={p.id}>
                   <td>{p.userEmail}</td>
                   <td>{p.note ? `${p.note} (${p.amountVCoin} V-COIN)` : `${p.amountVCoin} V-COIN`}</td>
-                  <td>{p.network}</td>
+                  <td>
+                    <PayoutMethodCell payout={p} />
+                  </td>
+                  <td style={{ fontFamily: "var(--font-mono)", fontSize: 11, wordBreak: "break-all", maxWidth: 220 }}>
+                    {(p.method === "BROKER" ? p.brokerUid : p.wallet) || "—"}
+                  </td>
                   <td style={{ fontFamily: "var(--font-mono)", fontSize: 11, wordBreak: "break-all", maxWidth: 220 }}>{p.txHash || "—"}</td>
                   <td>{p.paidAt ? new Date(p.paidAt).toLocaleDateString("es-ES") : "—"}</td>
                 </tr>
