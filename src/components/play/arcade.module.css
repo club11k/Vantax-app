@@ -625,8 +625,9 @@
   background: var(--lilaGlow);
 }
 .btn:disabled {
-  opacity: 0.5;
-  cursor: default;
+  opacity: 0.45;
+  filter: grayscale(0.8);
+  cursor: not-allowed;
 }
 .btnGhost {
   background: transparent;

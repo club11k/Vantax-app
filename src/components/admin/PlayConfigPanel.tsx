@@ -560,7 +560,7 @@ function ShopOrderRowItem({ order }: { order: ShopOrderRow }) {
       <td>{new Date(order.createdAt).toLocaleDateString("es-ES")}</td>
       <td>
         <button className="btn btn-primary" disabled={isPending} onClick={() => startTransition(() => markShopOrderDelivered(order.id))}>
-          {isPending ? "…" : "Marcar entregado"}
+          {isPending ? "…" : order.articleName.endsWith(" · pago por broker") ? "Marcar pagado" : "Marcar entregado"}
         </button>
       </td>
     </tr>
@@ -612,7 +612,7 @@ export function PlayConfigPanel({
         ))}
       </Section>
 
-      <Section title="Catálogo de artículos" help="Los artículos activos aparecen en la Tienda de Vantax Play y se canjean con V-COIN; también pueden salir como premio extra de un cofre. Los de categoría Cashback se pagan en USDT (salen en Pagos pendientes); el resto, en Pedidos de la tienda.">
+      <Section title="Catálogo de artículos" help="Los artículos activos aparecen en la Tienda de Vantax Play y se canjean con V-COIN; también pueden salir como premio extra de un cofre. Los Cashback se pagan en USDT si el jugador tiene wallet (Pagos pendientes) o por broker si no la tiene (Pedidos de la tienda); Merch y Mentoría van a Pedidos de la tienda.">
         <ArticleForm />
         <table>
           <thead>
@@ -666,7 +666,7 @@ export function PlayConfigPanel({
         </table>
       </Section>
 
-      <Section title={`Pedidos de la tienda (${shopOrders.length})`} help="Artículos de Merch o Mentoría canjeados en la Tienda que falta entregar. El V-COIN ya se ha descontado al jugador.">
+      <Section title={`Pedidos de la tienda (${shopOrders.length})`} help="Artículos de Merch o Mentoría que falta entregar, y Cashback de jugadores sin wallet (marcados «pago por broker») que hay que pagar a través del broker. El V-COIN ya se ha descontado al jugador.">
         <table>
           <thead>
             <tr>

@@ -24,7 +24,9 @@ export async function GET() {
       id: o.id,
       name: o.articleName,
       price: o.price,
-      status: o.status === "ENTREGADO" ? "Entregado" : "Pendiente de entrega",
+      status: o.articleName.endsWith(" · pago por broker")
+        ? o.status === "ENTREGADO" ? "Pagado" : "Pago pendiente"
+        : o.status === "ENTREGADO" ? "Entregado" : "Pendiente de entrega",
       done: o.status === "ENTREGADO",
       date: o.createdAt.toISOString(),
     })),

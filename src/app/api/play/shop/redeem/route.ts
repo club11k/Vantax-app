@@ -6,9 +6,12 @@ import { prisma } from "@/lib/prisma";
 // Canjea un artículo de la tienda con V-COIN (07/10/2026).
 // - Descuenta el precio del saldo de forma atómica (solo si llega el saldo,
 //   así dos clics seguidos no pueden dejarlo en negativo).
-// - Cashback → crea un pago pendiente en USDT a la wallet del perfil (sale
-//   en "Pagos pendientes" del admin, igual que antes).
+// - Cashback con wallet en el perfil → pago pendiente en USDT ("Pagos
+//   pendientes" del admin). Sin wallet (es opcional) → pedido "pago por
+//   broker" en "Pedidos de la tienda", para pagarlo a través del broker.
 // - Merch / mentoría → crea un pedido pendiente de entrega para el admin.
+const BROKER_SUFFIX = " · pago por broker";
+
 class ShopError extends Error {
   status: number;
   constructor(message: string, status: number) {
@@ -41,9 +44,7 @@ export async function POST(req: Request) {
         select: { publicId: true, payoutWallet: true, payoutNetwork: true },
       });
       if (!user?.publicId) throw new ShopError("Completa tu registro de jugador en Perfil antes de canjear.", 400);
-      if (article.category === "CASHBACK" && (!user.payoutWallet || !user.payoutNetwork)) {
-        throw new ShopError("Para canjear cashback, añade primero tu wallet USDT en Perfil.", 400);
-      }
+      const hasWallet = !!(user.payoutWallet && user.payoutNetwork);
 
       const charged = await tx.user.updateMany({
         where: { id: userId, vCoinBalance: { gte: price } },
@@ -55,7 +56,7 @@ export async function POST(req: Request) {
         data: { userId, type: "TIENDA", amount: -price, description: `Canje en la tienda: ${article.name}` },
       });
 
-      if (article.category === "CASHBACK") {
+      if (article.category === "CASHBACK" && hasWallet) {
         await tx.playPayout.create({
           data: {
             userId,
@@ -67,7 +68,12 @@ export async function POST(req: Request) {
         });
       } else {
         await tx.playShopOrder.create({
-          data: { userId, articleId: article.id, articleName: article.name, price },
+          data: {
+            userId,
+            articleId: article.id,
+            articleName: article.category === "CASHBACK" ? `${article.name}${BROKER_SUFFIX}` : article.name,
+            price,
+          },
         });
       }
 

@@ -531,7 +531,7 @@ export function PlayPanel() {
         </div>
       )}
 
-      {effectiveTab === "tienda" && <ShopTab onBalanceChange={load} />}
+      {effectiveTab === "tienda" && <ShopTab onBalanceChange={load} onGoProfile={() => setTab("perfil")} />}
 
       {effectiveTab === "perfil" && (
         <>

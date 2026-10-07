@@ -23,7 +23,7 @@ function fmt(n: number) {
   return Math.round(n).toLocaleString("es-ES");
 }
 
-export function ShopTab({ onBalanceChange }: { onBalanceChange?: () => void }) {
+export function ShopTab({ onBalanceChange, onGoProfile }: { onBalanceChange?: () => void; onGoProfile?: () => void }) {
   const [data, setData] = useState<ShopData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -51,7 +51,12 @@ export function ShopTab({ onBalanceChange }: { onBalanceChange?: () => void }) {
 
   async function redeem(a: Article) {
     if (!data) return;
-    const extra = a.category === "CASHBACK" ? " Te lo pagaremos en USDT a la wallet de tu perfil." : " Nos pondremos en contacto contigo para la entrega.";
+    const extra =
+      a.category === "CASHBACK"
+        ? data.hasWallet
+          ? " Te lo pagaremos en USDT a la wallet de tu perfil."
+          : " Te lo pagaremos a través del broker."
+        : " Nos pondremos en contacto contigo para la entrega.";
     if (!confirm(`¿Canjear «${a.name}» por ${fmt(a.price)} V-COIN?${extra}`)) return;
     setBusyId(a.id);
     setMessage(null);
@@ -69,7 +74,7 @@ export function ShopTab({ onBalanceChange }: { onBalanceChange?: () => void }) {
           ok: true,
           text:
             a.category === "CASHBACK"
-              ? `¡Canje hecho! «${a.name}» queda pendiente de pago a tu wallet.`
+              ? `¡Canje hecho! «${a.name}» queda pendiente de pago ${data.hasWallet ? "a tu wallet" : "a través del broker"}.`
               : `¡Canje hecho! «${a.name}» queda pendiente de entrega.`,
         });
         onBalanceChange?.();
@@ -135,7 +140,7 @@ export function ShopTab({ onBalanceChange }: { onBalanceChange?: () => void }) {
               const c = CAT[a.category];
               const missing = Math.max(0, Math.round(a.price) - data.balance);
               const affordable = missing === 0;
-              const needsWallet = a.category === "CASHBACK" && !data.hasWallet;
+              const viaBroker = a.category === "CASHBACK" && !data.hasWallet;
               const pct = Math.min(100, (data.balance / Math.max(1, a.price)) * 100);
               return (
                 <div key={a.id} className={`${styles.shopCard} ${affordable ? styles.shopAffordable : ""}`}>
@@ -162,14 +167,20 @@ export function ShopTab({ onBalanceChange }: { onBalanceChange?: () => void }) {
                         <span style={{ fontSize: 12, color: "var(--textDim)" }}>Te faltan {fmt(missing)} V-COIN</span>
                       </div>
                     )}
-                    {needsWallet && affordable && (
-                      <span style={{ fontSize: 12, color: "#FACC15" }}>Añade tu wallet USDT en Perfil para canjearlo.</span>
+                    {viaBroker && affordable && (
+                      <span style={{ fontSize: 12, color: "var(--textDim)" }}>
+                        Se paga a través del broker. Si prefieres cobrar en USDT, añade tu wallet en{" "}
+                        <button type="button" onClick={onGoProfile} style={{ background: "none", border: 0, padding: 0, color: "#C4B5FD", textDecoration: "underline", cursor: "pointer", font: "inherit" }}>
+                          Perfil
+                        </button>
+                        .
+                      </span>
                     )}
                     <button
                       type="button"
                       className={styles.btn}
                       style={{ marginTop: "auto", width: "100%" }}
-                      disabled={!affordable || needsWallet || busyId !== null}
+                      disabled={!affordable || busyId !== null}
                       onClick={() => redeem(a)}
                     >
                       {busyId === a.id ? "CANJEANDO…" : affordable ? "CANJEAR" : (
