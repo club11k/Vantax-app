@@ -30,6 +30,7 @@ function WarnButton({ row }: { row: Row }) {
         startTransition(async () => {
           await warnUserInactivity(row.userId);
           setJustWarned(true);
+          window.dispatchEvent(new Event("admin-notifications-refresh"));
         })
       }
     >
