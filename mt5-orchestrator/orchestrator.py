@@ -37,6 +37,7 @@ import os
 import sys
 import time
 import logging
+import subprocess
 from datetime import datetime, timedelta
 
 import requests
@@ -150,6 +151,41 @@ def read_account(mt5, login, password, server):
     }
 
 
+def kill_terminal():
+    """Cierra a la fuerza el terminal MT5. Tras un login fallido (p. ej. una
+    cuenta con contraseña o servidor mal puestos) el terminal se queda
+    colgado intentando conectar, y el siguiente initialize() da
+    'IPC timeout' aunque esa otra cuenta esté bien. Matarlo y empezar
+    limpio evita que una cuenta mala tumbe a todas las demás (06/10/2026)."""
+    exe = os.path.basename(TERMINAL_PATH) or "terminal64.exe"
+    subprocess.run(["taskkill", "/F", "/IM", exe], capture_output=True)
+    time.sleep(3)
+
+
+def read_account_with_retry(mt5, acc):
+    """Inicializa el terminal, lee la cuenta y lo cierra. Si algo falla,
+    mata el terminal y lo reintenta una vez desde cero."""
+    last_exc = None
+    for attempt in (1, 2):
+        try:
+            if not mt5.initialize(path=TERMINAL_PATH, timeout=90000):
+                raise RuntimeError(f"No se pudo inicializar el terminal ({mt5.last_error()})")
+            try:
+                return read_account(mt5, acc["login"], acc["password"], acc["server"])
+            finally:
+                mt5.shutdown()
+        except Exception as exc:
+            last_exc = exc
+            try:
+                mt5.shutdown()
+            except Exception:
+                pass
+            kill_terminal()
+            if attempt == 1:
+                log.warning("Reintentando %s tras error: %s", acc.get("accountNumber") or acc["login"], exc)
+    raise last_exc
+
+
 def sync_once():
     try:
         import MetaTrader5 as mt5
@@ -160,17 +196,24 @@ def sync_once():
     accounts = fetch_pending_accounts()
     log.info("Cuentas pendientes de sincronizar: %d", len(accounts))
 
+    # Una misma cuenta MT5 puede estar a la vez en Play y en Journaly: se lee
+    # una sola vez por ciclo y se reutiliza el dato (o el error).
+    cache = {}
+
     for acc in accounts:
         account_id = acc["accountId"]
         kind = acc.get("kind", "play")
         label = f"[{kind}] {acc.get('brokerName') or ''} {acc.get('accountNumber') or ''}".strip()
+        key = (str(acc["login"]), acc["server"])
         try:
-            if not mt5.initialize(path=TERMINAL_PATH):
-                raise RuntimeError(f"No se pudo inicializar el terminal ({mt5.last_error()})")
-            try:
-                data = read_account(mt5, acc["login"], acc["password"], acc["server"])
-            finally:
-                mt5.shutdown()
+            if key not in cache:
+                try:
+                    cache[key] = ("ok", read_account_with_retry(mt5, acc))
+                except Exception as exc:
+                    cache[key] = ("error", exc)
+            status, data = cache[key]
+            if status == "error":
+                raise data
 
             if kind == "journal":
                 result = report_journal_result(account_id, data["profit_today"], data["balance"])
