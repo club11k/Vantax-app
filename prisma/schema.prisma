@@ -74,6 +74,7 @@ enum PlayVCoinTxType {
   COFRE
   TORNEO
   AJUSTE_ADMIN
+  TIENDA        // canje en la tienda (importe negativo)
 }
 
 enum PlayRankingCriterion {
@@ -100,6 +101,11 @@ enum PlayPayoutNetwork {
 enum PlayPayoutStatus {
   PENDIENTE
   PAGADO
+}
+
+enum PlayShopOrderStatus {
+  PENDIENTE
+  ENTREGADO
 }
 
 model User {
@@ -175,6 +181,7 @@ model User {
   playPayouts           PlayPayout[]
   playerProgress        PlayPlayerProgress?
   playerGifts           PlayPlayerGift[]
+  playShopOrders        PlayShopOrder[]
   myfxbookLink          PlayMyfxbookLink?
 
   @@index([role])
@@ -542,8 +549,28 @@ model PlayPayout {
   wallet      String
   status      PlayPayoutStatus  @default(PENDIENTE)
   txHash      String?
+  // Qué se canjeó (p. ej. "100 USDT"), para que el admin sepa cuánto pagar.
+  note        String?
   requestedAt DateTime          @default(now())
   paidAt      DateTime?
+}
+
+// Pedidos de la tienda de Vantax Play (artículos de merch o mentoría
+// canjeados con V-COIN), pendientes de que el admin los entregue a mano.
+// Los canjes de cashback no van aquí: crean un PlayPayout.
+model PlayShopOrder {
+  id          String              @id @default(cuid())
+  userId      String
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  articleId   String?
+  article     PlayCatalogArticle? @relation(fields: [articleId], references: [id], onDelete: SetNull)
+  articleName String
+  price       Float
+  status      PlayShopOrderStatus @default(PENDIENTE)
+  createdAt   DateTime            @default(now())
+  deliveredAt DateTime?
+
+  @@index([status, createdAt])
 }
 
 // Escala de V-COIN por rango de lotes, separada por tipo de cuenta.
@@ -574,6 +601,7 @@ model PlayCatalogArticle {
   loot          PlayChestLoot[]
   gifts         PlayPlayerGift[]
   wonInChests   PlayUserChest[]
+  shopOrders    PlayShopOrder[]
 }
 
 // Probabilidad de cada artículo como premio de un cofre concreto.

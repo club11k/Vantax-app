@@ -10,7 +10,7 @@ import { PlayConfigPanel } from "@/components/admin/PlayConfigPanel";
 // lista de jugadores + regalar cofre a mano; esto es la parte de
 // "configurar las reglas del juego".
 export default async function AdminPlayConfigPage() {
-  const [config, tierGoals, chestsRaw, chestLoot, articles, payoutsPending, payoutsPaid] = await Promise.all([
+  const [config, tierGoals, chestsRaw, chestLoot, articles, payoutsPending, payoutsPaid, shopOrders] = await Promise.all([
     getPlayConfig(),
     prisma.playTierGoal.findMany(),
     prisma.playChest.findMany(),
@@ -26,6 +26,11 @@ export default async function AdminPlayConfigPage() {
       include: { user: { select: { email: true, name: true } } },
       orderBy: { paidAt: "desc" },
       take: 15,
+    }),
+    prisma.playShopOrder.findMany({
+      where: { status: "PENDIENTE" },
+      include: { user: { select: { email: true, name: true } } },
+      orderBy: { createdAt: "asc" },
     }),
   ]);
 
@@ -70,6 +75,7 @@ export default async function AdminPlayConfigPage() {
           network: p.network,
           wallet: p.wallet,
           requestedAt: p.requestedAt.toISOString(),
+          note: p.note,
         }))}
         payoutsPaid={payoutsPaid.map((p) => ({
           id: p.id,
@@ -80,6 +86,15 @@ export default async function AdminPlayConfigPage() {
           wallet: p.wallet,
           txHash: p.txHash,
           paidAt: p.paidAt ? p.paidAt.toISOString() : null,
+          note: p.note,
+        }))}
+        shopOrders={shopOrders.map((o) => ({
+          id: o.id,
+          userEmail: o.user.email,
+          userName: o.user.name,
+          articleName: o.articleName,
+          price: o.price,
+          createdAt: o.createdAt.toISOString(),
         }))}
       />
     </div>

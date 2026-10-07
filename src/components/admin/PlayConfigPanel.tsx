@@ -9,7 +9,9 @@ import {
   deleteChestLoot,
   createArticle,
   toggleArticleActive,
+  updateArticle,
   markPayoutPaid,
+  markShopOrderDelivered,
 } from "@/app/admin/play-config-actions";
 
 type PlayTierValue = "BASICO" | "INTERMEDIO" | "EPICO" | "LEGENDARIO";
@@ -38,7 +40,9 @@ type PayoutRow = {
   requestedAt?: string;
   txHash?: string | null;
   paidAt?: string | null;
+  note?: string | null;
 };
+type ShopOrderRow = { id: string; userEmail: string; userName: string | null; articleName: string; price: number; createdAt: string };
 
 function Section({ title, help, children }: { title: string; help?: string; children: React.ReactNode }) {
   return (
@@ -269,6 +273,84 @@ function ChestCard({ row, articles }: { row: TierRow; articles: Article[] }) {
 
 // --- Catálogo de artículos ---
 
+// Reduce la foto en el navegador (máx. 600 px, JPEG) para guardarla junto al
+// artículo sin necesitar un servidor de imágenes aparte.
+function resizeImage(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("No se pudo leer la imagen."));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("El archivo no es una imagen válida."));
+      img.onload = () => {
+        const max = 600;
+        const scale = Math.min(1, max / Math.max(img.width, img.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return reject(new Error("No se pudo procesar la imagen."));
+        ctx.fillStyle = "#14121f";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", 0.82));
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function ImageField({ value, onChange, disabled }: { value: string; onChange: (v: string) => void; disabled?: boolean }) {
+  const [err, setErr] = useState<string | null>(null);
+  const isData = value.startsWith("data:");
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: "1 1 240px" }}>
+      <span>Imagen (opcional)</span>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        {value && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={value} alt="" style={{ width: 52, height: 52, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border, #333)" }} />
+        )}
+        <label className="btn" style={{ cursor: disabled ? "default" : "pointer", margin: 0 }}>
+          📷 Subir foto
+          <input
+            type="file"
+            accept="image/*"
+            disabled={disabled}
+            style={{ display: "none" }}
+            onChange={async (e) => {
+              const f = e.target.files?.[0];
+              e.target.value = "";
+              if (!f) return;
+              try {
+                setErr(null);
+                onChange(await resizeImage(f));
+              } catch (ex: any) {
+                setErr(ex?.message ?? "No se pudo cargar la imagen.");
+              }
+            }}
+          />
+        </label>
+        {value && (
+          <button type="button" className="btn" disabled={disabled} onClick={() => onChange("")}>
+            Quitar
+          </button>
+        )}
+      </div>
+      <input
+        type="text"
+        placeholder="…o pega la URL de una imagen"
+        value={isData ? "" : value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+      />
+      {isData && <span style={{ fontSize: 11, color: "var(--text-dim)" }}>Foto subida desde tu ordenador.</span>}
+      {err && <span style={{ fontSize: 11, color: "#F472B6" }}>{err}</span>}
+    </div>
+  );
+}
+
 function ArticleForm() {
   const [name, setName] = useState("");
   const [category, setCategory] = useState<"MERCH" | "MENTORIA" | "CASHBACK">("MERCH");
@@ -305,10 +387,7 @@ function ArticleForm() {
         Precio (V-COIN)
         <input type="number" min="0" step="1" value={price} onChange={(e) => setPrice(e.target.value)} disabled={isPending} style={{ width: 110 }} />
       </label>
-      <label style={{ flex: "1 1 200px" }}>
-        Imagen (URL, opcional)
-        <input type="text" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} disabled={isPending} />
-      </label>
+      <ImageField value={imageUrl} onChange={setImageUrl} disabled={isPending} />
       <button className="btn btn-primary" type="submit" disabled={isPending || !name.trim()}>
         {isPending ? "Añadiendo…" : "+ Añadir artículo"}
       </button>
@@ -318,22 +397,107 @@ function ArticleForm() {
 
 function ArticleRow({ article }: { article: Article }) {
   const [isPending, startTransition] = useTransition();
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(article.name);
+  const [category, setCategory] = useState(article.category);
+  const [price, setPrice] = useState(String(article.price));
+  const [imageUrl, setImageUrl] = useState(article.imageUrl ?? "");
+  const [error, setError] = useState<string | null>(null);
+
+  function startEdit() {
+    setName(article.name);
+    setCategory(article.category);
+    setPrice(String(article.price));
+    setImageUrl(article.imageUrl ?? "");
+    setError(null);
+    setEditing(true);
+  }
+
+  function save() {
+    if (!name.trim() || !(Number(price) >= 0)) {
+      setError("Pon un nombre y un precio válido.");
+      return;
+    }
+    startTransition(async () => {
+      try {
+        await updateArticle(article.id, { name: name.trim(), category, price: Number(price), imageUrl });
+        setEditing(false);
+      } catch (e: any) {
+        setError(e?.message ?? "No se pudo guardar.");
+      }
+    });
+  }
+
+  if (editing) {
+    return (
+      <tr>
+        <td colSpan={5}>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+            <label style={{ flex: "1 1 180px" }}>
+              Nombre
+              <input type="text" value={name} onChange={(e) => setName(e.target.value)} disabled={isPending} />
+            </label>
+            <label>
+              Categoría
+              <select value={category} onChange={(e) => setCategory(e.target.value as any)} disabled={isPending}>
+                <option value="MERCH">Merch</option>
+                <option value="MENTORIA">Mentoría</option>
+                <option value="CASHBACK">Cashback</option>
+              </select>
+            </label>
+            <label>
+              Precio (V-COIN)
+              <input type="number" min="0" step="1" value={price} onChange={(e) => setPrice(e.target.value)} disabled={isPending} style={{ width: 110 }} />
+            </label>
+            <ImageField value={imageUrl} onChange={setImageUrl} disabled={isPending} />
+            <div style={{ display: "flex", gap: 6 }}>
+              <button className="btn btn-primary" type="button" disabled={isPending} onClick={save}>
+                {isPending ? "Guardando…" : "Guardar"}
+              </button>
+              <button className="btn" type="button" disabled={isPending} onClick={() => setEditing(false)}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+          {error && <div style={{ color: "#F472B6", fontSize: 12, marginTop: 6 }}>{error}</div>}
+        </td>
+      </tr>
+    );
+  }
+
   return (
     <tr>
-      <td>{article.name}</td>
+      <td>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {article.imageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={article.imageUrl} alt="" style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 6 }} />
+          ) : (
+            <span style={{ width: 40, height: 40, display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: 6, background: "rgba(167,139,250,0.12)", fontSize: 11, color: "var(--text-dim)" }}>
+              sin foto
+            </span>
+          )}
+          <span>{article.name}</span>
+        </div>
+      </td>
       <td>{article.category}</td>
       <td>{article.price} V-COIN</td>
       <td>
         <span className={`tag ${article.active ? "pos" : "neu"}`}>{article.active ? "Activo" : "Inactivo"}</span>
       </td>
       <td>
-        <button
-          className={`btn ${article.active ? "btn-danger" : ""}`}
-          disabled={isPending}
-          onClick={() => startTransition(() => toggleArticleActive(article.id, !article.active))}
-        >
-          {article.active ? "Desactivar" : "Activar"}
-        </button>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <button className="btn" disabled={isPending} onClick={startEdit}>
+            Editar
+          </button>
+          <button
+            className={`btn ${article.active ? "btn-danger" : ""}`}
+            disabled={isPending}
+            onClick={() => startTransition(() => toggleArticleActive(article.id, !article.active))}
+          >
+            {article.active ? "Desactivar" : "Activar"}
+          </button>
+        </div>
       </td>
     </tr>
   );
@@ -351,7 +515,10 @@ function PayoutRowItem({ payout }: { payout: PayoutRow }) {
         <div>{payout.userEmail}</div>
         {payout.userName && <div style={{ color: "var(--text-dim)", fontSize: 11 }}>{payout.userName}</div>}
       </td>
-      <td>{payout.amountVCoin} V-COIN</td>
+      <td>
+        {payout.note && <div style={{ fontWeight: 600 }}>Pagar: {payout.note}</div>}
+        <div style={{ color: payout.note ? "var(--text-dim)" : undefined, fontSize: payout.note ? 11 : undefined }}>{payout.amountVCoin} V-COIN</div>
+      </td>
       <td>{payout.network}</td>
       <td style={{ fontFamily: "var(--font-mono)", fontSize: 11, wordBreak: "break-all", maxWidth: 220 }}>{payout.wallet}</td>
       <td>{payout.requestedAt ? new Date(payout.requestedAt).toLocaleDateString("es-ES") : "—"}</td>
@@ -378,18 +545,42 @@ function PayoutRowItem({ payout }: { payout: PayoutRow }) {
   );
 }
 
+// --- Pedidos de la Tienda ---
+
+function ShopOrderRowItem({ order }: { order: ShopOrderRow }) {
+  const [isPending, startTransition] = useTransition();
+  return (
+    <tr>
+      <td>
+        <div>{order.userEmail}</div>
+        {order.userName && <div style={{ color: "var(--text-dim)", fontSize: 11 }}>{order.userName}</div>}
+      </td>
+      <td>{order.articleName}</td>
+      <td>{Math.round(order.price)} V-COIN</td>
+      <td>{new Date(order.createdAt).toLocaleDateString("es-ES")}</td>
+      <td>
+        <button className="btn btn-primary" disabled={isPending} onClick={() => startTransition(() => markShopOrderDelivered(order.id))}>
+          {isPending ? "…" : "Marcar entregado"}
+        </button>
+      </td>
+    </tr>
+  );
+}
+
 export function PlayConfigPanel({
   config,
   tiers,
   articles,
   payoutsPending,
   payoutsPaid,
+  shopOrders,
 }: {
   config: { vcoinRatePerLot: number; centFactor: number };
   tiers: TierRow[];
   articles: Article[];
   payoutsPending: PayoutRow[];
   payoutsPaid: PayoutRow[];
+  shopOrders: ShopOrderRow[];
 }) {
   return (
     <>
@@ -421,7 +612,7 @@ export function PlayConfigPanel({
         ))}
       </Section>
 
-      <Section title="Catálogo de artículos" help="Los artículos que pueden salir como premio extra de un cofre (y, más adelante, canjearse directamente en la Tienda).">
+      <Section title="Catálogo de artículos" help="Los artículos activos aparecen en la Tienda de Vantax Play y se canjean con V-COIN; también pueden salir como premio extra de un cofre. Los de categoría Cashback se pagan en USDT (salen en Pagos pendientes); el resto, en Pedidos de la tienda.">
         <ArticleForm />
         <table>
           <thead>
@@ -448,7 +639,7 @@ export function PlayConfigPanel({
         </table>
       </Section>
 
-      <Section title={`Pagos pendientes (${payoutsPending.length})`} help="Solicitudes de canje de V-COIN por USDT (TRC20/BEP20) esperando pago manual.">
+      <Section title={`Pagos pendientes (${payoutsPending.length})`} help="Canjes de Cashback de la Tienda (y solicitudes de V-COIN por USDT) esperando pago manual en TRC20/BEP20. «Pagar» indica lo que hay que enviar.">
         <table>
           <thead>
             <tr>
@@ -475,6 +666,32 @@ export function PlayConfigPanel({
         </table>
       </Section>
 
+      <Section title={`Pedidos de la tienda (${shopOrders.length})`} help="Artículos de Merch o Mentoría canjeados en la Tienda que falta entregar. El V-COIN ya se ha descontado al jugador.">
+        <table>
+          <thead>
+            <tr>
+              <th>Jugador</th>
+              <th>Artículo</th>
+              <th>Precio</th>
+              <th>Pedido</th>
+              <th>Acción</th>
+            </tr>
+          </thead>
+          <tbody>
+            {shopOrders.map((o) => (
+              <ShopOrderRowItem key={o.id} order={o} />
+            ))}
+            {shopOrders.length === 0 && (
+              <tr>
+                <td colSpan={5} style={{ textAlign: "center", color: "var(--text-dim)" }}>
+                  Sin pedidos pendientes.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </Section>
+
       {payoutsPaid.length > 0 && (
         <Section title="Últimos pagos realizados">
           <table>
@@ -491,7 +708,7 @@ export function PlayConfigPanel({
               {payoutsPaid.map((p) => (
                 <tr key={p.id}>
                   <td>{p.userEmail}</td>
-                  <td>{p.amountVCoin} V-COIN</td>
+                  <td>{p.note ? `${p.note} (${p.amountVCoin} V-COIN)` : `${p.amountVCoin} V-COIN`}</td>
                   <td>{p.network}</td>
                   <td style={{ fontFamily: "var(--font-mono)", fontSize: 11, wordBreak: "break-all", maxWidth: 220 }}>{p.txHash || "—"}</td>
                   <td>{p.paidAt ? new Date(p.paidAt).toLocaleDateString("es-ES") : "—"}</td>

@@ -5,6 +5,7 @@ import styles from "@/components/play/arcade.module.css";
 import { TraderProgressBar, type PlayProgress } from "@/components/play/TraderProgressBar";
 import { ChestCabinet } from "@/components/play/ChestCabinet";
 import { RankingBoard } from "@/components/play/RankingBoard";
+import { ShopTab } from "@/components/play/ShopTab";
 import { Mt5ServerField } from "@/components/Mt5ServerField";
 import { isArcadeMusicOn, stopArcadeMusic, toggleArcadeMusic } from "@/components/play/arcadeMusic";
 import { TIER_LABEL, LEAGUE_LABEL } from "@/components/play/tierStyles";
@@ -517,7 +518,7 @@ export function PlayPanel() {
             <div className={styles.step}>
               <span className={styles.stepNum}>4</span>
               <span className={styles.stepTitle}>Canjéalos</span>
-              <span className={styles.stepText}>Tu saldo abre los cofres de Progreso y, más adelante, se podrá canjear en la Tienda.</span>
+              <span className={styles.stepText}>Tu saldo abre los cofres de Progreso y también se canjea por premios en la Tienda.</span>
             </div>
           </div>
           <div className={styles.warnBox}>
@@ -530,16 +531,7 @@ export function PlayPanel() {
         </div>
       )}
 
-      {effectiveTab === "tienda" && (
-        <div className={styles.card}>
-          <h3 className={styles.sectionTitle}>TIENDA</h3>
-          <p style={{ fontSize: 15, color: "var(--textDim)" }}>
-            Muy pronto vas a poder canjear tu V-COIN por artículos del catálogo directamente aquí. De momento, los
-            artículos solo se consiguen como premio extra al abrir un cofre.
-          </p>
-          <span className={styles.tag}>Próximamente</span>
-        </div>
-      )}
+      {effectiveTab === "tienda" && <ShopTab onBalanceChange={load} />}
 
       {effectiveTab === "perfil" && (
         <>

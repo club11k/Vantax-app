@@ -122,6 +122,25 @@ export async function createArticle(data: {
   revalidatePath(PATH);
 }
 
+// Editar un artículo ya creado (07/10/2026): nombre, categoría, precio e
+// imagen. La imagen puede ser una URL o una foto subida desde el ordenador
+// (llega ya reducida desde el navegador como data URL JPEG).
+export async function updateArticle(
+  articleId: string,
+  data: { name: string; category: "MERCH" | "MENTORIA" | "CASHBACK"; price: number; imageUrl: string }
+) {
+  const admin = await requireAdmin();
+  const name = data.name.trim();
+  if (!name || !(data.price >= 0)) throw new Error("Nombre y precio son obligatorios.");
+  if (data.imageUrl.length > 900_000) throw new Error("La imagen es demasiado grande.");
+  await prisma.playCatalogArticle.update({
+    where: { id: articleId },
+    data: { name, category: data.category, price: data.price, imageUrl: data.imageUrl.trim() || null },
+  });
+  await logAction(admin.id, "update_play_article", { articleId });
+  revalidatePath(PATH);
+}
+
 export async function toggleArticleActive(articleId: string, active: boolean) {
   const admin = await requireAdmin();
   await prisma.playCatalogArticle.update({ where: { id: articleId }, data: { active } });
@@ -138,5 +157,16 @@ export async function markPayoutPaid(payoutId: string, txHash: string) {
     data: { status: "PAGADO", txHash: txHash || null, paidAt: new Date() },
   });
   await logAction(admin.id, "mark_play_payout_paid", { payoutId, txHash });
+  revalidatePath(PATH);
+}
+
+// --- Pedidos de la Tienda (merch / mentoría) ---
+export async function markShopOrderDelivered(orderId: string) {
+  const admin = await requireAdmin();
+  await prisma.playShopOrder.update({
+    where: { id: orderId },
+    data: { status: "ENTREGADO", deliveredAt: new Date() },
+  });
+  await logAction(admin.id, "mark_play_shop_order_delivered", { orderId });
   revalidatePath(PATH);
 }
