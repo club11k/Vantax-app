@@ -9,6 +9,7 @@ import {
   grantFreeAccess,
   toggleMarketAccess,
   toggleAnalysisChatAccess,
+  toggleTrainingAccess,
 } from "@/app/admin/actions";
 
 type Plan = { id: string; name: string };
@@ -26,6 +27,7 @@ type UserRowData = {
   planIsFree: boolean;
   marketAccess: boolean;
   analysisChatAccess: boolean;
+  trainingAccess: boolean;
 };
 
 export function UserRow({ user, plans }: { user: UserRowData; plans: Plan[] }) {
@@ -52,6 +54,14 @@ export function UserRow({ user, plans }: { user: UserRowData; plans: Plan[] }) {
             onClick={() => startTransition(() => toggleMarketAccess(user.id, !user.marketAccess))}
           >
             {user.marketAccess ? "Mercado: abierto" : "Mercado: bloqueado"}
+          </button>
+          <button
+            className="btn"
+            disabled={isPending}
+            style={user.trainingAccess ? { borderColor: "var(--up)", color: "var(--up)" } : {}}
+            onClick={() => startTransition(() => toggleTrainingAccess(user.id, !user.trainingAccess))}
+          >
+            {user.trainingAccess ? "Formación: abierta" : "Formación: bloqueada"}
           </button>
           <button
             className="btn"

@@ -155,6 +155,11 @@ model User {
   // esté activado. Se otorga por separado desde /admin/usuarios.
   analysisChatAccess Boolean @default(false)
 
+  // Acceso a Formación (/formacion). Cerrado al registrarse; lo abre un admin
+  // desde /admin/users, igual que el Centro de Mercado.
+  trainingAccess    Boolean  @default(false)
+  trainingProgress  TrainingProgress[]
+
   journalAccounts   JournalAccount[]
 
   // Saldo de V-COIN (moneda interna de cashback), acreditado automáticamente
@@ -684,4 +689,60 @@ model PlayLeague {
   prizeChestTier PlayTier?
   prizeChest     PlayChest? @relation(fields: [prizeChestTier], references: [tier])
   sortOrder      Int       @default(0)
+}
+
+
+// --- Formación (09/10/2026) ---
+// Formaciones por módulos al estilo Skool: cada formación tiene sus módulos
+// (vídeo por enlace y/o PDF subido) y cada usuario va marcando los que
+// completa. Solo se ven las formaciones publicadas.
+model TrainingCourse {
+  id          String           @id @default(cuid())
+  title       String
+  description String?
+  coverUrl    String?          // URL o foto subida (data URL reducida)
+  published   Boolean          @default(false)
+  sortOrder   Int              @default(0)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  modules     TrainingModule[]
+}
+
+model TrainingModule {
+  id          String             @id @default(cuid())
+  courseId    String
+  course      TrainingCourse     @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  videoUrl    String?
+  pdfUrl      String?            // PDF por enlace (alternativa a subirlo)
+  pdfFileId   String?
+  pdfFile     TrainingFile?      @relation(fields: [pdfFileId], references: [id], onDelete: SetNull)
+  sortOrder   Int                @default(0)
+  createdAt   DateTime           @default(now())
+  progress    TrainingProgress[]
+
+  @@index([courseId, sortOrder])
+}
+
+// PDFs subidos desde admin, guardados en la propia base de datos (Render no
+// conserva archivos en disco entre despliegues).
+model TrainingFile {
+  id        String           @id @default(cuid())
+  filename  String
+  mimeType  String
+  size      Int
+  data      Bytes
+  createdAt DateTime         @default(now())
+  modules   TrainingModule[]
+}
+
+model TrainingProgress {
+  userId      String
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  moduleId    String
+  module      TrainingModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  completedAt DateTime       @default(now())
+
+  @@id([userId, moduleId])
 }

@@ -104,6 +104,14 @@ export async function toggleAnalysisChatAccess(userId: string, enabled: boolean)
   revalidatePath("/admin/users");
 }
 
+// Acceso a Formación (/formacion): cerrado al registrarse, se abre aquí.
+export async function toggleTrainingAccess(userId: string, enabled: boolean) {
+  const admin = await requireAdmin();
+  await prisma.user.update({ where: { id: userId }, data: { trainingAccess: enabled } });
+  await logAction(admin.id, "toggle_training_access", { userId, enabled });
+  revalidatePath("/admin/users");
+}
+
 export async function toggleUserSuspended(userId: string, suspended: boolean) {
   const admin = await requireAdmin();
   await prisma.user.update({ where: { id: userId }, data: { suspended } });

@@ -33,6 +33,7 @@ const NAV_ITEMS = [
   { href: "/journal", label: "Journaly", key: "journal", icon: "📓", desc: "diario de operativa" },
   { href: "/riesgo", label: "Calculadora de riesgo", key: "riesgo", icon: "🧮", desc: "tamaño de posición" },
   { href: "/play", label: "Vantax Play", key: "play", icon: "🎮", desc: "V-COIN, cofres, ranking" },
+  { href: "/formacion", label: "Formación", key: "formacion", icon: "🎓", desc: "cursos por módulos" },
 ] as const;
 
 // Mismos 9 enlaces que antes vivían en la segunda fila fija del panel de
@@ -46,6 +47,7 @@ export const ADMIN_SUB_ITEMS = [
   { href: "/admin/players", label: "Jugadores (Play)" },
   { href: "/admin/play-config", label: "Vantax Play · Config" },
   { href: "/admin/play-inventory", label: "Inventario de cofres" },
+  { href: "/admin/formacion", label: "Formación" },
   { href: "/admin/plans", label: "Planes" },
   { href: "/admin/settings", label: "Configuración" },
 ] as const;
