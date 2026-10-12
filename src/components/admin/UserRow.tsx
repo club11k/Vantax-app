@@ -61,7 +61,7 @@ export function UserRow({ user, plans }: { user: UserRowData; plans: Plan[] }) {
             style={user.trainingAccess ? { borderColor: "var(--up)", color: "var(--up)" } : {}}
             onClick={() => startTransition(() => toggleTrainingAccess(user.id, !user.trainingAccess))}
           >
-            {user.trainingAccess ? "Formación: abierta" : "Formación: bloqueada"}
+            {user.trainingAccess ? "Formación (todas): abierta" : "Formación (todas): bloqueada"}
           </button>
           <button
             className="btn"

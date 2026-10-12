@@ -7,6 +7,7 @@ import { getServerSession } from "next-auth";
 import { revalidatePath } from "next/cache";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { bunnyDeleteVideo } from "@/lib/bunny";
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -56,7 +57,19 @@ function checkUrl(v: string | null) {
 
 // --- Formaciones ---
 
-export type CourseInput = { title: string; description: string; coverUrl: string };
+export type CourseInput = { title: string; description: string; coverUrl: string; price: string };
+
+// "99", "99,90" o "99.90" € → céntimos. Vacío o 0 = sin venta.
+function parsePrice(v: string): number | null {
+  const t = (v ?? "").trim().replace(/\s|€/g, "").replace(",", ".");
+  if (!t) return null;
+  const n = Number(t);
+  if (!Number.isFinite(n) || n < 0 || n > 100000) throw new Error("El precio no es válido. Escríbelo en euros, por ejemplo 99 o 99,90.");
+  const cents = Math.round(n * 100);
+  if (cents === 0) return null;
+  if (cents < 50) throw new Error("El precio mínimo para cobrar con Stripe es 0,50 €.");
+  return cents;
+}
 
 export async function createCourse(data: CourseInput) {
   const admin = await requireAdmin();
@@ -68,6 +81,7 @@ export async function createCourse(data: CourseInput) {
       title,
       description: clean(data.description, 4000),
       coverUrl: checkUrl(clean(data.coverUrl, 900_000)),
+      priceCents: parsePrice(data.price),
       sortOrder: (last?.sortOrder ?? 0) + 1,
     },
   });
@@ -82,7 +96,12 @@ export async function updateCourse(courseId: string, data: CourseInput) {
   if (!title) throw new Error("Pon un título a la formación.");
   await prisma.trainingCourse.update({
     where: { id: courseId },
-    data: { title, description: clean(data.description, 4000), coverUrl: checkUrl(clean(data.coverUrl, 900_000)) },
+    data: {
+      title,
+      description: clean(data.description, 4000),
+      coverUrl: checkUrl(clean(data.coverUrl, 900_000)),
+      priceCents: parsePrice(data.price),
+    },
   });
   await logAction(admin.id, "update_training_course", { courseId });
   refresh(courseId);
@@ -97,8 +116,10 @@ export async function setCoursePublished(courseId: string, published: boolean) {
 
 export async function deleteCourse(courseId: string) {
   const admin = await requireAdmin();
+  const vids = await prisma.trainingModule.findMany({ where: { courseId, bunnyVideoId: { not: null } }, select: { bunnyVideoId: true } });
   await prisma.trainingCourse.delete({ where: { id: courseId } });
   await logAction(admin.id, "delete_training_course", { courseId });
+  await Promise.all(vids.map((v) => bunnyDeleteVideo(v.bunnyVideoId)));
   await cleanupOrphanFiles();
   refresh();
 }
@@ -122,6 +143,7 @@ export type ModuleInput = {
   videoUrl: string;
   pdfUrl: string;
   pdfFileId: string | null;
+  bunnyVideoId: string | null;
 };
 
 function moduleData(data: ModuleInput) {
@@ -133,6 +155,7 @@ function moduleData(data: ModuleInput) {
     videoUrl: checkUrl(clean(data.videoUrl, 1000)),
     pdfUrl: data.pdfFileId ? null : checkUrl(clean(data.pdfUrl, 1000)),
     pdfFileId: data.pdfFileId || null,
+    bunnyVideoId: data.bunnyVideoId && /^[0-9a-f-]{20,64}$/i.test(data.bunnyVideoId) ? data.bunnyVideoId : null,
   };
 }
 
@@ -148,8 +171,12 @@ export async function createModule(courseId: string, data: ModuleInput) {
 
 export async function updateModule(moduleId: string, data: ModuleInput) {
   const admin = await requireAdmin();
-  const mod = await prisma.trainingModule.update({ where: { id: moduleId }, data: moduleData(data) });
+  const before = await prisma.trainingModule.findUnique({ where: { id: moduleId }, select: { bunnyVideoId: true } });
+  const next = moduleData(data);
+  const mod = await prisma.trainingModule.update({ where: { id: moduleId }, data: next });
   await logAction(admin.id, "update_training_module", { moduleId });
+  // Si se ha cambiado o quitado el vídeo subido, se borra el antiguo de Bunny.
+  if (before?.bunnyVideoId && before.bunnyVideoId !== next.bunnyVideoId) await bunnyDeleteVideo(before.bunnyVideoId);
   await cleanupOrphanFiles();
   refresh(mod.courseId);
 }
@@ -158,6 +185,7 @@ export async function deleteModule(moduleId: string) {
   const admin = await requireAdmin();
   const mod = await prisma.trainingModule.delete({ where: { id: moduleId } });
   await logAction(admin.id, "delete_training_module", { moduleId });
+  await bunnyDeleteVideo(mod.bunnyVideoId);
   await cleanupOrphanFiles();
   refresh(mod.courseId);
 }
@@ -177,4 +205,26 @@ export async function moveModule(moduleId: string, dir: -1 | 1) {
   [all[i], all[j]] = [all[j], all[i]];
   await prisma.$transaction(all.map((m, k) => prisma.trainingModule.update({ where: { id: m.id }, data: { sortOrder: k + 1 } })));
   refresh(mod.courseId);
+}
+
+// --- Accesos a una formación concreta ---
+
+export async function grantCourseAccess(courseId: string, email: string) {
+  const admin = await requireAdmin();
+  const e = (email ?? "").trim().toLowerCase();
+  if (!e) throw new Error("Escribe el email del usuario.");
+  const user = await prisma.user.findFirst({ where: { email: { equals: e, mode: "insensitive" } }, select: { id: true } });
+  if (!user) throw new Error("No hay ningún usuario registrado con ese email.");
+  const existing = await prisma.trainingPurchase.findUnique({ where: { userId_courseId: { userId: user.id, courseId } } });
+  if (existing) throw new Error("Este usuario ya tiene acceso a esta formación.");
+  await prisma.trainingPurchase.create({ data: { userId: user.id, courseId, source: "MANUAL", amountCents: 0 } });
+  await logAction(admin.id, "grant_training_course_access", { courseId, userId: user.id });
+  refresh(courseId);
+}
+
+export async function revokeCourseAccess(purchaseId: string) {
+  const admin = await requireAdmin();
+  const p = await prisma.trainingPurchase.delete({ where: { id: purchaseId } });
+  await logAction(admin.id, "revoke_training_course_access", { purchaseId, courseId: p.courseId, userId: p.userId, source: p.source });
+  refresh(p.courseId);
 }

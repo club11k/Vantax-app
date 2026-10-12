@@ -1,22 +1,26 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getTrainingViewer } from "@/lib/training";
+import { canAccessCourse, getTrainingViewer } from "@/lib/training";
 
 // Sirve un PDF subido a Formación, solo a quien tenga acceso. Siempre se abre
 // dentro del navegador (sin opción de descarga desde la web).
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   const viewer = await getTrainingViewer();
   if (!viewer) return NextResponse.json({ error: "No autenticado." }, { status: 401 });
-  if (!viewer.allowed) return NextResponse.json({ error: "No tienes acceso a Formación." }, { status: 403 });
 
   const file = await prisma.trainingFile.findUnique({
     where: { id: params.id },
-    include: { modules: { select: { course: { select: { published: true } } } } },
+    include: { modules: { select: { course: { select: { id: true, published: true } } } } },
   });
   if (!file) return NextResponse.json({ error: "Archivo no encontrado." }, { status: 404 });
-  if (!viewer.isAdmin && !file.modules.some((m) => m.course.published)) {
-    return NextResponse.json({ error: "Archivo no encontrado." }, { status: 404 });
+  let allowed = false;
+  for (const m of file.modules) {
+    if (await canAccessCourse(viewer, m.course)) {
+      allowed = true;
+      break;
+    }
   }
+  if (!allowed) return NextResponse.json({ error: "No tienes acceso a este archivo." }, { status: 403 });
 
   const safeName = file.filename.replace(/[^\w.\- ]+/g, "_");
   return new NextResponse(new Uint8Array(file.data), {

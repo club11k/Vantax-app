@@ -1,35 +1,17 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { getTrainingViewer } from "@/lib/training";
+import { formatPrice, getOwnedCourseIds, getTrainingViewer } from "@/lib/training";
 import { AppNav } from "@/components/AppNav";
 
-// Formación (09/10/2026): formaciones por módulos al estilo Skool. Cerrada
-// por defecto; un admin abre el acceso a cada usuario desde /admin/users.
+// Formación (09/10/2026): formaciones por módulos al estilo Skool. Todos los
+// usuarios ven el catálogo; cada formación se abre comprándola (pago único
+// con Stripe) o si un admin les da acceso (total o a esa formación).
 export const dynamic = "force-dynamic";
 
 export default async function FormacionPage() {
   const viewer = await getTrainingViewer();
   if (!viewer) redirect("/login");
-
-  if (!viewer.allowed) {
-    return (
-      <div className="container" style={{ paddingTop: 40, maxWidth: 640 }}>
-        <div className="panel locked-panel">
-          <span className="locked-icon">🔒</span>
-          <div>
-            <h1 style={{ fontSize: 20, marginTop: 0 }}>Formación bloqueada</h1>
-            <p style={{ color: "var(--text-muted)", fontSize: 13.5, marginBottom: 16 }}>
-              Todavía no tienes acceso a las formaciones. En cuanto el equipo lo active en tu cuenta, podrás verlas aquí.
-            </p>
-            <div className="btn-row">
-              <AppNav isAdmin={viewer.isAdmin} active="formacion" />
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   const courses = await prisma.trainingCourse.findMany({
     where: viewer.isAdmin ? {} : { published: true },
@@ -41,6 +23,8 @@ export default async function FormacionPage() {
     select: { moduleId: true },
   });
   const doneSet = new Set(done.map((d) => d.moduleId));
+  const owned = await getOwnedCourseIds(viewer.userId);
+  const hasAccess = (id: string) => viewer.isAdmin || (!viewer.suspended && (viewer.fullAccess || owned.has(id)));
 
   return (
     <div className="container" style={{ paddingTop: 40 }}>
@@ -89,17 +73,34 @@ export default async function FormacionPage() {
                     </span>
                   )}
                   {!c.published && <span className="fm-draft">Borrador (solo admin)</span>}
+                  {c.published && !hasAccess(c.id) && <span className="fm-lock-badge">🔒</span>}
                 </div>
                 <div className="fm-card-body">
                   <span className="fm-card-title">{c.title}</span>
                   {c.description && <span className="fm-card-desc">{c.description}</span>}
                   <div className="fm-card-foot">
-                    <div className="fm-bar">
-                      <span style={{ width: `${pct}%` }} />
-                    </div>
-                    <span className="fm-pct">
-                      {pct}% · {total} {total === 1 ? "módulo" : "módulos"}
-                    </span>
+                    {hasAccess(c.id) ? (
+                      <>
+                        <div className="fm-bar">
+                          <span style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="fm-pct">
+                          {pct}% · {total} {total === 1 ? "módulo" : "módulos"}
+                        </span>
+                      </>
+                    ) : c.priceCents ? (
+                      <div className="fm-buy-row">
+                        <span className="fm-price">{formatPrice(c.priceCents)}</span>
+                        <span className="fm-buy-cta">Ver y comprar →</span>
+                      </div>
+                    ) : (
+                      <div className="fm-buy-row">
+                        <span className="fm-locked">🔒 Acceso bajo petición</span>
+                        <span className="fm-pct">
+                          {total} {total === 1 ? "módulo" : "módulos"}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </Link>

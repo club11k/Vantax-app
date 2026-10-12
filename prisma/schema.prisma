@@ -159,6 +159,7 @@ model User {
   // desde /admin/users, igual que el Centro de Mercado.
   trainingAccess    Boolean  @default(false)
   trainingProgress  TrainingProgress[]
+  trainingPurchases TrainingPurchase[]
 
   journalAccounts   JournalAccount[]
 
@@ -702,10 +703,14 @@ model TrainingCourse {
   description String?
   coverUrl    String?          // URL o foto subida (data URL reducida)
   published   Boolean          @default(false)
+  // Precio de pago único en céntimos de EUR (ej. 9900 = 99 €). Nulo o 0 =
+  // sin venta: solo la ven quienes tengan acceso manual a Formación.
+  priceCents  Int?
   sortOrder   Int              @default(0)
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
   modules     TrainingModule[]
+  purchases   TrainingPurchase[]
 }
 
 model TrainingModule {
@@ -715,6 +720,8 @@ model TrainingModule {
   title       String
   description String?
   videoUrl    String?
+  // Vídeo subido a Bunny Stream (GUID). Si está, tiene prioridad sobre videoUrl.
+  bunnyVideoId String?
   pdfUrl      String?            // PDF por enlace (alternativa a subirlo)
   pdfFileId   String?
   pdfFile     TrainingFile?      @relation(fields: [pdfFileId], references: [id], onDelete: SetNull)
@@ -745,4 +752,22 @@ model TrainingProgress {
   completedAt DateTime       @default(now())
 
   @@id([userId, moduleId])
+}
+
+// Compras de formaciones (pago único con Stripe) y accesos a una formación
+// concreta dados a mano por un admin (source = MANUAL, amountCents = 0).
+model TrainingPurchase {
+  id              String         @id @default(cuid())
+  userId          String
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseId        String
+  course          TrainingCourse @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  source          String         @default("STRIPE") // STRIPE | MANUAL
+  amountCents     Int            @default(0)
+  currency        String         @default("eur")
+  stripeSessionId String?        @unique
+  createdAt       DateTime       @default(now())
+
+  @@unique([userId, courseId])
+  @@index([courseId, createdAt])
 }

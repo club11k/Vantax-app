@@ -21,6 +21,7 @@ export function CourseForm({
   const [title, setTitle] = useState(initial?.title ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [coverUrl, setCoverUrl] = useState(initial?.coverUrl ?? "");
+  const [price, setPrice] = useState(initial?.price ?? "");
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -32,12 +33,13 @@ export function CourseForm({
     setOk(false);
     startTransition(async () => {
       try {
-        await onSubmit({ title, description, coverUrl });
+        await onSubmit({ title, description, coverUrl, price });
         setOk(true);
         if (resetOnSuccess) {
           setTitle("");
           setDescription("");
           setCoverUrl("");
+          setPrice("");
         }
       } catch (ex: any) {
         setError(ex?.message ?? "No se pudo guardar.");
@@ -61,6 +63,22 @@ export function CourseForm({
           onChange={(e) => setDescription(e.target.value)}
           disabled={isPending}
         />
+      </label>
+      <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13 }}>
+        Precio (pago único, en €)
+        <input
+          type="text"
+          inputMode="decimal"
+          value={price}
+          placeholder="Ej: 99 o 149,90 · vacío = no se vende"
+          onChange={(e) => setPrice(e.target.value)}
+          disabled={isPending}
+          style={{ maxWidth: 260 }}
+        />
+        <span style={{ fontSize: 11.5, color: "var(--text-dim)" }}>
+          Con precio, cualquier usuario puede comprarla con Stripe y se le abre al momento. Sin precio, solo la ven quienes tengan
+          acceso dado a mano.
+        </span>
       </label>
       <CoverField value={coverUrl} onChange={setCoverUrl} disabled={isPending} />
       {error && <div style={{ color: "var(--down)", fontSize: 13 }}>{error}</div>}

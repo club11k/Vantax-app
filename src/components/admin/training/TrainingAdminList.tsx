@@ -6,7 +6,7 @@ import { useState, useTransition } from "react";
 import { createCourse, moveCourse, setCoursePublished } from "@/app/admin/formacion-actions";
 import { CourseForm } from "./CourseForm";
 
-type CourseRow = { id: string; title: string; coverUrl: string | null; published: boolean; modules: number };
+type CourseRow = { id: string; title: string; coverUrl: string | null; published: boolean; modules: number; price: string | null; sales: number };
 
 // Lista de formaciones en admin: crear, publicar/ocultar, ordenar y entrar a
 // editar los módulos.
@@ -43,8 +43,8 @@ export function TrainingAdminList({ courses }: { courses: CourseRow[] }) {
       <div className="panel" style={{ marginTop: 18 }}>
         <h3 style={{ marginTop: 0, fontSize: 15 }}>Formaciones ({courses.length})</h3>
         <p style={{ fontSize: 12.5, color: "var(--text-muted)", marginTop: -6 }}>
-          Solo las <b>publicadas</b> las ven los usuarios con acceso a Formación (el acceso se da en Usuarios). Las flechas
-          cambian el orden en que aparecen.
+          Solo se ven las <b>publicadas</b>. Las que tienen precio se pueden comprar; las demás solo las ven quienes tengan
+          acceso dado a mano. Las flechas cambian el orden en que aparecen.
         </p>
         {courses.length === 0 ? (
           <p style={{ color: "var(--text-dim)", fontSize: 13 }}>Todavía no hay formaciones.</p>
@@ -90,6 +90,8 @@ export function TrainingAdminList({ courses }: { courses: CourseRow[] }) {
                   <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                     <span className={`tag ${c.published ? "pos" : "neu"}`}>{c.published ? "Publicada" : "Borrador"}</span>
                     {c.modules} {c.modules === 1 ? "módulo" : "módulos"}
+                    <span>· {c.price ?? "Sin venta"}</span>
+                    {c.sales > 0 && <span>· {c.sales} {c.sales === 1 ? "venta" : "ventas"}</span>}
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>

@@ -14,8 +14,10 @@ import {
 } from "@/app/admin/formacion-actions";
 import { CourseForm } from "./CourseForm";
 import { ModuleForm, type ModuleInitial } from "./ModuleForm";
+import { CourseBuyers } from "./CourseBuyers";
 
-type Course = { id: string; title: string; description: string | null; coverUrl: string | null; published: boolean };
+type Course = { id: string; title: string; description: string | null; coverUrl: string | null; published: boolean; priceCents: number | null };
+type Buyer = { id: string; email: string; name: string | null; source: string; amount: string | null; date: string };
 type ModuleRow = ModuleInitial & { id: string };
 
 function ModuleItem({ mod, index, count }: { mod: ModuleRow; index: number; count: number }) {
@@ -71,7 +73,7 @@ function ModuleItem({ mod, index, count }: { mod: ModuleRow; index: number; coun
       <div style={{ flex: "1 1 200px", minWidth: 0 }}>
         <div style={{ fontWeight: 600 }}>{mod.title}</div>
         <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3, display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <span>{mod.videoUrl ? "▶ Vídeo" : "Sin vídeo"}</span>
+          <span>{mod.bunnyVideoId ? "▶ Vídeo subido" : mod.videoUrl ? "▶ Vídeo (enlace)" : "Sin vídeo"}</span>
           <span>{mod.pdfFileId ? `📄 ${mod.pdfFileName ?? "PDF"}` : mod.pdfUrl ? "📄 PDF (enlace)" : "Sin PDF"}</span>
         </div>
       </div>
@@ -102,7 +104,7 @@ function ModuleItem({ mod, index, count }: { mod: ModuleRow; index: number; coun
   );
 }
 
-export function TrainingCourseEditor({ course, modules }: { course: Course; modules: ModuleRow[] }) {
+export function TrainingCourseEditor({ course, modules, buyers }: { course: Course; modules: ModuleRow[]; buyers: Buyer[] }) {
   const [adding, setAdding] = useState(modules.length === 0);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
@@ -165,16 +167,23 @@ export function TrainingCourseEditor({ course, modules }: { course: Course; modu
         <h3 style={{ marginTop: 0, fontSize: 15 }}>Datos de la formación</h3>
         <CourseForm
           key={course.id}
-          initial={{ title: course.title, description: course.description ?? "", coverUrl: course.coverUrl ?? "" }}
+          initial={{
+            title: course.title,
+            description: course.description ?? "",
+            coverUrl: course.coverUrl ?? "",
+            price: course.priceCents ? (course.priceCents / 100).toFixed(course.priceCents % 100 ? 2 : 0).replace(".", ",") : "",
+          }}
           submitLabel="Guardar cambios"
           onSubmit={(data) => updateCourse(course.id, data)}
         />
       </div>
 
+      <CourseBuyers courseId={course.id} buyers={buyers} />
+
       <div className="panel" style={{ marginTop: 18, borderColor: "rgba(244,114,182,0.35)" }}>
         <h3 style={{ marginTop: 0, fontSize: 15 }}>Borrar formación</h3>
         <p style={{ fontSize: 12.5, color: "var(--text-muted)", marginTop: -6 }}>
-          Se borran la formación, todos sus módulos, sus PDF y el progreso de los usuarios. No se puede deshacer. Si solo
+          Se borran la formación, todos sus módulos, sus PDF, el progreso y los accesos de los alumnos (también los que la pagaron). No se puede deshacer. Si solo
           quieres que no se vea, usa «Ocultar».
         </p>
         <button
