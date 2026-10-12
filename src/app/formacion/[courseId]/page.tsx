@@ -29,13 +29,23 @@ export default async function CoursePage({
   const course = await prisma.trainingCourse.findUnique({
     where: { id: params.courseId },
     include: {
-      modules: {
+      sections: {
         orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-        include: { pdfFile: { select: { id: true, filename: true } } },
+        include: {
+          lessons: {
+            orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+            include: { pdfFile: { select: { id: true, filename: true } } },
+          },
+        },
       },
     },
   });
   if (!course || (!course.published && !viewer.isAdmin)) notFound();
+
+  // Formación → módulos (sections) → capítulos (lessons). Para avanzar y
+  // calcular el progreso se usan todos los capítulos en orden.
+  const sections = course.sections;
+  const lessons = sections.flatMap((sec, si) => sec.lessons.map((l) => ({ ...l, sectionIndex: si, sectionTitle: sec.title })));
 
   // Vuelta de Stripe tras pagar: se confirma el pago aquí mismo para abrir el
   // acceso al momento (el webhook hace lo mismo por si se cierra la pestaña).
@@ -88,7 +98,8 @@ export default async function CoursePage({
             <h1 style={{ fontSize: 26, margin: 0 }}>{course.title}</h1>
             {course.description && <p className="fm-sales-desc">{course.description}</p>}
             <div className="fm-sales-meta">
-              {course.modules.length} {course.modules.length === 1 ? "módulo" : "módulos"} · acceso para siempre
+              {sections.length} {sections.length === 1 ? "módulo" : "módulos"} · {lessons.length}{" "}
+              {lessons.length === 1 ? "capítulo" : "capítulos"} · acceso para siempre
             </div>
             {course.priceCents && course.priceCents >= 50 ? (
               <div className="fm-sales-buy">
@@ -107,19 +118,30 @@ export default async function CoursePage({
         <div className="panel" style={{ marginTop: 18 }}>
           <h3 style={{ marginTop: 0, fontSize: 15 }}>Contenido de la formación</h3>
           <div className="fm-mods">
-            {course.modules.map((m, i) => (
-              <div key={m.id} className="fm-mod fm-mod-locked">
-                <span className="fm-check" aria-hidden="true">
-                  {i + 1}
-                </span>
-                <span className="fm-mod-title">{m.title}</span>
-                <span className="fm-mod-type" aria-hidden="true">
-                  {m.videoUrl || m.bunnyVideoId ? "▶" : ""}
-                  {m.pdfFile || m.pdfUrl ? "📄" : ""} 🔒
-                </span>
+            {sections.map((sec, si) => (
+              <div key={sec.id} className="fm-sec">
+                <div className="fm-sec-head static">
+                  <span className="fm-sec-num">Módulo {si + 1}</span>
+                  <span className="fm-sec-title">{sec.title}</span>
+                  <span className="fm-sec-count">
+                    {sec.lessons.length} {sec.lessons.length === 1 ? "capítulo" : "capítulos"}
+                  </span>
+                </div>
+                {sec.lessons.map((m, i) => (
+                  <div key={m.id} className="fm-mod fm-mod-locked">
+                    <span className="fm-check" aria-hidden="true">
+                      {i + 1}
+                    </span>
+                    <span className="fm-mod-title">{m.title}</span>
+                    <span className="fm-mod-type" aria-hidden="true">
+                      {m.videoUrl || m.bunnyVideoId ? "▶" : ""}
+                      {m.pdfFile || m.pdfUrl ? "📄" : ""} 🔒
+                    </span>
+                  </div>
+                ))}
               </div>
             ))}
-            {course.modules.length === 0 && <p style={{ color: "var(--text-dim)", fontSize: 13 }}>Pronto se añadirán los módulos.</p>}
+            {sections.length === 0 && <p style={{ color: "var(--text-dim)", fontSize: 13 }}>Pronto se añadirán los módulos.</p>}
           </div>
         </div>
       </div>
@@ -127,23 +149,23 @@ export default async function CoursePage({
   }
 
   const progress = await prisma.trainingProgress.findMany({
-    where: { userId: viewer.userId, moduleId: { in: course.modules.map((m) => m.id) } },
+    where: { userId: viewer.userId, moduleId: { in: lessons.map((m) => m.id) } },
     select: { moduleId: true },
   });
   const doneSet = new Set(progress.map((p) => p.moduleId));
-  const total = course.modules.length;
-  const completed = course.modules.filter((m) => doneSet.has(m.id)).length;
+  const total = lessons.length;
+  const completed = lessons.filter((m) => doneSet.has(m.id)).length;
   const pct = total ? Math.round((completed / total) * 100) : 0;
 
   // Módulo abierto: el de la URL o, si no hay, el primero sin completar.
   const current =
-    course.modules.find((m) => m.id === searchParams.m) ??
-    course.modules.find((m) => !doneSet.has(m.id)) ??
-    course.modules[0] ??
+    lessons.find((m) => m.id === searchParams.m) ??
+    lessons.find((m) => !doneSet.has(m.id)) ??
+    lessons[0] ??
     null;
-  const idx = current ? course.modules.findIndex((m) => m.id === current.id) : -1;
-  const prev = idx > 0 ? course.modules[idx - 1] : null;
-  const next = idx >= 0 && idx < total - 1 ? course.modules[idx + 1] : null;
+  const idx = current ? lessons.findIndex((m) => m.id === current.id) : -1;
+  const prev = idx > 0 ? lessons[idx - 1] : null;
+  const next = idx >= 0 && idx < total - 1 ? lessons[idx + 1] : null;
 
   // Vídeo subido a Bunny (enlace firmado que caduca) o, si no, el enlace externo.
   const bunnySrc = current?.bunnyVideoId ? bunnyEmbedUrl(current.bunnyVideoId) : null;
@@ -179,23 +201,39 @@ export default async function CoursePage({
               <span style={{ width: `${pct}%` }} />
             </div>
             <span className="fm-side-count">
-              {completed} de {total} completados
+              {completed} de {total} capítulos completados
             </span>
           </div>
-          <nav className="fm-mods" aria-label="Módulos">
-            {course.modules.map((m, i) => (
-              <Link key={m.id} href={href(m.id)} className={`fm-mod${current?.id === m.id ? " active" : ""}`}>
-                <span className={`fm-check${doneSet.has(m.id) ? " done" : ""}`} aria-hidden="true">
-                  {doneSet.has(m.id) ? "✓" : i + 1}
-                </span>
-                <span className="fm-mod-title">{m.title}</span>
-                <span className="fm-mod-type" aria-hidden="true">
-                  {m.videoUrl || m.bunnyVideoId ? "▶" : ""}
-                  {m.pdfFile || m.pdfUrl ? "📄" : ""}
-                </span>
-              </Link>
-            ))}
-            {total === 0 && <p style={{ color: "var(--text-dim)", fontSize: 13, padding: "8px 10px" }}>Esta formación aún no tiene módulos.</p>}
+          <nav className="fm-mods" aria-label="Módulos y capítulos">
+            {sections.map((sec, si) => {
+              const secDone = sec.lessons.filter((l) => doneSet.has(l.id)).length;
+              const isCurrent = current?.sectionIndex === si;
+              return (
+                <details key={sec.id} className="fm-sec" open={isCurrent || sections.length <= 3}>
+                  <summary className="fm-sec-head">
+                    <span className="fm-sec-num">Módulo {si + 1}</span>
+                    <span className="fm-sec-title">{sec.title}</span>
+                    <span className={`fm-sec-count${sec.lessons.length > 0 && secDone === sec.lessons.length ? " done" : ""}`}>
+                      {secDone}/{sec.lessons.length}
+                    </span>
+                  </summary>
+                  {sec.lessons.map((m, i) => (
+                    <Link key={m.id} href={href(m.id)} className={`fm-mod${current?.id === m.id ? " active" : ""}`}>
+                      <span className={`fm-check${doneSet.has(m.id) ? " done" : ""}`} aria-hidden="true">
+                        {doneSet.has(m.id) ? "✓" : i + 1}
+                      </span>
+                      <span className="fm-mod-title">{m.title}</span>
+                      <span className="fm-mod-type" aria-hidden="true">
+                        {m.videoUrl || m.bunnyVideoId ? "▶" : ""}
+                        {m.pdfFile || m.pdfUrl ? "📄" : ""}
+                      </span>
+                    </Link>
+                  ))}
+                  {sec.lessons.length === 0 && <p style={{ color: "var(--text-dim)", fontSize: 12.5, padding: "4px 10px 8px" }}>Próximamente.</p>}
+                </details>
+              );
+            })}
+            {sections.length === 0 && <p style={{ color: "var(--text-dim)", fontSize: 13, padding: "8px 10px" }}>Esta formación aún no tiene módulos.</p>}
           </nav>
           {course.description && <p className="fm-side-desc">{course.description}</p>}
         </aside>
@@ -207,7 +245,7 @@ export default async function CoursePage({
                 <div className="fm-lesson-head">
                   <div style={{ minWidth: 0 }}>
                     <span className="fm-lesson-kicker">
-                      Módulo {idx + 1} de {total}
+                      Módulo {current.sectionIndex + 1} · {current.sectionTitle} · Capítulo {idx + 1} de {total}
                     </span>
                     <h2 className="fm-lesson-title">{current.title}</h2>
                   </div>
@@ -271,7 +309,7 @@ export default async function CoursePage({
             </>
           ) : (
             <div className="panel" style={{ padding: 24, color: "var(--text-muted)" }}>
-              Esta formación todavía no tiene módulos.
+              Esta formación todavía no tiene capítulos.
             </div>
           )}
         </section>

@@ -135,7 +135,59 @@ export async function moveCourse(courseId: string, dir: -1 | 1) {
   refresh();
 }
 
-// --- Módulos ---
+// --- Módulos (agrupan capítulos) ---
+
+export type SectionInput = { title: string; description: string };
+
+export async function createSection(courseId: string, data: SectionInput) {
+  const admin = await requireAdmin();
+  const title = clean(data.title, 160);
+  if (!title) throw new Error("Pon un título al módulo.");
+  const last = await prisma.trainingSection.findFirst({ where: { courseId }, orderBy: { sortOrder: "desc" }, select: { sortOrder: true } });
+  const sec = await prisma.trainingSection.create({
+    data: { courseId, title, description: clean(data.description, 4000), sortOrder: (last?.sortOrder ?? 0) + 1 },
+  });
+  await logAction(admin.id, "create_training_section", { courseId, sectionId: sec.id });
+  refresh(courseId);
+}
+
+export async function updateSection(sectionId: string, data: SectionInput) {
+  const admin = await requireAdmin();
+  const title = clean(data.title, 160);
+  if (!title) throw new Error("Pon un título al módulo.");
+  const sec = await prisma.trainingSection.update({ where: { id: sectionId }, data: { title, description: clean(data.description, 4000) } });
+  await logAction(admin.id, "update_training_section", { sectionId });
+  refresh(sec.courseId);
+}
+
+export async function deleteSection(sectionId: string) {
+  const admin = await requireAdmin();
+  const vids = await prisma.trainingModule.findMany({ where: { sectionId, bunnyVideoId: { not: null } }, select: { bunnyVideoId: true } });
+  const sec = await prisma.trainingSection.delete({ where: { id: sectionId } });
+  await logAction(admin.id, "delete_training_section", { sectionId });
+  await Promise.all(vids.map((v) => bunnyDeleteVideo(v.bunnyVideoId)));
+  await cleanupOrphanFiles();
+  refresh(sec.courseId);
+}
+
+export async function moveSection(sectionId: string, dir: -1 | 1) {
+  await requireAdmin();
+  const sec = await prisma.trainingSection.findUnique({ where: { id: sectionId }, select: { courseId: true } });
+  if (!sec) return;
+  const all = await prisma.trainingSection.findMany({
+    where: { courseId: sec.courseId },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    select: { id: true },
+  });
+  const i = all.findIndex((x) => x.id === sectionId);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= all.length) return;
+  [all[i], all[j]] = [all[j], all[i]];
+  await prisma.$transaction(all.map((x, k) => prisma.trainingSection.update({ where: { id: x.id }, data: { sortOrder: k + 1 } })));
+  refresh(sec.courseId);
+}
+
+// --- Capítulos (tabla TrainingModule) ---
 
 export type ModuleInput = {
   title: string;
@@ -148,7 +200,7 @@ export type ModuleInput = {
 
 function moduleData(data: ModuleInput) {
   const title = clean(data.title, 160);
-  if (!title) throw new Error("Pon un título al módulo.");
+  if (!title) throw new Error("Pon un título al capítulo.");
   return {
     title,
     description: clean(data.description, 10000),
@@ -159,14 +211,16 @@ function moduleData(data: ModuleInput) {
   };
 }
 
-export async function createModule(courseId: string, data: ModuleInput) {
+export async function createModule(sectionId: string, data: ModuleInput) {
   const admin = await requireAdmin();
-  const last = await prisma.trainingModule.findFirst({ where: { courseId }, orderBy: { sortOrder: "desc" }, select: { sortOrder: true } });
+  const sec = await prisma.trainingSection.findUnique({ where: { id: sectionId }, select: { courseId: true } });
+  if (!sec) throw new Error("Este módulo ya no existe.");
+  const last = await prisma.trainingModule.findFirst({ where: { sectionId }, orderBy: { sortOrder: "desc" }, select: { sortOrder: true } });
   const mod = await prisma.trainingModule.create({
-    data: { ...moduleData(data), courseId, sortOrder: (last?.sortOrder ?? 0) + 1 },
+    data: { ...moduleData(data), courseId: sec.courseId, sectionId, sortOrder: (last?.sortOrder ?? 0) + 1 },
   });
-  await logAction(admin.id, "create_training_module", { courseId, moduleId: mod.id });
-  refresh(courseId);
+  await logAction(admin.id, "create_training_lesson", { sectionId, moduleId: mod.id });
+  refresh(sec.courseId);
 }
 
 export async function updateModule(moduleId: string, data: ModuleInput) {
@@ -192,10 +246,10 @@ export async function deleteModule(moduleId: string) {
 
 export async function moveModule(moduleId: string, dir: -1 | 1) {
   await requireAdmin();
-  const mod = await prisma.trainingModule.findUnique({ where: { id: moduleId }, select: { courseId: true } });
+  const mod = await prisma.trainingModule.findUnique({ where: { id: moduleId }, select: { courseId: true, sectionId: true } });
   if (!mod) return;
   const all = await prisma.trainingModule.findMany({
-    where: { courseId: mod.courseId },
+    where: { sectionId: mod.sectionId },
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
     select: { id: true },
   });

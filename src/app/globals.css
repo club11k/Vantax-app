@@ -695,3 +695,21 @@ td { color: var(--text-primary); }
 .fm-mod-locked { cursor: default; color: var(--text-muted); }
 .fm-mod-locked:hover { background: transparent; }
 @media (max-width: 860px) { .fm-sales { grid-template-columns: 1fr; } }
+
+/* --- Formación: módulos con capítulos (12/10/2026) --- */
+.fm-sec { border-radius: 12px; margin-bottom: 6px; }
+.fm-sec + .fm-sec { border-top: 1px solid var(--line); padding-top: 6px; }
+.fm-sec-head {
+  display: grid; grid-template-columns: 1fr auto; grid-template-areas: "num count" "title count"; column-gap: 10px;
+  padding: 8px 10px; border-radius: 10px; cursor: pointer; list-style: none;
+}
+.fm-sec-head::-webkit-details-marker { display: none; }
+.fm-sec-head:hover { background: var(--bg-panel-hover); }
+.fm-sec-head.static { cursor: default; }
+.fm-sec-head.static:hover { background: transparent; }
+.fm-sec-num { grid-area: num; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--violet); }
+.fm-sec-title { grid-area: title; font-weight: 700; font-size: 14px; line-height: 1.3; }
+.fm-sec-count { grid-area: count; align-self: center; font-family: var(--font-mono); font-size: 11.5px; color: var(--text-muted); background: var(--bg-panel-raised); border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; }
+.fm-sec-count.done { color: #0E0A18; background: var(--violet); border-color: var(--violet); }
+details.fm-sec > summary.fm-sec-head::after { content: "▾"; grid-area: count; justify-self: end; align-self: start; font-size: 10px; color: var(--text-dim); margin-top: -2px; display: none; }
+.fm-sec .fm-mod { padding-left: 14px; }

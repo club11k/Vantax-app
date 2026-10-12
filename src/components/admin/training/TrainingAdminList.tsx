@@ -6,7 +6,7 @@ import { useState, useTransition } from "react";
 import { createCourse, moveCourse, setCoursePublished } from "@/app/admin/formacion-actions";
 import { CourseForm } from "./CourseForm";
 
-type CourseRow = { id: string; title: string; coverUrl: string | null; published: boolean; modules: number; price: string | null; sales: number };
+type CourseRow = { id: string; title: string; coverUrl: string | null; published: boolean; modules: number; lessons: number; price: string | null; sales: number };
 
 // Lista de formaciones en admin: crear, publicar/ocultar, ordenar y entrar a
 // editar los módulos.
@@ -89,7 +89,7 @@ export function TrainingAdminList({ courses }: { courses: CourseRow[] }) {
                   <div style={{ fontWeight: 600 }}>{c.title}</div>
                   <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                     <span className={`tag ${c.published ? "pos" : "neu"}`}>{c.published ? "Publicada" : "Borrador"}</span>
-                    {c.modules} {c.modules === 1 ? "módulo" : "módulos"}
+                    {c.modules} {c.modules === 1 ? "módulo" : "módulos"} · {c.lessons} {c.lessons === 1 ? "capítulo" : "capítulos"}
                     <span>· {c.price ?? "Sin venta"}</span>
                     {c.sales > 0 && <span>· {c.sales} {c.sales === 1 ? "venta" : "ventas"}</span>}
                   </div>
@@ -117,7 +117,7 @@ export function TrainingAdminList({ courses }: { courses: CourseRow[] }) {
                     {c.published ? "Ocultar" : "Publicar"}
                   </button>
                   <Link href={`/admin/formacion/${c.id}`} className="btn btn-primary">
-                    Editar y módulos
+                    Editar contenido
                   </Link>
                 </div>
               </div>

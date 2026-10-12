@@ -16,7 +16,7 @@ export default async function FormacionPage() {
   const courses = await prisma.trainingCourse.findMany({
     where: viewer.isAdmin ? {} : { published: true },
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-    include: { modules: { select: { id: true } } },
+    include: { modules: { select: { id: true } }, _count: { select: { sections: true } } },
   });
   const done = await prisma.trainingProgress.findMany({
     where: { userId: viewer.userId },
@@ -85,7 +85,7 @@ export default async function FormacionPage() {
                           <span style={{ width: `${pct}%` }} />
                         </div>
                         <span className="fm-pct">
-                          {pct}% · {total} {total === 1 ? "módulo" : "módulos"}
+                          {pct}% · {c._count.sections} {c._count.sections === 1 ? "módulo" : "módulos"} · {total} {total === 1 ? "capítulo" : "capítulos"}
                         </span>
                       </>
                     ) : c.priceCents ? (
@@ -97,7 +97,7 @@ export default async function FormacionPage() {
                       <div className="fm-buy-row">
                         <span className="fm-locked">🔒 Acceso bajo petición</span>
                         <span className="fm-pct">
-                          {total} {total === 1 ? "módulo" : "módulos"}
+                          {c._count.sections} {c._count.sections === 1 ? "módulo" : "módulos"}
                         </span>
                       </div>
                     )}

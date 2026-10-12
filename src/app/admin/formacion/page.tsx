@@ -10,7 +10,7 @@ export default async function AdminFormacionPage() {
   const [courses, usersWithAccess] = await Promise.all([
     prisma.trainingCourse.findMany({
       orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-      select: { id: true, title: true, coverUrl: true, published: true, priceCents: true, _count: { select: { modules: true } } },
+      select: { id: true, title: true, coverUrl: true, published: true, priceCents: true, _count: { select: { modules: true, sections: true } } },
     }),
     prisma.user.count({ where: { trainingAccess: true } }),
   ]);
@@ -31,7 +31,8 @@ export default async function AdminFormacionPage() {
           title: c.title,
           coverUrl: c.coverUrl,
           published: c.published,
-          modules: c._count.modules,
+          modules: c._count.sections,
+          lessons: c._count.modules,
           price: c.priceCents ? formatPrice(c.priceCents) : null,
           sales: salesBy.get(c.id) ?? 0,
         }))}

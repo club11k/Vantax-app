@@ -709,14 +709,34 @@ model TrainingCourse {
   sortOrder   Int              @default(0)
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
+  sections    TrainingSection[]
   modules     TrainingModule[]
   purchases   TrainingPurchase[]
 }
 
+// "Módulo" que ve el usuario: agrupa varios capítulos (12/10/2026).
+model TrainingSection {
+  id          String           @id @default(cuid())
+  courseId    String
+  course      TrainingCourse   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  sortOrder   Int              @default(0)
+  createdAt   DateTime         @default(now())
+  lessons     TrainingModule[]
+
+  @@index([courseId, sortOrder])
+}
+
+// Cada fila es un CAPÍTULO (clase con su vídeo/PDF) dentro de un módulo
+// (TrainingSection). La tabla se llama así por compatibilidad con los datos
+// que ya existían.
 model TrainingModule {
   id          String             @id @default(cuid())
   courseId    String
   course      TrainingCourse     @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  sectionId   String
+  section     TrainingSection    @relation(fields: [sectionId], references: [id], onDelete: Cascade)
   title       String
   description String?
   videoUrl    String?
@@ -730,6 +750,7 @@ model TrainingModule {
   progress    TrainingProgress[]
 
   @@index([courseId, sortOrder])
+  @@index([sectionId, sortOrder])
 }
 
 // PDFs subidos desde admin, guardados en la propia base de datos (Render no

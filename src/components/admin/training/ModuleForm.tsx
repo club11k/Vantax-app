@@ -141,7 +141,7 @@ export function ModuleForm({
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!title.trim()) return setError("Pon un título al módulo.");
+    if (!title.trim()) return setError("Pon un título al capítulo.");
     setError(null);
     startTransition(async () => {
       try {
@@ -164,12 +164,12 @@ export function ModuleForm({
   return (
     <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13 }}>
-        Título del módulo
-        <input type="text" value={title} maxLength={160} placeholder="Ej: Módulo 1 · Qué mueve al oro" onChange={(e) => setTitle(e.target.value)} disabled={busy} />
+        Título del capítulo
+        <input type="text" value={title} maxLength={160} placeholder="Ej: Capítulo 1 · Qué mueve al oro" onChange={(e) => setTitle(e.target.value)} disabled={busy} />
       </label>
       <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13 }}>
         Descripción (opcional)
-        <textarea value={description} rows={3} maxLength={10000} placeholder="Resumen, apuntes o enlaces del módulo" onChange={(e) => setDescription(e.target.value)} disabled={busy} />
+        <textarea value={description} rows={3} maxLength={10000} placeholder="Resumen, apuntes o enlaces del capítulo" onChange={(e) => setDescription(e.target.value)} disabled={busy} />
       </label>
       <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13 }}>
         Vídeo (opcional)

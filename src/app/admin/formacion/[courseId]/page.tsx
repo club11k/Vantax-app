@@ -9,9 +9,14 @@ export default async function AdminFormacionCoursePage({ params }: { params: { c
   const course = await prisma.trainingCourse.findUnique({
     where: { id: params.courseId },
     include: {
-      modules: {
+      sections: {
         orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-        include: { pdfFile: { select: { id: true, filename: true } } },
+        include: {
+          lessons: {
+            orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+            include: { pdfFile: { select: { id: true, filename: true } } },
+          },
+        },
       },
       purchases: { orderBy: { createdAt: "desc" }, include: { user: { select: { email: true, name: true } } } },
     },
@@ -38,15 +43,20 @@ export default async function AdminFormacionCoursePage({ params }: { params: { c
           amount: p.source === "STRIPE" ? formatPrice(p.amountCents, p.currency) : null,
           date: p.createdAt.toISOString(),
         }))}
-        modules={course.modules.map((m) => ({
-          id: m.id,
-          title: m.title,
-          description: m.description ?? "",
-          videoUrl: m.videoUrl ?? "",
-          pdfUrl: m.pdfUrl ?? "",
-          pdfFileId: m.pdfFileId,
-          bunnyVideoId: m.bunnyVideoId,
-          pdfFileName: m.pdfFile?.filename ?? null,
+        sections={course.sections.map((sec) => ({
+          id: sec.id,
+          title: sec.title,
+          description: sec.description ?? "",
+          lessons: sec.lessons.map((m) => ({
+            id: m.id,
+            title: m.title,
+            description: m.description ?? "",
+            videoUrl: m.videoUrl ?? "",
+            pdfUrl: m.pdfUrl ?? "",
+            pdfFileId: m.pdfFileId,
+            bunnyVideoId: m.bunnyVideoId,
+            pdfFileName: m.pdfFile?.filename ?? null,
+          })),
         }))}
       />
     </div>
