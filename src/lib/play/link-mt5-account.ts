@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { encrypt } from "@/lib/play/crypto";
 import { findOrCreatePlayBroker } from "@/lib/play/brokers";
+import { ibBrokerFromName } from "@/lib/vantage-ib";
 
 // Lógica central para vincular una cuenta MT5 (modo observador/investor) a
 // un usuario — antes vivía solo dentro de /api/play/accounts/route.ts.
@@ -92,18 +93,21 @@ export async function linkMt5Account(input: LinkMt5AccountInput): Promise<LinkMt
       },
     });
 
-    // Si es una cuenta de Vantage, se vincula también del lado del IB para
-    // que salga en Panel de admin → Clientes Vantage — sin bloquear la
-    // creación de la cuenta si esto falla por lo que sea (ej. ese número de
-    // cuenta ya estaba vinculado por otro usuario desde antes).
-    if (brokerName.trim().toLowerCase() === "vantage") {
+    // Si es una cuenta de Vantage o de VT Markets (los dos brokers con IB),
+    // se vincula también del lado del IB para que salga en Panel de admin →
+    // Clientes IB — sin bloquear la creación de la cuenta si esto falla por
+    // lo que sea (ej. ese número de cuenta ya estaba vinculado desde antes).
+    const ibBroker = ibBrokerFromName(brokerName);
+    if (ibBroker) {
       try {
-        const alreadyLinked = await prisma.vantageIbAccount.findUnique({ where: { accountNumber } });
+        const alreadyLinked = await prisma.vantageIbAccount.findUnique({
+          where: { broker_accountNumber: { broker: ibBroker, accountNumber } },
+        });
         if (!alreadyLinked) {
-          await prisma.vantageIbAccount.create({ data: { userId, accountNumber } });
+          await prisma.vantageIbAccount.create({ data: { userId, accountNumber, broker: ibBroker } });
         }
       } catch (err) {
-        console.error("No se pudo enlazar la cuenta con Vantage IB (no afecta a la cuenta MT5):", err);
+        console.error("No se pudo enlazar la cuenta con el IB (no afecta a la cuenta MT5):", err);
       }
     }
 

@@ -20,12 +20,56 @@
 //   VANTAGE_IB_SECRET     → tu secret generado en el Portal IB de Vantage
 //
 // Nunca deben ir escritas en el código ni subidas a GitHub.
+//
+// VT MARKETS (19/10/2026): VT Markets tiene exactamente la misma API de IB
+// (mismos 4 endpoints y mismos campos, base https://openapi.vtmarkets.com).
+// Todo lo de aquí funciona para los dos brokers; cada cuenta IB guarda de
+// cuál es (VantageIbAccount.broker). Variables para VT Markets:
+//   VTMARKETS_IB_USER_ID  → tu userId del Portal IB de VT Markets
+//   VTMARKETS_IB_SECRET   → la clave de acceso generada en su Portal IB
+//   VTMARKETS_PROXY_URL   → opcional; si no está, se usa VANTAGE_PROXY_URL
+//                           (misma IP fija del droplet para su lista blanca)
 
 import https from "node:https";
 import { HttpsProxyAgent } from "https-proxy-agent";
 import { prisma } from "@/lib/prisma";
 
-const VANTAGE_BASE = "https://openapi.vantagemarkets.com";
+export type IbBroker = "VANTAGE" | "VTMARKETS";
+
+const IB_CONFIG: Record<IbBroker, { label: string; base: string; userEnv: string; secretEnv: string; proxyEnvs: string[]; cursorKey: string }> = {
+  VANTAGE: {
+    label: "Vantage",
+    base: "https://openapi.vantagemarkets.com",
+    userEnv: "VANTAGE_IB_USER_ID",
+    secretEnv: "VANTAGE_IB_SECRET",
+    proxyEnvs: ["VANTAGE_PROXY_URL"],
+    cursorKey: "vantage.allocation_cursor",
+  },
+  VTMARKETS: {
+    label: "VT Markets",
+    base: "https://openapi.vtmarkets.com",
+    userEnv: "VTMARKETS_IB_USER_ID",
+    secretEnv: "VTMARKETS_IB_SECRET",
+    proxyEnvs: ["VTMARKETS_PROXY_URL", "VANTAGE_PROXY_URL"],
+    cursorKey: "vtmarkets.allocation_cursor",
+  },
+};
+
+export const IB_BROKER_LABEL: Record<IbBroker, string> = { VANTAGE: "Vantage", VTMARKETS: "VT Markets" };
+
+// Nombre de broker que escribe/elige el usuario al añadir su cuenta MT5 →
+// broker con IB (o null si no es ninguno de los dos).
+export function ibBrokerFromName(name: string): IbBroker | null {
+  const n = name.trim().toLowerCase().replace(/[\s._-]+/g, "");
+  if (n === "vantage" || n === "vantagemarkets") return "VANTAGE";
+  if (n === "vtmarkets" || n === "vt" || n === "vtmarket") return "VTMARKETS";
+  return null;
+}
+
+export function isIbBrokerConfigured(broker: IbBroker): boolean {
+  const c = IB_CONFIG[broker];
+  return !!(process.env[c.userEnv] && process.env[c.secretEnv]);
+}
 
 type VantageEnvelope<T> = {
   code: number;
@@ -43,21 +87,23 @@ export type VantageCommissionRow = {
   commission: number;
 };
 
-function getProxyAgent(): HttpsProxyAgent<string> {
-  const proxyUrl = process.env.VANTAGE_PROXY_URL;
+function getProxyAgent(broker: IbBroker): HttpsProxyAgent<string> {
+  const c = IB_CONFIG[broker];
+  const proxyUrl = c.proxyEnvs.map((k) => process.env[k]).find(Boolean);
   if (!proxyUrl) {
     throw new Error(
-      "Falta la variable de entorno VANTAGE_PROXY_URL (proxy del droplet de DigitalOcean con la IP fija de Vantage)."
+      `Falta la variable de entorno ${c.proxyEnvs.join(" o ")} (proxy del droplet de DigitalOcean con la IP fija para la API de ${c.label}).`
     );
   }
   return new HttpsProxyAgent(proxyUrl);
 }
 
-function callVantageIb<T>(path: string, extraParams: Record<string, unknown> = {}): Promise<VantageEnvelope<T>> {
-  const userId = process.env.VANTAGE_IB_USER_ID;
-  const secret = process.env.VANTAGE_IB_SECRET;
+function callIb<T>(broker: IbBroker, path: string, extraParams: Record<string, unknown> = {}): Promise<VantageEnvelope<T>> {
+  const c = IB_CONFIG[broker];
+  const userId = process.env[c.userEnv];
+  const secret = process.env[c.secretEnv];
   if (!userId || !secret) {
-    return Promise.reject(new Error("Faltan VANTAGE_IB_USER_ID o VANTAGE_IB_SECRET en las variables de entorno."));
+    return Promise.reject(new Error(`Faltan ${c.userEnv} o ${c.secretEnv} en las variables de entorno.`));
   }
 
   const payload = JSON.stringify({
@@ -69,14 +115,14 @@ function callVantageIb<T>(path: string, extraParams: Record<string, unknown> = {
   return new Promise((resolve, reject) => {
     let agent: HttpsProxyAgent<string>;
     try {
-      agent = getProxyAgent();
+      agent = getProxyAgent(broker);
     } catch (err) {
       reject(err);
       return;
     }
 
     const req = https.request(
-      `${VANTAGE_BASE}${path}`,
+      `${c.base}${path}`,
       {
         method: "POST",
         agent,
@@ -93,12 +139,12 @@ function callVantageIb<T>(path: string, extraParams: Record<string, unknown> = {
           try {
             resolve(JSON.parse(raw) as VantageEnvelope<T>);
           } catch {
-            reject(new Error(`Respuesta no válida de Vantage (${res.statusCode}): ${raw.slice(0, 300)}`));
+            reject(new Error(`Respuesta no válida de ${c.label} (${res.statusCode}): ${raw.slice(0, 300)}`));
           }
         });
       }
     );
-    req.on("timeout", () => req.destroy(new Error("Tiempo de espera agotado llamando a la API de Vantage.")));
+    req.on("timeout", () => req.destroy(new Error(`Tiempo de espera agotado llamando a la API de ${c.label}.`)));
     req.on("error", reject);
     req.write(payload);
     req.end();
@@ -129,7 +175,7 @@ const MAX_VANTAGE_WINDOW_MS = 89 * 24 * 60 * 60 * 1000;
 export async function fetchVantageCommissions(): Promise<VantageCommissionRow[]> {
   const endTime = new Date();
   const startTime = new Date(endTime.getTime() - MAX_VANTAGE_WINDOW_MS);
-  const res = await callVantageIb<VantageCommissionRow[]>("/api/ibData/commissionData", {
+  const res = await callIb<VantageCommissionRow[]>("VANTAGE", "/api/ibData/commissionData", {
     startTime: formatVantageDate(startTime),
     endTime: formatVantageDate(endTime),
   });
@@ -153,13 +199,13 @@ export type VantageAllocationRow = {
 // explícitamente cuándo alguien deja de estar en tu IB. Un solo llamado no
 // puede pedir más de ~3 meses (ver MAX_VANTAGE_WINDOW_MS) — trocear rangos
 // más largos es responsabilidad de quien llama (ver syncVantageAllocations).
-export async function fetchVantageAllocations(startTime: Date, endTime: Date): Promise<VantageAllocationRow[]> {
-  const res = await callVantageIb<VantageAllocationRow[]>("/api/ibData/allocationData", {
+export async function fetchVantageAllocations(startTime: Date, endTime: Date, broker: IbBroker = "VANTAGE"): Promise<VantageAllocationRow[]> {
+  const res = await callIb<VantageAllocationRow[]>(broker, "/api/ibData/allocationData", {
     startTime: formatVantageDate(startTime),
     endTime: formatVantageDate(endTime),
   });
   if (res.code !== 1) {
-    throw new Error(`Vantage devolvió un error al pedir el historial de asignaciones: ${res.msg}`);
+    throw new Error(`${IB_CONFIG[broker].label} devolvió un error al pedir el historial de asignaciones: ${res.msg}`);
   }
   return res.data ?? [];
 }
@@ -220,8 +266,8 @@ export async function syncVantageVCoin(): Promise<VantageSyncResult> {
   };
 }
 
-async function getAllocationCursor(): Promise<Date> {
-  const setting = await prisma.setting.findUnique({ where: { key: "vantage.allocation_cursor" } });
+async function getAllocationCursor(broker: IbBroker): Promise<Date> {
+  const setting = await prisma.setting.findUnique({ where: { key: IB_CONFIG[broker].cursorKey } });
   const value = setting?.value as any;
   const raw = value && typeof value === "object" && "value" in value ? value.value : null;
   const parsed = raw ? new Date(raw) : null;
@@ -233,11 +279,12 @@ async function getAllocationCursor(): Promise<Date> {
   return oneYearAgo;
 }
 
-async function setAllocationCursor(at: Date): Promise<void> {
+async function setAllocationCursor(broker: IbBroker, at: Date): Promise<void> {
+  const key = IB_CONFIG[broker].cursorKey;
   await prisma.setting.upsert({
-    where: { key: "vantage.allocation_cursor" },
+    where: { key },
     update: { value: { value: at.toISOString() } },
-    create: { key: "vantage.allocation_cursor", value: { value: at.toISOString() } },
+    create: { key, value: { value: at.toISOString() } },
   });
 }
 
@@ -247,8 +294,33 @@ async function setAllocationCursor(at: Date): Promise<void> {
 // Vantage que aún no se vincularon en VANTAX (o eventos sin número de
 // cuenta que no matchean ningún vantageUserId conocido) se guardan igual en
 // el historial crudo, pero no afectan a ningún ibStatus.
-export async function syncVantageAllocations(): Promise<Pick<VantageSyncResult, "allocationEventsFound" | "accountsEntered" | "accountsExited">> {
-  const cursor = await getAllocationCursor();
+type AllocationResult = Pick<VantageSyncResult, "allocationEventsFound" | "accountsEntered" | "accountsExited">;
+
+// Los dos brokers con IB (VT Markets solo si tiene sus claves puestas). Si
+// uno falla, el otro se sincroniza igual; el error se relanza al final.
+export async function syncVantageAllocations(): Promise<AllocationResult> {
+  const total: AllocationResult = { allocationEventsFound: 0, accountsEntered: 0, accountsExited: 0 };
+  const errors: string[] = [];
+  for (const broker of ["VANTAGE", "VTMARKETS"] as IbBroker[]) {
+    if (broker !== "VANTAGE" && !isIbBrokerConfigured(broker)) continue;
+    try {
+      const r = await syncIbAllocations(broker);
+      total.allocationEventsFound += r.allocationEventsFound;
+      total.accountsEntered += r.accountsEntered;
+      total.accountsExited += r.accountsExited;
+    } catch (err: any) {
+      console.error(`Error sincronizando entradas/salidas de ${IB_CONFIG[broker].label}:`, err);
+      errors.push(`${IB_CONFIG[broker].label}: ${err?.message ?? err}`);
+    }
+  }
+  if (errors.length && total.allocationEventsFound === 0 && total.accountsEntered === 0 && total.accountsExited === 0) {
+    throw new Error(errors.join(" · "));
+  }
+  return total;
+}
+
+export async function syncIbAllocations(broker: IbBroker): Promise<AllocationResult> {
+  const cursor = await getAllocationCursor(broker);
   const now = new Date();
 
   // Vantage no deja pedir más de ~3 meses por llamada (ver
@@ -259,7 +331,7 @@ export async function syncVantageAllocations(): Promise<Pick<VantageSyncResult, 
   let windowStart = cursor;
   while (windowStart < now) {
     const windowEnd = new Date(Math.min(windowStart.getTime() + MAX_VANTAGE_WINDOW_MS, now.getTime()));
-    const chunk = await fetchVantageAllocations(windowStart, windowEnd);
+    const chunk = await fetchVantageAllocations(windowStart, windowEnd, broker);
     rows.push(...chunk);
     windowStart = windowEnd;
   }
@@ -267,6 +339,7 @@ export async function syncVantageAllocations(): Promise<Pick<VantageSyncResult, 
   if (rows.length > 0) {
     await prisma.vantageAllocationEvent.createMany({
       data: rows.map((r) => ({
+        broker,
         vantageUserId: r.userId,
         accountNumber: r.account != null ? String(r.account) : null,
         type: r.type,
@@ -278,7 +351,7 @@ export async function syncVantageAllocations(): Promise<Pick<VantageSyncResult, 
     });
   }
 
-  const linkedAccounts = await prisma.vantageIbAccount.findMany();
+  const linkedAccounts = await prisma.vantageIbAccount.findMany({ where: { broker } });
   const byAccountNumber = new Map(linkedAccounts.map((a) => [a.accountNumber, a]));
   const byVantageUserId = new Map(linkedAccounts.filter((a) => a.vantageUserId != null).map((a) => [a.vantageUserId as number, a]));
 
@@ -316,7 +389,7 @@ export async function syncVantageAllocations(): Promise<Pick<VantageSyncResult, 
     });
   }
 
-  await setAllocationCursor(now);
+  await setAllocationCursor(broker, now);
 
   return { allocationEventsFound: rows.length, accountsEntered, accountsExited };
 }

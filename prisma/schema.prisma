@@ -304,11 +304,14 @@ model JournalEntry {
 // sincronizó: en cada sincronización solo se acredita la diferencia
 // (comisión nueva) desde ese valor, para no volver a pagar lo mismo dos
 // veces (la API de Vantage siempre devuelve el acumulado, no por operación).
+// Desde el 19/10/2026 sirve para los dos brokers donde hay IB: Vantage y
+// VT Markets (misma API) — el campo broker dice de cuál es cada cuenta.
 model VantageIbAccount {
   id             String    @id @default(cuid())
   userId         String
   user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  accountNumber  String    @unique // número de cuenta de trading en Vantage, tal como lo escribe el usuario (campo "account" de la API)
+  broker         String    @default("VANTAGE") // VANTAGE | VTMARKETS
+  accountNumber  String    // número de cuenta de trading en el broker, tal como lo escribe el usuario (campo "account" de la API)
   accountType    String?   // tal como lo devuelve Vantage (ej. "STP"); no distingue Cent de forma fiable, es solo informativo
   platform       String?   // "MT4" o "MT5", tal como lo devuelve Vantage
   lastCommission Float     @default(0) // comisión acumulada vista en el último sync
@@ -347,6 +350,7 @@ model VantageIbAccount {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
+  @@unique([broker, accountNumber])
   @@index([userId])
 }
 
@@ -356,6 +360,7 @@ model VantageIbAccount {
 // reciente por cuenta/usuario para actualizar VantageIbAccount.ibStatus.
 model VantageAllocationEvent {
   id            String   @id @default(cuid())
+  broker        String   @default("VANTAGE") // VANTAGE | VTMARKETS
   vantageUserId Int // userId de Vantage del cliente afectado (siempre viene, a diferencia de account)
   accountNumber String? // puede venir null (evento a nivel de usuario, no de una cuenta concreta)
   type          String // "In" o "Out"
@@ -364,7 +369,7 @@ model VantageAllocationEvent {
   details       String?
   createdAt     DateTime @default(now())
 
-  @@unique([vantageUserId, occurredAt, type])
+  @@unique([broker, vantageUserId, occurredAt, type])
   @@index([accountNumber])
 }
 

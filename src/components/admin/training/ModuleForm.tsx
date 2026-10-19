@@ -74,7 +74,7 @@ function BunnyStatus({ videoId }: { videoId: string }) {
         if (!res.ok) return setText("No se pudo consultar el estado (revisa la configuración de Bunny).");
         if (j.status === 4) return setText("✓ Vídeo listo");
         if (j.status >= 5) return setText("⚠ Bunny no ha podido procesar este vídeo. Prueba a subirlo otra vez.");
-        setText(`Procesando en Bunny… ${j.progress ?? 0}% (puedes guardar y seguir trabajando)`);
+        setText(`Procesando en Bunny… ${j.progress ?? 0}% — ya puedes pulsar «Añadir capítulo» o «Guardar capítulo»`);
         timer = setTimeout(check, 6000);
       } catch {
         if (alive) setText("No se pudo consultar el estado.");

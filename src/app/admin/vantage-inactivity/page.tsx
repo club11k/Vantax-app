@@ -69,7 +69,7 @@ export default async function AdminVantageInactivityPage() {
       <h2 style={{ marginTop: 0, fontSize: 16 }}>Avisos de inactividad ({rows.length})</h2>
       <p style={{ fontSize: 12.5, color: "var(--text-muted)", marginTop: -6 }}>
         Gente que sigue vinculada a tu IB pero lleva {WARNING_DAYS} días o más sin operar en ninguna de sus cuentas
-        de Vantage. A los {INACTIVITY_BLOCK_DAYS} días se les bloquea solo el acceso a toda la app (Análisis,
+        de Vantage o VT Markets. A los {INACTIVITY_BLOCK_DAYS} días se les bloquea solo el acceso a toda la app (Análisis,
         Journaly, Centro de mercado, Riesgo, Play) — este panel es para poder avisarles antes de que llegue ese
         momento. El botón "Avisar" les muestra un mensaje dentro de la app; deja de salir solo en cuanto vuelvan a
         operar, sin que haga falta quitarlo a mano.

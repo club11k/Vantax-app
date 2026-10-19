@@ -7,6 +7,7 @@ import { ChestCabinet } from "@/components/play/ChestCabinet";
 import { RankingBoard } from "@/components/play/RankingBoard";
 import { ShopTab } from "@/components/play/ShopTab";
 import { Mt5ServerField } from "@/components/Mt5ServerField";
+import { BrokerField } from "@/components/BrokerField";
 import { isArcadeMusicOn, stopArcadeMusic, toggleArcadeMusic } from "@/components/play/arcadeMusic";
 import { TIER_LABEL, LEAGUE_LABEL } from "@/components/play/tierStyles";
 import { CoinIcon, ShieldIcon, TrophyIcon, MonitorIcon, LockIcon } from "@/components/play/PixelIcons";
@@ -599,7 +600,7 @@ export function PlayPanel() {
               <span>
                 Un solo paso: indica el broker, el número de cuenta y conecta MT5 con la contraseña <b>investor</b> (solo
                 lectura, nunca la de trading). Con eso ya está — tu saldo, el lotaje de XAUUSD y (si es una cuenta de
-                Vantage) tu comisión de IB se sincronizan solos cada 15 minutos, sin nada más que vincular en ningún
+                Vantage o VT Markets) tu estado en el IB se sincronizan solos cada 15 minutos, sin nada más que vincular en ningún
                 otro sitio.
               </span>
             </div>
@@ -607,7 +608,7 @@ export function PlayPanel() {
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <div style={{ flex: 1, minWidth: 150 }}>
                   <label className={styles.label}>Broker</label>
-                  <input className={styles.input} type="text" placeholder="Ej: Vantage" value={brokerName} onChange={(e) => setBrokerName(e.target.value)} disabled={savingAccount} />
+                  <BrokerField className={styles.input} value={brokerName} onChange={setBrokerName} disabled={savingAccount} />
                 </div>
                 <div style={{ flex: 1, minWidth: 150 }}>
                   <label className={styles.label}>Número de cuenta</label>

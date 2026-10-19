@@ -101,7 +101,13 @@ export function Mt5ServerField({ brokerName, value, onChange, disabled, classNam
         className={className}
         style={style}
         type="text"
-        placeholder={isVantage ? "Ej: VantageMarkets-Live 14" : "Ej: ICMarketsSC-Demo"}
+        placeholder={
+          isVantage
+            ? "Ej: VantageMarkets-Live 14"
+            : brokerName.trim().toLowerCase().replace(/\s+/g, "") === "vtmarkets"
+              ? "Tal como sale en tu MT5 (ej: VTMarkets-Live)"
+              : "Ej: ICMarketsSC-Demo"
+        }
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}

@@ -15,7 +15,7 @@ import Link from "next/link";
 const BLOCKED_MESSAGES: Record<string, string> = {
   suspended: "Tu cuenta ha sido suspendida. Contacta con nosotros si crees que es un error.",
   blocked_ib:
-    "Tu cuenta se ha bloqueado: tu cuenta de Vantage ya no está vinculada a nuestro IB. Contacta con nosotros si crees que es un error.",
+    "Tu cuenta se ha bloqueado: tu cuenta de trading (Vantage o VT Markets) ya no está vinculada a nuestro IB. Contacta con nosotros si crees que es un error.",
   blocked_inactivity:
     "Tu cuenta se ha bloqueado por inactividad (más de 30 días sin operar). En cuanto vuelvas a operar se desbloqueará sola.",
 };

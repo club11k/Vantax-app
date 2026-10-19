@@ -42,7 +42,7 @@ const NAV_ITEMS = [
 export const ADMIN_SUB_ITEMS = [
   { href: "/admin", label: "Resumen" },
   { href: "/admin/users", label: "Usuarios" },
-  { href: "/admin/vantage-clients", label: "Clientes Vantage" },
+  { href: "/admin/vantage-clients", label: "Clientes IB (Vantage / VT)" },
   { href: "/admin/vantage-inactivity", label: "Avisos de inactividad" },
   { href: "/admin/players", label: "Jugadores (Play)" },
   { href: "/admin/play-config", label: "Vantax Play · Config" },

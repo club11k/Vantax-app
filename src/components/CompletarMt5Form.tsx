@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Mt5ServerField } from "@/components/Mt5ServerField";
+import { BrokerField } from "@/components/BrokerField";
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
@@ -81,7 +82,7 @@ export function CompletarMt5Form() {
     <form onSubmit={handleSubmit} className="panel" style={{ display: "flex", flexDirection: "column", gap: 14, maxWidth: 480 }}>
       <div>
         <label style={labelStyle}>Bróker</label>
-        <input style={inputStyle} type="text" placeholder="Ej: Vantage" value={brokerName} onChange={(e) => setBrokerName(e.target.value)} disabled={saving} />
+        <BrokerField style={inputStyle} value={brokerName} onChange={setBrokerName} disabled={saving} />
       </div>
       <div>
         <label style={labelStyle}>Número de cuenta</label>

@@ -17,6 +17,7 @@
 // salió (ibStatus, ver src/lib/vantage-block.ts, que no cambia).
 
 import { prisma } from "@/lib/prisma";
+import { ibBrokerFromName } from "@/lib/vantage-ib";
 import { getPlayConfig, vcoinsForLots, type PlayAccountTypeValue } from "@/lib/play/vcoin-engine";
 import { applyProgressLots } from "@/lib/play/progress-engine";
 import { currentPeriodKey, monthBounds } from "@/lib/play/period-utils";
@@ -42,16 +43,19 @@ export type Mt5SyncOutcome =
 // linkMt5Account en src/lib/play/link-mt5-account.ts). Puede no haber
 // ninguna (bróker distinto de Vantage), y entonces simplemente no hay nada
 // que actualizar de ese lado.
-async function findLinkedVantageAccountId(userId: string, accountNumber: string): Promise<string | null> {
+async function findLinkedVantageAccountId(userId: string, accountNumber: string, brokerName: string): Promise<string | null> {
+  // Con el broker reconocido se filtra por él (Vantage y VT Markets podrían
+  // tener el mismo número de cuenta); si el nombre es raro, como antes.
+  const ibBroker = ibBrokerFromName(brokerName);
   const linked = await prisma.vantageIbAccount.findFirst({
-    where: { userId, accountNumber },
+    where: { userId, accountNumber, ...(ibBroker ? { broker: ibBroker } : {}) },
     select: { id: true },
   });
   return linked?.id ?? null;
 }
 
 export async function applyMt5SyncResult(report: Mt5SyncReport): Promise<Mt5SyncOutcome> {
-  const account = await prisma.playMt5Account.findUnique({ where: { id: report.accountId } });
+  const account = await prisma.playMt5Account.findUnique({ where: { id: report.accountId }, include: { broker: { select: { name: true } } } });
   if (!account) return { ok: false, error: "Cuenta no encontrada." };
 
   const now = new Date();
@@ -64,7 +68,7 @@ export async function applyMt5SyncResult(report: Mt5SyncReport): Promise<Mt5Sync
   const profitPct = balance > 0 ? (profitAmount / balance) * 100 : 0;
   const lastTradeTime = report.lastTradeTime ? new Date(report.lastTradeTime) : null;
 
-  const linkedVantageAccountId = await findLinkedVantageAccountId(account.userId, account.accountNumber);
+  const linkedVantageAccountId = await findLinkedVantageAccountId(account.userId, account.accountNumber, account.broker?.name ?? "");
 
   // Se actualiza siempre que hay dato nuevo, pase lo que pase con el
   // V-COIN — la actividad real (para el bloqueo por 30 días) no depende de

@@ -18,10 +18,11 @@ export function VantageSyncPanel() {
 
   return (
     <div className="panel" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <label>Sincronizar historial del IB de Vantage</label>
+      <label>Sincronizar historial del IB (Vantage y VT Markets)</label>
       <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: 0 }}>
         Trae el historial de entradas/salidas del IB (quién se desvincula) — lo puedes ver en detalle en{" "}
-        <a href="/admin/vantage-clients">Clientes Vantage</a>. El V-COIN y la fecha de última operación de cada
+        <a href="/admin/vantage-clients">Clientes IB</a>. Incluye VT Markets en cuanto estén puestas sus claves en
+        Render (VTMARKETS_IB_USER_ID y VTMARKETS_IB_SECRET). El V-COIN y la fecha de última operación de cada
         cuenta YA NO salen de aquí: desde que MT5 es obligatorio para todo el mundo, esos dos datos se actualizan
         solos vía el orquestador propio de la VPS, cada vez que sincroniza. Esto de aquí también corre solo, cada
         15-30 min (Cron Job en Render) — este botón es solo para forzarlo a mano sin esperar.

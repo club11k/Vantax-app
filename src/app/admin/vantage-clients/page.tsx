@@ -21,6 +21,7 @@ export default async function AdminVantageClientsPage() {
       userEmail: a.user.email,
       userName: a.user.name,
       accountNumber: a.accountNumber,
+      broker: a.broker,
       accountType: a.accountType,
       platform: a.platform,
       lastCommission: a.lastCommission,
@@ -37,12 +38,13 @@ export default async function AdminVantageClientsPage() {
 
   return (
     <div className="panel">
-      <h2 style={{ marginTop: 0, fontSize: 16 }}>Clientes de Vantage ({rows.length})</h2>
+      <h2 style={{ marginTop: 0, fontSize: 16 }}>Clientes IB · Vantage y VT Markets ({rows.length})</h2>
       <p style={{ fontSize: 12.5, color: "var(--text-muted)", marginTop: -6 }}>
         "V-COIN (lotaje MT5)" y "Última operación" salen directo de MT5 (vía el orquestador propio de la VPS), no de
         la comisión de Vantage — ver /completar-mt5, ahora obligatorio para todo el mundo. "Estado IB" sale del
         historial de entradas/salidas de Vantage (Allocation Data API): si la cuenta se desvincula de tu IB, se marca
-        "Desvinculado" en el próximo sync (eso sí sigue viniendo de Vantage, es lo único que solo ella sabe).
+        "Desvinculado" en el próximo sync (eso sí sigue viniendo del broker, es lo único que solo él sabe). Las cuentas de VT
+        Markets funcionan igual, con la API de IB de VT Markets.
       </p>
       <p style={{ fontSize: 12.5, color: "var(--text-muted)", marginTop: 4 }}>
         <strong>Bloqueo de acceso:</strong> un usuario pierde el acceso a toda la app en cuanto NINGUNA de sus

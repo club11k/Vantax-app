@@ -8,6 +8,7 @@ type ClientRow = {
   userEmail: string;
   userName: string | null;
   accountNumber: string;
+  broker: string;
   accountType: string | null;
   platform: string | null;
   lastCommission: number;
@@ -61,6 +62,7 @@ function OverrideControl({ row }: { row: ClientRow }) {
 export function VantageClientsTable({ rows }: { rows: ClientRow[] }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
+  const [brokerFilter, setBrokerFilter] = useState<"ALL" | "VANTAGE" | "VTMARKETS">("ALL");
 
   const counts = useMemo(
     () => ({
@@ -73,7 +75,7 @@ export function VantageClientsTable({ rows }: { rows: ClientRow[] }) {
   );
 
   const filtered = useMemo(() => {
-    let list = rows;
+    let list = brokerFilter === "ALL" ? rows : rows.filter((r) => r.broker === brokerFilter);
     if (filter === "active") list = list.filter((r) => r.activeLast30Days && r.ibStatus === "LINKED");
     if (filter === "inactive") list = list.filter((r) => !r.activeLast30Days && r.ibStatus === "LINKED");
     if (filter === "unlinked") list = list.filter((r) => r.ibStatus === "UNLINKED");
@@ -84,7 +86,7 @@ export function VantageClientsTable({ rows }: { rows: ClientRow[] }) {
     return list.filter((r) =>
       [r.userEmail, r.userName ?? "", r.accountNumber].join(" ").toLowerCase().includes(q)
     );
-  }, [rows, query, filter]);
+  }, [rows, query, filter, brokerFilter]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -96,6 +98,11 @@ export function VantageClientsTable({ rows }: { rows: ClientRow[] }) {
           onChange={(e) => setQuery(e.target.value)}
           style={{ maxWidth: 320, flex: 1, minWidth: 200 }}
         />
+        <select value={brokerFilter} onChange={(e) => setBrokerFilter(e.target.value as any)} style={{ width: "auto" }}>
+          <option value="ALL">Todos los brokers</option>
+          <option value="VANTAGE">Vantage ({rows.filter((r) => r.broker === "VANTAGE").length})</option>
+          <option value="VTMARKETS">VT Markets ({rows.filter((r) => r.broker === "VTMARKETS").length})</option>
+        </select>
         <button className={`btn ${filter === "all" ? "btn-primary" : ""}`} onClick={() => setFilter("all")}>
           Todos ({rows.length})
         </button>
@@ -117,7 +124,7 @@ export function VantageClientsTable({ rows }: { rows: ClientRow[] }) {
           <thead>
             <tr>
               <th>Usuario</th>
-              <th>Cuenta Vantage</th>
+              <th>Cuenta</th>
               <th>V-COIN (lotaje MT5)</th>
               <th>Última operación</th>
               <th>Actividad</th>
@@ -133,6 +140,9 @@ export function VantageClientsTable({ rows }: { rows: ClientRow[] }) {
                   {r.userName && <div style={{ color: "var(--text-dim)", fontSize: 11 }}>{r.userName}</div>}
                 </td>
                 <td>
+                  <span className="tag neu" style={{ fontSize: 10.5, marginBottom: 3, display: "inline-block" }}>
+                    {r.broker === "VTMARKETS" ? "VT Markets" : "Vantage"}
+                  </span>
                   <div style={{ fontFamily: "var(--font-mono)" }}>{r.accountNumber}</div>
                   <div style={{ color: "var(--text-dim)", fontSize: 11 }}>
                     {[r.accountType, r.platform].filter(Boolean).join(" · ") || "—"}
