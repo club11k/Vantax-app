@@ -6,7 +6,7 @@ import { TraderProgressBar, type PlayProgress } from "@/components/play/TraderPr
 import { ChestCabinet } from "@/components/play/ChestCabinet";
 import { RankingBoard } from "@/components/play/RankingBoard";
 import { ShopTab } from "@/components/play/ShopTab";
-import { Mt5ServerField } from "@/components/Mt5ServerField";
+import { Mt5ServerField, serverListForBroker } from "@/components/Mt5ServerField";
 import { BrokerField } from "@/components/BrokerField";
 import { isArcadeMusicOn, stopArcadeMusic, toggleArcadeMusic } from "@/components/play/arcadeMusic";
 import { TIER_LABEL, LEAGUE_LABEL } from "@/components/play/tierStyles";
@@ -636,7 +636,7 @@ export function PlayPanel() {
                   <input className={styles.input} type="password" value={investorPassword} onChange={(e) => setInvestorPassword(e.target.value)} disabled={savingAccount} />
                 </div>
               </div>
-              {brokerName.trim().toLowerCase() !== "vantage" && (
+              {!serverListForBroker(brokerName) && (
                 <div style={{ fontSize: 11.5, color: "var(--text-dim)", marginTop: -6 }}>
                   El "Servidor MT5" tiene que ser EXACTAMENTE igual que en tu terminal (mayúsculas y espacios
                   incluidos) — lo ves en la pantalla de login de MT5 o en el correo de bienvenida de tu broker. Si no

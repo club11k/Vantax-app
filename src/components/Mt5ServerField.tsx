@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
 // Lista real de servidores MT5 de Vantage (pasada a mano por Esther desde la
 // app de MT5 -> "Servidor" al dar de alta una cuenta nueva -- no es una
@@ -34,7 +34,26 @@ export const VANTAGE_MT5_SERVERS = [
   "VantageMarkets-Live 21",
 ];
 
-const OTHER = "__otro__";
+// Servidores reales de VT Markets (captura de MT5 que pasó Esther el
+// 19/10/2026; sin el de Demo, que no cuenta para nada en Vantax).
+export const VTMARKETS_MT5_SERVERS = [
+  "VTMarkets-Live",
+  "VTMarkets-Live 2",
+  "VTMarkets-Live 3",
+  "VTMarkets-Live 5",
+  "VTMarkets-Live 6",
+  "VTMarkets-Live 7",
+  "VTMarkets-Live 8",
+  "VTMarkets-Live 9",
+];
+
+// Lista cerrada de servidores para los brokers con IB; null = texto libre.
+export function serverListForBroker(brokerName: string): string[] | null {
+  const n = brokerName.trim().toLowerCase().replace(/[\s._-]+/g, "");
+  if (n === "vantage" || n === "vantagemarkets") return VANTAGE_MT5_SERVERS;
+  if (n === "vtmarkets" || n === "vtmarket" || n === "vt") return VTMARKETS_MT5_SERVERS;
+  return null;
+}
 
 type Props = {
   brokerName: string;
@@ -48,89 +67,43 @@ type Props = {
   style?: React.CSSProperties;
 };
 
-// Campo de "Servidor MT5" reutilizable: si el broker es Vantage, muestra un
-// desplegable con la lista real (evita el típico error de escribirlo a mano
-// mal -- falta un espacio, mayúscula distinta -- que se queda colgado sin
-// avisar). Para cualquier otro broker, o si el usuario elige "Otro", cae a
-// un campo de texto libre como antes.
+// Campo de "Servidor MT5": para Vantage y VT Markets es un desplegable con
+// su lista real y nada más (19/10/2026: sin opción "Otro", para que nadie
+// lo escriba mal). Para cualquier otro bróker, campo de texto libre.
 export function Mt5ServerField({ brokerName, value, onChange, disabled, className, style }: Props) {
-  const isVantage = brokerName.trim().toLowerCase() === "vantage";
-  const matchesKnown = VANTAGE_MT5_SERVERS.includes(value);
-  const [manual, setManual] = useState(isVantage ? value !== "" && !matchesKnown : true);
+  const list = serverListForBroker(brokerName);
 
-  // Si cambian el broker a Vantage y el valor ya es uno conocido (por
-  // ejemplo, al abrir "Editar" de una cuenta ya vinculada), usa el
-  // desplegable directamente en vez del campo de texto.
+  // Si cambian de bróker y el servidor elegido no es de la lista nueva, se
+  // vacía para obligar a elegir uno válido.
   useEffect(() => {
-    if (isVantage && matchesKnown) setManual(false);
-    if (!isVantage) setManual(true);
-  }, [isVantage, matchesKnown]);
+    if (list && value && !list.includes(value)) onChange("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [brokerName]);
 
-  if (isVantage && !manual) {
+  if (list) {
     return (
-      <select
-        className={className}
-        style={style}
-        value={matchesKnown ? value : ""}
-        disabled={disabled}
-        onChange={(e) => {
-          if (e.target.value === OTHER) {
-            setManual(true);
-            onChange("");
-          } else {
-            onChange(e.target.value);
-          }
-        }}
-      >
+      <select className={className} style={style} value={list.includes(value) ? value : ""} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
         <option value="" disabled>
           Elige el servidor…
         </option>
-        {VANTAGE_MT5_SERVERS.map((s) => (
-          <option key={s} value={s}>
-            {s}
+        {list.map((srv) => (
+          <option key={srv} value={srv}>
+            {srv}
           </option>
         ))}
-        <option value={OTHER}>Otro / no está en la lista…</option>
       </select>
     );
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <input
-        className={className}
-        style={style}
-        type="text"
-        placeholder={
-          isVantage
-            ? "Ej: VantageMarkets-Live 14"
-            : brokerName.trim().toLowerCase().replace(/\s+/g, "") === "vtmarkets"
-              ? "Tal como sale en tu MT5 (ej: VTMarkets-Live)"
-              : "Ej: ICMarketsSC-Demo"
-        }
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        disabled={disabled}
-      />
-      {isVantage && (
-        <button
-          type="button"
-          onClick={() => setManual(false)}
-          style={{
-            background: "none",
-            border: "none",
-            color: "var(--accent, #7aa2ff)",
-            cursor: "pointer",
-            padding: 0,
-            fontSize: 11,
-            textAlign: "left",
-            textDecoration: "underline",
-          }}
-        >
-          ← volver a elegir de la lista
-        </button>
-      )}
-    </div>
+    <input
+      className={className}
+      style={style}
+      type="text"
+      placeholder="Ej: ICMarketsSC-Live"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      disabled={disabled}
+    />
   );
 }
-
