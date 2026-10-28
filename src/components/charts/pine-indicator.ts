@@ -104,6 +104,43 @@ function secLoad(rawKey: string): Promise<void> {
   return entry.loading;
 }
 
+// ---------------------------------------------------------------- worker
+
+let worker: Worker | null | undefined;
+let reqSeq = 0;
+const waiting = new Map<number, (r: any) => void>();
+
+function getWorker(): Worker | null {
+  if (worker !== undefined) return worker;
+  try {
+    worker = new Worker(new URL("./pine.worker.ts", import.meta.url));
+    worker.onmessage = (e: MessageEvent) => {
+      const cb = waiting.get(e.data.reqId);
+      if (cb) {
+        waiting.delete(e.data.reqId);
+        cb(e.data);
+      }
+    };
+    worker.onerror = () => {
+      // si el worker falla, se calcula en el hilo principal
+      for (const cb of waiting.values()) cb({ error: "__worker" });
+      waiting.clear();
+      worker = null;
+    };
+  } catch {
+    worker = null;
+  }
+  return worker;
+}
+
+function workerRun(w: Worker, msg: Record<string, any>): Promise<{ out: PineOutput; missing: string[]; ms: number; error?: string }> {
+  return new Promise((resolve) => {
+    const reqId = ++reqSeq;
+    waiting.set(reqId, resolve);
+    w.postMessage({ reqId, ...msg });
+  });
+}
+
 // Compila el código (lanza PineError si no es válido) y devuelve la plantilla
 export function makePineTemplate(def: PineDef) {
   const rt = new PineRuntime(def.code); // errores de sintaxis: lanza aquí
@@ -125,10 +162,34 @@ export function makePineTemplate(def: PineDef) {
     const bars = dataList.map((d) => ({ t: d.timestamp, o: d.open, h: d.high, l: d.low, c: d.close, v: d.volume ?? 0 }));
     try {
       for (let attempt = 0; attempt < 5; attempt++) {
-        const missing = new Set<string>();
-        const t0 = performance.now();
-        const out = rt.run(bars, { symbol: c.symbol, tf: c.tf, mintick: 10 ** -c.digits, inputs: def.inputs, secBars: (s, tf) => secGet(s + "|" + tf), missing });
-        lastRunMs = performance.now() - t0;
+        const opts = { symbol: c.symbol, tf: c.tf, mintick: 10 ** -c.digits, inputs: def.inputs };
+        let out: PineOutput;
+        let missing: Set<string>;
+        const w = getWorker();
+        if (w) {
+          // en segundo plano: se le pasan las velas de otras temporalidades ya cargadas
+          const sec: Record<string, PineBar[] | "error"> = {};
+          for (const k of secKeys) {
+            const v = secGet(k);
+            if (v) sec[k] = v;
+          }
+          const res = await workerRun(w, { id: def.id, code: def.code, bars, opts, sec });
+          if (res.error && res.error !== "__worker") throw new Error(res.error);
+          if (!res.error) {
+            out = res.out;
+            missing = new Set(res.missing);
+            lastRunMs = res.ms;
+          } else {
+            missing = new Set<string>();
+            out = rt.run(bars, { ...opts, secBars: (s, tf) => secGet(s + "|" + tf), missing });
+          }
+        } else {
+          missing = new Set<string>();
+          const t0 = performance.now();
+          out = rt.run(bars, { ...opts, secBars: (s, tf) => secGet(s + "|" + tf), missing });
+          lastRunMs = performance.now() - t0;
+        }
+        missing.forEach((k) => secKeys.add(k));
         head.inputs = out.inputs;
         if (!missing.size) {
           report(null, out.warnings, out, bars.length > 0);
@@ -145,6 +206,7 @@ export function makePineTemplate(def: PineDef) {
       return null;
     }
   };
+  const secKeys = new Set<string>();
   let lastRunMs = 0;
   let lastCalcAt = 0;
   let lastKey = "";
@@ -537,8 +599,112 @@ function drawPine(
     else if (d.type === "line") drawLine(ctx, d, xOf, Y, W);
   }
   for (const d of ordered) if (d.type === "label") drawLabel(ctx, d, xOf, Y, dataList, timeToIndex);
+  for (const d of ordered) if (d.type === "table") drawTable(ctx, d, W, H);
 
   ctx.restore();
+}
+
+// Tablas (panel con datos) en la esquina que indique el script
+function drawTable(ctx: CanvasRenderingContext2D, t: any, W: number, H: number) {
+  const cols: number = t.cols;
+  const rows: number = t.rows;
+  const cells: Record<string, any> = t.cells ?? {};
+  if (!Object.keys(cells).length) return;
+  const merges: number[][] = t.merges ?? [];
+  const covered = new Set<string>();
+  const spanOf = (c: number, r: number) => {
+    const m = merges.find((g) => g[0] === c && g[1] === r);
+    return m ? { c2: m[2], r2: m[3] } : null;
+  };
+  for (const g of merges) for (let c = g[0]; c <= g[2]; c++) for (let r = g[1]; r <= g[3]; r++) if (c !== g[0] || r !== g[1]) covered.add(`${c}:${r}`);
+  const padX = 8;
+  const padY = 5;
+  const colW = new Array(cols).fill(0);
+  const rowH = new Array(rows).fill(0);
+  const fontOf = (cell: any) => sizePx(cell.text_size === "size.auto" ? "size.small" : cell.text_size);
+  const linesOf = (cell: any) => String(cell.text ?? "").split("\n");
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < cols; c++) {
+      const cell = cells[`${c}:${r}`];
+      if (!cell || covered.has(`${c}:${r}`)) continue;
+      const fs = fontOf(cell);
+      ctx.font = `500 ${fs}px ${FONT}`;
+      const lines = linesOf(cell);
+      const w = Math.max(...lines.map((l) => ctx.measureText(l).width)) + padX * 2;
+      const h = lines.length * (fs + 3) + padY * 2;
+      if (!spanOf(c, r)) colW[c] = Math.max(colW[c], w);
+      rowH[r] = Math.max(rowH[r], h);
+    }
+  // celdas combinadas: que quepan
+  for (const g of merges) {
+    const cell = cells[`${g[0]}:${g[1]}`];
+    if (!cell) continue;
+    ctx.font = `500 ${fontOf(cell)}px ${FONT}`;
+    const need = Math.max(...linesOf(cell).map((l) => ctx.measureText(l).width)) + padX * 2;
+    let have = 0;
+    for (let c = g[0]; c <= g[2]; c++) have += colW[c];
+    if (need > have) {
+      const extra = (need - have) / (g[2] - g[0] + 1);
+      for (let c = g[0]; c <= g[2]; c++) colW[c] += extra;
+    }
+  }
+  const tw = colW.reduce((a, b) => a + b, 0);
+  const th = rowH.reduce((a, b) => a + b, 0);
+  if (!tw || !th) return;
+  const pos: string = t.position ?? "position.top_right";
+  const m = 12;
+  const x0 = pos.endsWith("left") ? m : pos.endsWith("center") ? (W - tw) / 2 : W - tw - m - 60;
+  const y0 = pos.includes("top") ? m + 30 : pos.includes("middle") ? (H - th) / 2 : H - th - m;
+  if (typeof t.bgcolor === "string") {
+    ctx.fillStyle = t.bgcolor;
+    ctx.fillRect(x0, y0, tw, th);
+  }
+  let y = y0;
+  for (let r = 0; r < rows; r++) {
+    let x = x0;
+    for (let c = 0; c < cols; c++) {
+      const k = `${c}:${r}`;
+      const cell = cells[k];
+      let w = colW[c];
+      let h = rowH[r];
+      const sp = spanOf(c, r);
+      if (sp) {
+        w = 0;
+        for (let cc = c; cc <= sp.c2; cc++) w += colW[cc];
+        h = 0;
+        for (let rr = r; rr <= sp.r2; rr++) h += rowH[rr];
+      }
+      if (cell && !covered.has(k)) {
+        if (typeof cell.bgcolor === "string") {
+          ctx.fillStyle = cell.bgcolor;
+          ctx.fillRect(x, y, w, h);
+        }
+        if (typeof t.border_color === "string" && t.border_width > 0) {
+          ctx.strokeStyle = t.border_color;
+          ctx.lineWidth = t.border_width;
+          ctx.strokeRect(x + 0.5, y + 0.5, w, h);
+        }
+        const fs = fontOf(cell);
+        ctx.font = `500 ${fs}px ${FONT}`;
+        ctx.fillStyle = typeof cell.text_color === "string" ? cell.text_color : "#fff";
+        const ha = cell.text_halign ?? "text.align_center";
+        ctx.textAlign = ha.endsWith("left") ? "left" : ha.endsWith("right") ? "right" : "center";
+        ctx.textBaseline = "middle";
+        const tx = ctx.textAlign === "left" ? x + padX : ctx.textAlign === "right" ? x + w - padX : x + w / 2;
+        const lines = linesOf(cell);
+        const lh = fs + 3;
+        const startY = y + h / 2 - ((lines.length - 1) * lh) / 2;
+        lines.forEach((l, i) => ctx.fillText(l, tx, startY + i * lh));
+      }
+      x += colW[c];
+    }
+    y += rowH[r];
+  }
+  if (typeof t.frame_color === "string" && t.frame_width > 0) {
+    ctx.strokeStyle = t.frame_color;
+    ctx.lineWidth = t.frame_width;
+    ctx.strokeRect(x0 + 0.5, y0 + 0.5, tw, th);
+  }
 }
 
 function order(d: any) {
@@ -683,8 +849,8 @@ function drawBox(ctx: CanvasRenderingContext2D, d: any, xOf: (x: number, l: stri
     ctx.strokeRect(x + 0.5, y + 0.5, w, h);
     ctx.setLineDash([]);
   }
-  if (d.text) {
-    ctx.fillStyle = typeof d.text_color === "string" ? d.text_color : "#fff";
+  if (d.text && typeof d.text_color === "string") {
+    ctx.fillStyle = d.text_color;
     ctx.font = `500 ${sizePx(d.text_size === "size.auto" ? "size.small" : d.text_size)}px ${FONT}`;
     const ha = d.text_halign ?? "text.align_center";
     const va = d.text_valign ?? "text.align_center";
@@ -785,7 +951,8 @@ function drawLabel(ctx: CanvasRenderingContext2D, d: any, xOf: (x: number, l: st
   const th = lines.length * (fs + 3);
   const style: string = d.style ?? "label.style_label_down";
   const bg = typeof d.color === "string" ? d.color : null;
-  const fg = typeof d.textcolor === "string" ? d.textcolor : "#fff";
+  // color de texto na = texto invisible (como en TradingView)
+  const fg = typeof d.textcolor === "string" ? d.textcolor : null;
   const padX = 6;
   const padY = 4;
   const bw = tw + padX * 2;
@@ -837,8 +1004,8 @@ function drawLabel(ctx: CanvasRenderingContext2D, d: any, xOf: (x: number, l: st
     default:
       if (style.startsWith("label.style_") && !style.includes("label_")) {
         // formas: triangleup, circle, xcross...
-        if (bg) drawShape(ctx, style.replace("label.style_", "shape."), x, y, 10, bg);
-        if (text) {
+        if (bg) drawShape(ctx, style.replace("label.style_", "shape."), x, y, sizePx(d.size === "size.auto" ? "size.small" : d.size), bg);
+        if (text && fg) {
           ctx.fillStyle = fg;
           ctx.textAlign = "center";
           ctx.textBaseline = "bottom";
@@ -871,6 +1038,7 @@ function drawLabel(ctx: CanvasRenderingContext2D, d: any, xOf: (x: number, l: st
     }
     ctx.fill();
   }
+  if (!fg || !text) return;
   ctx.fillStyle = fg;
   ctx.textAlign = "center";
   ctx.textBaseline = "top";

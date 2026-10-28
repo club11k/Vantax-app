@@ -46,7 +46,7 @@ export type ShapeOut = {
   texts: (string | null)[];
   textcolors: (string | null)[];
 };
-export type Drawing = Record<string, any> & { type: "line" | "box" | "label" | "linefill"; deleted: boolean; seq: number };
+export type Drawing = Record<string, any> & { type: "line" | "box" | "label" | "linefill" | "table"; deleted: boolean; seq: number };
 
 export type PineOutput = {
   title: string;
@@ -149,6 +149,7 @@ class Var {
 }
 type Frame = { vars: Map<string, Var>; parent: Frame | null; path: string };
 class BreakSig {}
+const NO_SELF = Symbol("noself");
 class ContinueSig {}
 
 const SOURCES = ["open", "high", "low", "close", "volume", "hl2", "hlc3", "ohlc4", "hlcc4"];
@@ -294,6 +295,7 @@ export class PineRuntime {
     this.warned.clear();
     this.ops = 0;
     this.drawSeq = 0;
+    this.queues = {};
     this.captures = new Map();
     if (!opts._memo) opts._memo = new Map();
     if (!opts._computing) opts._computing = new Set();
@@ -357,6 +359,10 @@ export class PineRuntime {
 
   private declare(frame: Frame, name: string, key: string): Var {
     let v = this.store.get(key);
+    if (v) {
+      frame.vars.set(name, v);
+      return v;
+    }
     if (!v) {
       v = new Var();
       this.store.set(key, v);
@@ -506,11 +512,22 @@ export class PineRuntime {
         if (isNa(n) || n < 0) return NaN;
         const o = node.obj;
         if (o.k === "Ident") {
-          const v = !o.name.includes(".") ? this.lookup(frame, o.name) : null;
-          if (v) {
+          const parts: string[] = o._parts ?? (o._parts = o.name.split("."));
+          const v = this.lookup(frame, parts[0]);
+          if (v && parts.length === 1) {
             if (n === 0) return v.cur;
             const x = v.hist[this.bar - n];
             return x === undefined ? NaN : x;
+          }
+          if (v) {
+            // b.i[15]: el objeto que tenía la variable hace n velas y luego su campo
+            let obj = n === 0 ? v.cur : v.hist[this.bar - n];
+            if (obj === undefined) return NaN;
+            for (let i = 1; i < parts.length; i++) {
+              if (!(obj instanceof PineObj)) return NaN;
+              obj = obj.f[parts[i]];
+            }
+            return obj === undefined ? NaN : obj;
           }
           if (SOURCES.includes(o.name) || ["time", "bar_index", "time_close"].includes(o.name)) return this.series(o.name, this.bar - n);
         }
@@ -630,16 +647,15 @@ export class PineRuntime {
 
   private ident(node: Node, frame: Frame): any {
     const name: string = node.name;
-    const dot = name.indexOf(".");
-    if (dot < 0) {
+    const parts: string[] = node._parts ?? (node._parts = name.split("."));
+    if (parts.length === 1) {
       const v = this.lookup(frame, name);
       if (v) return v.cur;
     } else {
-      const parts = name.split(".");
       const v = this.lookup(frame, parts[0]);
       if (v) {
         let obj = v.cur;
-        for (const part of parts.slice(1)) obj = this.field(obj, part, node);
+        for (let i = 1; i < parts.length; i++) obj = this.field(obj, parts[i], node);
         return obj;
       }
       const en = this.enums.get(parts[0]);
@@ -905,14 +921,15 @@ export class PineRuntime {
     if (callee.k === "Na") return this.builtin("na", node, frame);
     if (callee.k !== "Ident") throw new PineError("Llamada no válida", node.line);
     let name: string = callee.name;
-    const dot = name.indexOf(".");
-    if (dot < 0 && this.funcs.has(name)) return this.callUser(this.funcs.get(name)!, node, frame);
-    if (dot > 0) {
-      const parts = name.split(".");
+    const parts: string[] = callee._parts ?? (callee._parts = name.split("."));
+    if (parts.length === 1) {
+      const fn = this.funcs.get(name);
+      if (fn) return this.callUser(fn, node, frame);
+    } else {
       const v = this.lookup(frame, parts[0]);
       if (v) {
         let obj = v.cur;
-        for (const part of parts.slice(1, -1)) obj = this.field(obj, part, node);
+        for (let i = 1; i < parts.length - 1; i++) obj = this.field(obj, parts[i], node);
         return this.method(obj, parts[parts.length - 1], node, frame, 0);
       }
       if (this.types.has(parts[0]) && parts.length === 2) {
@@ -944,8 +961,7 @@ export class PineRuntime {
     else if (typeof obj === "string" && !obj.startsWith("#") && !obj.startsWith("rgba")) ns = "str";
     else if (isNa(obj)) return NaN;
     else throw new PineError(`No se puede usar «.${meth}()» aquí`, node.line);
-    const fake: Node = { ...node, args: [{ k: "__val", id: -1, line: node.line, v: obj } as Node, ...(node.args as Node[])] };
-    return this.builtin(`${ns}.${meth}`, fake, frame);
+    return this.builtin(ns + "." + meth, node, frame, obj);
   }
 
   private callUser(fn: Node, node: Node, frame: Frame): any {
@@ -983,13 +999,36 @@ export class PineRuntime {
     return n.k === "__val" ? n.v : this.eval(n, frame);
   }
 
-  private builtin(name: string, node: Node, frame: Frame): any {
-    const key = frame.path + "|" + node.id;
+  private posArgs(node: Node, frame: Frame, self: any): any[] {
+    const nodes = node.args as Node[];
+    const hasSelf = self !== NO_SELF;
+    const a = new Array(nodes.length + (hasSelf ? 1 : 0));
+    let j = 0;
+    if (hasSelf) a[j++] = self;
+    for (let i = 0; i < nodes.length; i++) a[j++] = this.evalArg(nodes[i], frame);
+    return a;
+  }
+
+  private builtin(name: string, node: Node, frame: Frame, self: any = NO_SELF): any {
     const line = node.line;
+    // Camino rápido para dibujos y arrays (lo que más se usa en indicadores grandes)
+    const c0 = name.charCodeAt(0);
+    if ((c0 === 108 || c0 === 98 || c0 === 97) && (name.startsWith("line.") || name.startsWith("box.") || name.startsWith("label.") || name.startsWith("linefill.") || name.startsWith("array."))) {
+      const a = this.posArgs(node, frame, self);
+      const named = node.named as Record<string, Node>;
+      const sig = SIG[name];
+      for (const k in named) {
+        const i = sig ? sig.indexOf(k) : -1;
+        if (i >= 0) a[i] = this.eval(named[k], frame);
+        else if (!sig) a.push(this.eval(named[k], frame));
+      }
+      return name.startsWith("array.") ? this.arrayFn(name, a, line) : this.drawFn(name, a, line);
+    }
+    const key = frame.path + "|" + node.id;
     // funciones ta.* con estado
     const ta = TA[name];
     if (ta) {
-      const a = (node.args as Node[]).map((x) => this.evalArg(x, frame));
+      const a = this.posArgs(node, frame, self);
       const named = node.named as Record<string, Node>;
       for (const k of Object.keys(named)) {
         const i = ta.params.indexOf(k);
@@ -1003,8 +1042,9 @@ export class PineRuntime {
     }
     if (name.startsWith("input")) return this.input(name, node, frame, key);
 
+    if (name.startsWith("table.")) return this.tableFn(name, node, frame, line, self);
     const sig = SIG[name];
-    const a = (node.args as Node[]).map((x) => this.evalArg(x, frame));
+    const a = this.posArgs(node, frame, self);
     const named = node.named as Record<string, Node>;
     if (sig) {
       for (const k of Object.keys(named)) {
@@ -1172,17 +1212,25 @@ export class PineRuntime {
           let h = this.captures.get(key);
           if (!h) this.captures.set(key, (h = []));
           h[bar] = expr;
-          return lower ? new PineArray([expr]) : expr;
+          if (!lower) return expr;
+          return Array.isArray(expr) ? tuple(expr.map((x) => new PineArray([x]))) : new PineArray([expr]);
         }
         const chartMs = this.tfInfo().secs * 1000;
         const otherMs = tfInfoOf(tf).secs * 1000;
         if (lower && otherMs > chartMs) {
           // Igual que TradingView con ignore_invalid_timeframe: sin velas internas
           this.warn("Parte del indicador usa velas internas más pequeñas que las del gráfico: pon el gráfico en una temporalidad mayor para verla completa.");
-          return new PineArray([]);
+          return Array.isArray(expr) ? tuple(expr.map(() => new PineArray([]))) : new PineArray([]);
         }
         const ser = this.secSeries(sym, tf, line);
-        const naRes = () => (lower ? new PineArray([]) : Array.isArray(expr) ? tuple(expr.map(() => NaN)) : NaN);
+        const naRes = () =>
+          lower
+            ? Array.isArray(expr)
+              ? tuple(expr.map(() => new PineArray([])))
+              : new PineArray([])
+            : Array.isArray(expr)
+              ? tuple(expr.map(() => NaN))
+              : NaN;
         if (!ser) return naRes();
         const vals = ser.caps.get(key);
         if (!vals) return naRes();
@@ -1191,7 +1239,12 @@ export class PineRuntime {
         if (lower) {
           const lo = lowerBound(hb, t);
           const hi = lowerBound(hb, t + chartMs);
-          return new PineArray(vals.slice(lo, hi).map((v) => (v === undefined ? NaN : v)));
+          const slice = vals.slice(lo, hi);
+          if (Array.isArray(expr)) {
+            // [close, volume, time] -> un array por cada valor
+            return tuple(expr.map((_, j) => new PineArray(slice.map((v) => (Array.isArray(v) ? v[j] : NaN)))));
+          }
+          return new PineArray(slice.map((v) => (v === undefined ? NaN : v)));
         }
         let k: number;
         if (otherMs < chartMs) {
@@ -1227,6 +1280,13 @@ export class PineRuntime {
         return isNa(a[0]) ? NaN : +a[0];
       case "bool":
         return this.truthy(a[0]);
+      case "box":
+      case "line":
+      case "label":
+      case "linefill":
+      case "table":
+      case "color":
+        return a[0] === undefined ? NaN : a[0];
       case "string":
         return String(a[0]);
       case "iff":
@@ -1394,10 +1454,7 @@ export class PineRuntime {
 
     if (name.startsWith("array.")) return this.arrayFn(name, a, line);
     if (name.startsWith("line.") || name.startsWith("box.") || name.startsWith("label.") || name.startsWith("linefill.")) return this.drawFn(name, a, line);
-    if (name.startsWith("table.")) {
-      this.warn("Las tablas (table.*) no se muestran en VANTAX CHARTS");
-      return name === "table.new" ? { type: "table" } : NaN;
-    }
+
     if (name.startsWith("map.") || name.startsWith("matrix.") || name.startsWith("polyline.") || name.startsWith("chart.point")) {
       throw new PineError(`«${name}» no está soportado en VANTAX CHARTS`, line);
     }
@@ -1703,17 +1760,97 @@ export class PineRuntime {
     throw new PineError(`«${name}» no está soportado`, line);
   }
 
+  // ------------------------------------------------------------ tablas
+
+  private tableFn(name: string, node: Node, frame: Frame, line: number, self: any = NO_SELF): any {
+    const m = name.slice(6);
+    const SIGS: Record<string, string[]> = {
+      new: ["position", "columns", "rows", "bgcolor", "frame_color", "frame_width", "border_color", "border_width", "force_overlay"],
+      cell: ["table_id", "column", "row", "text", "width", "height", "text_color", "text_halign", "text_valign", "text_size", "bgcolor", "tooltip", "text_font_family", "text_formatting"],
+      merge_cells: ["table_id", "start_column", "start_row", "end_column", "end_row"],
+      clear: ["table_id", "start_column", "start_row", "end_column", "end_row"],
+    };
+    const sig = SIGS[m] ?? (m.startsWith("cell_set_") ? ["table_id", "column", "row", "value"] : ["table_id", "value"]);
+    const a = this.posArgs(node, frame, self);
+    const named = node.named as Record<string, Node>;
+    for (const k of Object.keys(named)) {
+      const i = sig.indexOf(k);
+      if (i >= 0) a[i] = this.eval(named[k], frame);
+    }
+    if (m === "new") {
+      const t: Drawing = {
+        type: "table", deleted: false, seq: this.drawSeq++,
+        position: a[0] ?? "position.top_right", cols: Math.max(1, a[1] | 0), rows: Math.max(1, a[2] | 0),
+        bgcolor: a[3], frame_color: a[4], frame_width: a[5] ?? 0, border_color: a[6], border_width: a[7] ?? 0,
+        cells: {} as Record<string, any>, merges: [] as number[][],
+      };
+      this.addDrawing(t);
+      return t;
+    }
+    const t = a[0];
+    if (!t || typeof t !== "object" || t.type !== "table") return NaN;
+    switch (m) {
+      case "cell": {
+        const k = `${a[1]}:${a[2]}`;
+        t.cells[k] = {
+          text: a[3] === undefined || isNa(a[3]) ? "" : String(a[3]), width: a[4] ?? 0, height: a[5] ?? 0,
+          text_color: a[6] ?? "#000000", text_halign: a[7] ?? "text.align_center", text_valign: a[8] ?? "text.align_center",
+          text_size: a[9] ?? "size.normal", bgcolor: a[10],
+        };
+        return NaN;
+      }
+      case "merge_cells":
+        t.merges = t.merges.filter((g: number[]) => !(g[0] === a[1] && g[1] === a[2]));
+        t.merges.push([a[1], a[2], a[3], a[4]]);
+        return NaN;
+      case "clear":
+        if (a[1] === undefined) t.cells = {};
+        else
+          for (let c = a[1]; c <= (a[3] ?? a[1]); c++) for (let r = a[2]; r <= (a[4] ?? a[2]); r++) delete t.cells[`${c}:${r}`];
+        return NaN;
+      case "delete":
+        t.deleted = true;
+        return NaN;
+      default:
+        if (m.startsWith("cell_set_")) {
+          const f = m.slice(9);
+          const k = `${a[1]}:${a[2]}`;
+          const cell = (t.cells[k] ??= { text: "", text_color: "#000000", text_size: "size.normal", text_halign: "text.align_center", text_valign: "text.align_center" });
+          cell[f] = f === "text" ? String(a[3] ?? "") : a[3];
+          return NaN;
+        }
+        if (m.startsWith("set_")) {
+          t[m.slice(4)] = a[1];
+          return NaN;
+        }
+    }
+    void line;
+    return NaN;
+  }
+
   // ------------------------------------------------------------ dibujos
 
+  private queues: Record<string, Drawing[]> = {};
   private addDrawing(d: Drawing) {
     this.out.drawings.push(d);
+    if (d.type === "table") return;
     const t = d.type as keyof typeof this.maxCount;
-    const alive = this.out.drawings.filter((x) => x.type === t && !x.deleted);
-    const max = this.maxCount[t];
-    if (alive.length > max) {
-      for (let i = 0; i < alive.length - max; i++) alive[i].deleted = true;
+    const q = (this.queues[t] ??= []);
+    q.push(d);
+    // Como TradingView: al pasar del máximo se borran los más antiguos
+    let alive = 0;
+    for (let i = q.length - 1; i >= 0; i--) if (!q[i].deleted) alive++;
+    if (alive > this.maxCount[t]) {
+      let extra = alive - this.maxCount[t];
+      for (let i = 0; i < q.length && extra > 0; i++) {
+        if (!q[i].deleted) {
+          q[i].deleted = true;
+          extra--;
+        }
+      }
     }
-    if (this.out.drawings.length > 5000) this.out.drawings = this.out.drawings.filter((x) => !x.deleted);
+    if (q.length > this.maxCount[t] * 4 + 50) this.queues[t] = q.filter((x) => !x.deleted);
+    if (this.out.drawings.length > 6000) this.out.drawings = this.out.drawings.filter((x) => !x.deleted);
   }
 
   private drawFn(name: string, a: any[], line: number): any {
