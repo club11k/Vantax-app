@@ -51,5 +51,6 @@ export const config = {
     "/riesgo/:path*",
     "/completar-mt5/:path*",
     "/formacion/:path*",
+    "/charts/:path*",
   ],
 };

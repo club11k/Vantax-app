@@ -160,6 +160,7 @@ model User {
   trainingAccess    Boolean  @default(false)
   trainingProgress  TrainingProgress[]
   trainingPurchases TrainingPurchase[]
+  chartLayout       ChartLayout?
 
   journalAccounts   JournalAccount[]
 
@@ -796,4 +797,14 @@ model TrainingPurchase {
 
   @@unique([userId, courseId])
   @@index([courseId, createdAt])
+}
+
+// CHARTS (28/10/2026): lo que cada usuario deja en su gráfico (símbolo,
+// temporalidad, indicadores y dibujos por símbolo), para encontrarlo igual
+// en cualquier dispositivo.
+model ChartLayout {
+  userId    String   @id
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  data      Json
+  updatedAt DateTime @updatedAt
 }
