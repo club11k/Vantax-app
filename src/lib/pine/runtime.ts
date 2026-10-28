@@ -719,7 +719,7 @@ export class PineRuntime {
   }
 
   private tfInfo() {
-    return TF_INFO[this.opts.tf] ?? TF_INFO.H1;
+    return tfInfoOf(this.opts.tf);
   }
 
   private tz(): string {
@@ -1175,7 +1175,7 @@ export class PineRuntime {
           return lower ? new PineArray([expr]) : expr;
         }
         const chartMs = this.tfInfo().secs * 1000;
-        const otherMs = (TF_INFO[tf]?.secs ?? 60) * 1000;
+        const otherMs = tfInfoOf(tf).secs * 1000;
         if (lower && otherMs > chartMs) throw new PineError("request.security_lower_tf necesita una temporalidad menor que la del gráfico", line);
         const ser = this.secSeries(sym, tf, line);
         const naRes = () => (lower ? new PineArray([]) : Array.isArray(expr) ? tuple(expr.map(() => NaN)) : NaN);
@@ -1412,9 +1412,8 @@ export class PineRuntime {
 
   private normTf(x: any, line: number): string {
     if (x === undefined || isNa(x) || x === "") return this.opts.tf;
-    const s = String(x).toUpperCase();
-    const tf = PINE_TF[s];
-    if (!tf) throw new PineError(`La temporalidad «${x}» no existe en el bróker. Se pueden usar: 1, 5, 15, 30, 60, 240, D, W y M`, line);
+    const tf = tfKeyOf(String(x));
+    if (!tf) throw new PineError(`La temporalidad «${x}» no está soportada (las de segundos no existen en MT5)`, line);
     return tf;
   }
 
@@ -1808,6 +1807,89 @@ export class PineRuntime {
     }
     throw new PineError(`«${name}» no está soportado`, line);
   }
+}
+
+// ---------------------------------------------------------------- temporalidades
+// Claves: las del MT5 (M1…MN1) o compuestas: m<N> minutos, d<N> días,
+// w<N> semanas, mo<N> meses. Las compuestas se construyen juntando velas.
+
+const NATIVE_MIN: Record<number, string> = { 1: "M1", 5: "M5", 15: "M15", 30: "M30", 60: "H1", 240: "H4" };
+
+export function tfKeyOf(x: string): string | null {
+  const s = x.trim().toUpperCase();
+  if (PINE_TF[s]) return PINE_TF[s];
+  let m = /^(\d+)$/.exec(s);
+  if (m) {
+    const n = +m[1];
+    return n > 0 ? NATIVE_MIN[n] ?? `m${n}` : null;
+  }
+  m = /^(\d+)H$/.exec(s);
+  if (m) {
+    const n = +m[1] * 60;
+    return NATIVE_MIN[n] ?? `m${n}`;
+  }
+  m = /^(\d*)([DWM])$/.exec(s);
+  if (m) {
+    const n = m[1] ? +m[1] : 1;
+    if (n < 1) return null;
+    if (n === 1) return m[2] === "D" ? "D1" : m[2] === "W" ? "W1" : "MN1";
+    return (m[2] === "D" ? "d" : m[2] === "W" ? "w" : "mo") + n;
+  }
+  return null;
+}
+
+export function tfInfoOf(tf: string): { period: string; mult: number; unit: "m" | "D" | "W" | "M"; secs: number } {
+  if (TF_INFO[tf]) return TF_INFO[tf];
+  const m = /^(m|d|w|mo)(\d+)$/.exec(tf);
+  if (!m) return TF_INFO.H1;
+  const n = +m[2];
+  if (m[1] === "m") return { period: String(n), mult: n, unit: "m", secs: n * 60 };
+  if (m[1] === "d") return { period: `${n}D`, mult: n, unit: "D", secs: n * 86400 };
+  if (m[1] === "w") return { period: `${n}W`, mult: n, unit: "W", secs: n * 604800 };
+  return { period: `${n}M`, mult: n, unit: "M", secs: n * 2592000 };
+}
+
+// Temporalidad del MT5 a partir de la cual se construye una compuesta
+export function tfBaseOf(tf: string): { base: string; n: number } | null {
+  if (TF_INFO[tf]) return null;
+  const m = /^(m|d|w|mo)(\d+)$/.exec(tf);
+  if (!m) return null;
+  const n = +m[2];
+  if (m[1] === "m") {
+    for (const b of [240, 60, 30, 15, 5, 1]) if (n % b === 0) return { base: NATIVE_MIN[b], n: n / b };
+    return null;
+  }
+  return { base: m[1] === "d" ? "D1" : m[1] === "w" ? "W1" : "MN1", n };
+}
+
+// Junta velas: minutos alineados al reloj (UTC); días/semanas/meses de N en N
+export function aggregateBars(bars: PineBar[], tf: string): PineBar[] {
+  const info = tfInfoOf(tf);
+  const out: PineBar[] = [];
+  const isMin = /^m\d+$/.test(tf);
+  const ms = info.secs * 1000;
+  const n = info.mult;
+  let cur: PineBar | null = null;
+  let count = 0;
+  let bucket = NaN;
+  for (const b of bars) {
+    const k = isMin ? Math.floor(b.t / ms) * ms : NaN;
+    const startNew = cur === null || (isMin ? k !== bucket : count >= n);
+    if (startNew) {
+      if (cur) out.push(cur);
+      cur = { t: isMin ? k : b.t, o: b.o, h: b.h, l: b.l, c: b.c, v: b.v };
+      bucket = k;
+      count = 1;
+    } else if (cur) {
+      cur.h = Math.max(cur.h, b.h);
+      cur.l = Math.min(cur.l, b.l);
+      cur.c = b.c;
+      cur.v += b.v;
+      count++;
+    }
+  }
+  if (cur) out.push(cur);
+  return out;
 }
 
 function lowerBound(bars: PineBar[], t: number): number {

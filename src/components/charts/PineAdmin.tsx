@@ -205,11 +205,11 @@ export function PineAdmin({
             <summary>¿Qué partes de Pine funcionan?</summary>
             <p>
               <b>Sí:</b> ta.* (sma, ema, rma, wma, hma, rsi, macd, bb, atr, stoch, cci, dmi, supertrend, sar, pivothigh/low, highest/lowest, crossover…), math.*, inputs (se pueden cambiar
-              desde el gráfico), plot, plotshape, plotchar, plotarrow, hline, fill, bgcolor, box, line, label, linefill, arrays, if/for/while/switch, funciones propias, tipos propios (type), method, enum, var, time() con sesiones, request.security y request.security_lower_tf (temporalidades 1, 5, 15, 30, 60, 240, D, W y M, y otros símbolos del bróker),
+              desde el gráfico), plot, plotshape, plotchar, plotarrow, hline, fill, bgcolor, box, line, label, linefill, arrays, if/for/while/switch, funciones propias, tipos propios (type), method, enum, var, time() con sesiones, request.security y request.security_lower_tf (cualquier temporalidad de minutos, horas, días, semanas o meses, y otros símbolos del bróker),
               Pine v4, v5 y v6.
             </p>
             <p>
-              <b>No:</b> temporalidades que no tiene el MT5 (por ejemplo 2, 3, 45, 120 o 2D), strategy, library/import, map y matrix. Las tablas y barcolor se ignoran.
+              <b>No:</b> temporalidades de segundos, strategy, library/import, map y matrix. Las tablas y barcolor se ignoran.
             </p>
             <p>La hora de las funciones de tiempo (hour, time con sesión…) es UTC salvo que el script indique la zona horaria, por ejemplo «Europe/Madrid».</p>
           </details>

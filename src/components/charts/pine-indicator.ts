@@ -4,7 +4,7 @@
 // cajas, líneas y etiquetas.
 
 import type { KLineData } from "klinecharts";
-import { PineBar, PineOutput, PineRuntime, sizePx, parseColor } from "@/lib/pine/runtime";
+import { PineBar, PineOutput, PineRuntime, sizePx, parseColor, tfBaseOf, aggregateBars } from "@/lib/pine/runtime";
 
 const PALETTE = ["#C084FC", "#FFFFFF", "#F472B6", "#60A5FA", "#FBBF24", "#34D399", "#F87171", "#A78BFA"];
 const FONT = "Sora, Inter, 'Segoe UI', system-ui, sans-serif";
@@ -27,7 +27,30 @@ type SecEntry = { bars: PineBar[] | null; error: boolean; loading: Promise<void>
 const secCache = new Map<string, SecEntry>();
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// Temporalidades compuestas (p. ej. 2 minutos): se construyen desde la del MT5
+const aggCache = new Map<string, { src: PineBar[]; last: number; out: PineBar[] }>();
+function baseKey(key: string): string {
+  const [symbol, tf] = key.split("|");
+  const b = tfBaseOf(tf);
+  return b ? `${symbol}|${b.base}` : key;
+}
+
 function secGet(key: string): PineBar[] | null | "error" {
+  const bk = baseKey(key);
+  if (bk !== key) {
+    const base = secGetNative(bk);
+    if (!base || base === "error") return base;
+    const lastC = base.length ? base[base.length - 1].c + base[base.length - 1].t : 0;
+    const hit = aggCache.get(key);
+    if (hit && hit.src.length === base.length && hit.last === lastC) return hit.out;
+    const out = aggregateBars(base, key.split("|")[1]);
+    aggCache.set(key, { src: base, last: lastC, out });
+    return out;
+  }
+  return secGetNative(key);
+}
+
+function secGetNative(key: string): PineBar[] | null | "error" {
   const e = secCache.get(key);
   if (!e) return null;
   if (e.error) return "error";
@@ -51,7 +74,8 @@ async function secLive(key: string, e: SecEntry) {
   e.bars = bars;
 }
 
-function secLoad(key: string): Promise<void> {
+function secLoad(rawKey: string): Promise<void> {
+  const key = baseKey(rawKey);
   let e = secCache.get(key);
   if (e?.bars || e?.error) return Promise.resolve();
   if (e?.loading) return e.loading;
