@@ -194,7 +194,9 @@ export function makePineTemplate(def: PineDef) {
         // indicador es pesado (solo cambia la última vela).
         const c = def.getCtx();
         const key = `${c.symbol}|${c.tf}|${dataList.length}|${dataList[0]?.timestamp ?? 0}`;
-        const minGap = Math.max(900, lastRunMs * 6);
+        // Recalcular un indicador solo porque se mueve la última vela: como
+        // mucho cada 2 s, o más espaciado si el indicador es pesado.
+        const minGap = Math.max(2000, lastRunMs * 15);
         if (key === lastKey && last && performance.now() - lastCalcAt < minGap) return lastResult;
         lastKey = key;
         lastCalcAt = performance.now();

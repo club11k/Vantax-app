@@ -339,11 +339,28 @@ export function ProChart({ isAdmin = false, onUnavailable }: { isAdmin?: boolean
         },
         subscribeBar: ({ callback }) => {
           stopLive();
-          const onData = (json: any) => {
+          // Se pinta como mucho una vez por fotograma y nunca con la pestaña oculta
+          let pending: any = null;
+          let raf = 0;
+          let lastStatus = "";
+          const flush = () => {
+            raf = 0;
+            const json = pending;
+            pending = null;
             if (!json || token !== loadToken.current) return;
-            setStatus(json.online ? "ok" : "offline");
+            const st = json.online ? "ok" : "offline";
+            if (st !== lastStatus) {
+              lastStatus = st;
+              setStatus(st);
+            }
             for (const b of (json.bars as Bar[]) ?? []) callback(toK(b));
             updateLast();
+          };
+          const onData = (json: any) => {
+            if (!json || token !== loadToken.current) return;
+            pending = json;
+            if (document.hidden) return;
+            if (!raf) raf = requestAnimationFrame(flush);
           };
           // Respaldo: preguntar cada segundo si la conexión en vivo no funciona
           const startPolling = () => {
@@ -401,7 +418,8 @@ export function ProChart({ isAdmin = false, onUnavailable }: { isAdmin?: boolean
         break;
       }
     }
-    setLast({ price: lastBar.close, change: ref.close ? ((lastBar.close - ref.close) / ref.close) * 100 : 0 });
+    const change = ref.close ? ((lastBar.close - ref.close) / ref.close) * 100 : 0;
+    setLast((prev) => (prev && prev.price === lastBar.close && Math.abs(prev.change - change) < 0.005 ? prev : { price: lastBar.close, change }));
   }
 
   // ---------- arranque ----------

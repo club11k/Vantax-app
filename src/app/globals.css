@@ -784,7 +784,7 @@ details.fm-sec > summary.fm-sec-head::after { content: "▾"; grid-area: count; 
 .pc-status { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: #8E88A8; padding: 0 6px; white-space: nowrap; }
 .pc-status .dot { width: 7px; height: 7px; border-radius: 50%; background: #8E88A8; }
 .pc-status.live { color: #D8B4FE; }
-.pc-status.live .dot { background: #9B30FF; box-shadow: 0 0 0 3px rgba(155,48,255,0.25); animation: pcPulse 1.6s infinite; }
+.pc-status.live .dot { background: #9B30FF; box-shadow: 0 0 0 3px rgba(155,48,255,0.25); }
 .pc-status.off { color: #F87171; }
 .pc-status.off .dot { background: #F87171; }
 @keyframes pcPulse { 50% { box-shadow: 0 0 0 6px rgba(155,48,255,0); } }
@@ -942,3 +942,7 @@ label.pa-label { font-family: inherit; font-size: 11px; letter-spacing: 0.08em; 
   .pa-drawer { position: absolute; inset: 0; width: 100%; }
   .pc-btn-admin span { display: none; }
 }
+
+/* Charts: sin pie de página ni efectos caros detrás del gráfico (28/10/2026) */
+body:has(.pc-page) footer { display: none; }
+.pc-pop, .pc-modal-box { backdrop-filter: none; }

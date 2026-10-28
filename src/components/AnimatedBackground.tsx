@@ -306,6 +306,9 @@ export function AnimatedBackground() {
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
   }, []);
+  // En Charts no se pinta: queda tapado por el gráfico y gastaba procesador
+  // y tarjeta gráfica sin que se viera (28/10/2026).
+  if (pathname.startsWith("/charts")) return null;
   return (
     <div aria-hidden="true" className={`vx-bg${hidden ? " vx-paused" : ""}`}>
       {arcade ? <ArcadeScene lite={lite} /> : <GridScene lite={lite} />}
