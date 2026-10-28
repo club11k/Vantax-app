@@ -70,6 +70,17 @@ export type PineOptions = {
   mintick: number;
   inputs?: Record<string, any>;
   timezone?: string;
+  // Velas de otras temporalidades / símbolos (request.security).
+  // Devuelve null si aún no están cargadas (se anotan en `missing`) o "error".
+  secBars?: (symbol: string, tf: string) => PineBar[] | null | "error";
+  missing?: Set<string>;
+  _memo?: Map<string, { bars: PineBar[]; caps: Map<string, any[]> }>;
+  _computing?: Set<string>;
+};
+
+const PINE_TF: Record<string, string> = {
+  "1": "M1", "5": "M5", "15": "M15", "30": "M30", "60": "H1", "1H": "H1", "240": "H4", "4H": "H4",
+  D: "D1", "1D": "D1", W: "W1", "1W": "W1", M: "MN1", "1M": "MN1",
 };
 
 // ---------------------------------------------------------------- colores
@@ -184,6 +195,7 @@ const SIG: Record<string, string[]> = {
   "label.new": ["x", "y", "text", "xloc", "yloc", "color", "style", "textcolor", "size", "textalign", "tooltip", "text_font_family", "force_overlay", "text_formatting"],
   "linefill.new": ["line1", "line2", "color"],
   "request.security": ["symbol", "timeframe", "expression", "gaps", "lookahead", "ignore_invalid_symbol", "currency", "calc_bars_count"],
+  "request.security_lower_tf": ["symbol", "timeframe", "expression", "ignore_invalid_symbol", "currency", "ignore_invalid_timeframe", "calc_bars_count"],
   "color.new": ["color", "transp"],
   "color.rgb": ["red", "green", "blue", "transp"],
   "color.from_gradient": ["value", "bottom_value", "top_value", "bottom_color", "top_color"],
@@ -243,8 +255,11 @@ export class PineRuntime {
   private partsCache = new Map<string, any>();
   private warned = new Set<string>();
   private curNode: Node | null = null;
+  private src: string;
+  captures = new Map<string, any[]>();
 
   constructor(src: string) {
+    this.src = src;
     this.ast = parsePine(src);
     for (const st of this.ast.body as Node[]) this.registerDef(st);
     if (!(this.ast.body as Node[]).some((s) => s.k === "ExprStmt" && s.expr.k === "Call" && ["indicator", "study"].includes(s.expr.callee?.name))) {
@@ -279,6 +294,10 @@ export class PineRuntime {
     this.warned.clear();
     this.ops = 0;
     this.drawSeq = 0;
+    this.captures = new Map();
+    if (!opts._memo) opts._memo = new Map();
+    if (!opts._computing) opts._computing = new Set();
+    opts._computing.add(opts.symbol + "|" + opts.tf);
     const n = bars.length;
     this.out = {
       title: "Indicador",
@@ -306,6 +325,7 @@ export class PineRuntime {
         throw new PineError(`Error al calcular: ${(e as Error).message}`, this.curNode?.line ?? 0);
       }
     }
+    opts._computing.delete(opts.symbol + "|" + opts.tf);
     this.out.inputs = [...this.inputIdx.values()];
     this.out.drawings = this.out.drawings.filter((d) => !d.deleted);
     return this.out;
@@ -1141,13 +1161,56 @@ export class PineRuntime {
         return NaN;
 
       // ----- request
-      case "request.security": {
-        const tf = a[1];
-        if (tf !== "" && tf !== this.tfInfo().period && !isNa(tf)) {
-          throw new PineError(`request.security con otra temporalidad («${tf}») no está soportado. Solo funciona con la temporalidad del gráfico.`, line);
+      case "request.security":
+      case "request.security_lower_tf": {
+        const lower = name === "request.security_lower_tf";
+        const sym = this.normSym(a[0]);
+        const tf = this.normTf(a[1], line);
+        const expr = a[2];
+        const same = sym === this.opts.symbol && tf === this.opts.tf;
+        if (same) {
+          let h = this.captures.get(key);
+          if (!h) this.captures.set(key, (h = []));
+          h[bar] = expr;
+          return lower ? new PineArray([expr]) : expr;
         }
-        return a[2];
+        const chartMs = this.tfInfo().secs * 1000;
+        const otherMs = (TF_INFO[tf]?.secs ?? 60) * 1000;
+        if (lower && otherMs > chartMs) throw new PineError("request.security_lower_tf necesita una temporalidad menor que la del gráfico", line);
+        const ser = this.secSeries(sym, tf, line);
+        const naRes = () => (lower ? new PineArray([]) : Array.isArray(expr) ? tuple(expr.map(() => NaN)) : NaN);
+        if (!ser) return naRes();
+        const vals = ser.caps.get(key);
+        if (!vals) return naRes();
+        const hb = ser.bars;
+        const t = this.bars[bar].t;
+        if (lower) {
+          const lo = lowerBound(hb, t);
+          const hi = lowerBound(hb, t + chartMs);
+          return new PineArray(vals.slice(lo, hi).map((v) => (v === undefined ? NaN : v)));
+        }
+        let k: number;
+        if (otherMs < chartMs) {
+          k = lowerBound(hb, t + chartMs) - 1; // último intrabar de esta vela
+        } else {
+          k = lowerBound(hb, t + 1) - 1; // vela superior que contiene a esta
+          if (k < 0) return naRes();
+          const lookahead = a[4] === "barmerge.lookahead_on";
+          if (!lookahead) {
+            const endK = k + 1 < hb.length ? hb[k + 1].t : hb[k].t + otherMs;
+            const closed = t + chartMs >= endK;
+            if (!closed && bar !== this.bars.length - 1) k -= 1;
+          }
+        }
+        if (k < 0) return naRes();
+        const v = vals[k];
+        return v === undefined ? naRes() : v;
       }
+      case "ticker.new":
+        return a[1];
+      case "ticker.standard":
+      case "ticker.modify":
+        return a[0];
 
       // ----- na / conversiones
       case "na":
@@ -1335,6 +1398,46 @@ export class PineRuntime {
       throw new PineError(`«${name}» no está soportado en VANTAX CHARTS`, line);
     }
     throw new PineError(`La función «${name}» no existe o no está soportada`, line);
+  }
+
+  // ------------------------------------------------------------ request.security
+
+  private normSym(x: any): string {
+    if (x === undefined || isNa(x) || x === "") return this.opts.symbol;
+    let s = String(x);
+    if (s.includes(":")) s = s.slice(s.indexOf(":") + 1);
+    if (s.toUpperCase() === this.opts.symbol.toUpperCase()) return this.opts.symbol;
+    return s;
+  }
+
+  private normTf(x: any, line: number): string {
+    if (x === undefined || isNa(x) || x === "") return this.opts.tf;
+    const s = String(x).toUpperCase();
+    const tf = PINE_TF[s];
+    if (!tf) throw new PineError(`La temporalidad «${x}» no existe en el bróker. Se pueden usar: 1, 5, 15, 30, 60, 240, D, W y M`, line);
+    return tf;
+  }
+
+  // Ejecuta el script entero en otra temporalidad / símbolo y guarda el valor
+  // de cada request.security en cada vela de esa serie (como TradingView).
+  private secSeries(sym: string, tf: string, line: number): { bars: PineBar[]; caps: Map<string, any[]> } | null {
+    const k = sym + "|" + tf;
+    const memo = this.opts._memo!;
+    const hit = memo.get(k);
+    if (hit) return hit;
+    if (this.opts._computing!.has(k)) return null;
+    const bars = this.opts.secBars ? this.opts.secBars(sym, tf) : null;
+    if (bars === "error") throw new PineError(`No hay datos de «${sym}» en ${tf} en el bróker`, line);
+    if (!bars) {
+      this.opts.missing?.add(k);
+      return null;
+    }
+    const nested = new PineRuntime(this.src);
+    nested.run(bars, { ...this.opts, symbol: sym, tf, _memo: memo, _computing: this.opts._computing });
+    this.opts._computing!.delete(k);
+    const res = { bars, caps: nested.captures };
+    memo.set(k, res);
+    return res;
   }
 
   // ------------------------------------------------------------ inputs
@@ -1705,6 +1808,17 @@ export class PineRuntime {
     }
     throw new PineError(`«${name}» no está soportado`, line);
   }
+}
+
+function lowerBound(bars: PineBar[], t: number): number {
+  let lo = 0;
+  let hi = bars.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (bars[mid].t < t) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
 }
 
 function normTz(tz: string): string {

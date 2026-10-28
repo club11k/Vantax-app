@@ -202,7 +202,7 @@ export function ProChart({ isAdmin = false, onUnavailable }: { isAdmin?: boolean
 
   // Añade (o vuelve a añadir) un indicador Pine al gráfico
   const addPine = useCallback(
-    (id: string, code: string, inputs: Record<string, any>): { error: string | null; warnings: string[]; title?: string } => {
+    async (id: string, code: string, inputs: Record<string, any>): Promise<{ error: string | null; warnings: string[]; title?: string }> => {
       const chart = chartRef.current;
       const kl = klRef.current;
       if (!chart || !kl) return { error: "El gráfico aún no está listo.", warnings: [] };
@@ -210,7 +210,7 @@ export function ProChart({ isAdmin = false, onUnavailable }: { isAdmin?: boolean
       chart.removeIndicator({ name });
       let result: { error: string | null; warnings: string[]; title?: string } = { error: null, warnings: [] };
       try {
-        const { template, head } = makePineTemplate({
+        const { template, head, firstResult } = makePineTemplate({
           id,
           name,
           code,
@@ -227,8 +227,12 @@ export function ProChart({ isAdmin = false, onUnavailable }: { isAdmin?: boolean
           chart.createIndicator({ name, paneId: `pane_${id}` } as any, false);
           chart.setPaneOptions({ id: `pane_${id}`, height: 150 });
         }
-        setStatusFor(id, { error: statusRef.current[id]?.error ?? null, warnings: statusRef.current[id]?.warnings ?? [], inputs: head.inputs, title: head.title });
-        result = { error: statusRef.current[id]?.error ?? null, warnings: statusRef.current[id]?.warnings ?? [], title: head.title };
+        setStatusFor(id, { error: null, warnings: [], inputs: head.inputs, title: head.title });
+        const timeout = new Promise<{ error: string | null; warnings: string[] }>((r) =>
+          setTimeout(() => r({ error: "El indicador tarda demasiado en calcularse.", warnings: [] }), 90_000)
+        );
+        const r = await Promise.race([firstResult, timeout]);
+        result = { ...r, title: head.title };
       } catch (e) {
         chart.removeIndicator({ name });
         const msg = (e as Error).message;

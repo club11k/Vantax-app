@@ -4,7 +4,7 @@
 // cajas, líneas y etiquetas.
 
 import type { KLineData } from "klinecharts";
-import { PineOutput, PineRuntime, sizePx, parseColor } from "@/lib/pine/runtime";
+import { PineBar, PineOutput, PineRuntime, sizePx, parseColor } from "@/lib/pine/runtime";
 
 const PALETTE = ["#C084FC", "#FFFFFF", "#F472B6", "#60A5FA", "#FBBF24", "#34D399", "#F87171", "#A78BFA"];
 const FONT = "Sora, Inter, 'Segoe UI', system-ui, sans-serif";
@@ -20,27 +20,111 @@ export type PineDef = {
   onResult: (info: { error: string | null; warnings: string[]; out: PineOutput | null }) => void;
 };
 
+// ---------------------------------------------------------------- velas de otras temporalidades
+// (request.security): se piden al feed de MT5 y se guardan aquí.
+
+type SecEntry = { bars: PineBar[] | null; error: boolean; loading: Promise<void> | null; liveAt: number };
+const secCache = new Map<string, SecEntry>();
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+function secGet(key: string): PineBar[] | null | "error" {
+  const e = secCache.get(key);
+  if (!e) return null;
+  if (e.error) return "error";
+  if (e.bars && Date.now() - e.liveAt > 2000) void secLive(key, e);
+  return e.bars;
+}
+
+async function secLive(key: string, e: SecEntry) {
+  e.liveAt = Date.now();
+  const [symbol, tf] = key.split("|");
+  const res = await fetch(`/api/charts/live?symbol=${encodeURIComponent(symbol)}&tf=${tf}`, { cache: "no-store" }).catch(() => null);
+  const json = res ? await res.json().catch(() => null) : null;
+  const live: PineBar[] = json?.bars ?? [];
+  if (!e.bars || !live.length) return;
+  const bars = e.bars.slice();
+  for (const b of live) {
+    const last = bars[bars.length - 1];
+    if (!last || b.t > last.t) bars.push(b);
+    else if (b.t === last.t) bars[bars.length - 1] = b;
+  }
+  e.bars = bars;
+}
+
+function secLoad(key: string): Promise<void> {
+  let e = secCache.get(key);
+  if (e?.bars || e?.error) return Promise.resolve();
+  if (e?.loading) return e.loading;
+  e = { bars: null, error: false, loading: null, liveAt: 0 };
+  secCache.set(key, e);
+  const entry = e;
+  entry.loading = (async () => {
+    const [symbol, tf] = key.split("|");
+    for (let i = 0; i < 40; i++) {
+      const res = await fetch(`/api/charts/bars?symbol=${encodeURIComponent(symbol)}&tf=${tf}`, { cache: "no-store" }).catch(() => null);
+      const json = res ? await res.json().catch(() => null) : null;
+      if (json?.status === "ok") {
+        entry.bars = json.bars;
+        entry.liveAt = Date.now();
+        break;
+      }
+      if (json?.status === "error") {
+        entry.error = true;
+        break;
+      }
+      await sleep(i < 10 ? 600 : 1200);
+    }
+    if (!entry.bars) entry.error = true;
+    entry.loading = null;
+  })();
+  return entry.loading;
+}
+
 // Compila el código (lanza PineError si no es válido) y devuelve la plantilla
 export function makePineTemplate(def: PineDef) {
   const rt = new PineRuntime(def.code); // errores de sintaxis: lanza aquí
   let last: PineOutput | null = null;
   let lastTimes: number[] = [];
 
-  const runOn = (dataList: KLineData[]): PineOutput | null => {
+  let firstResolve: ((r: { error: string | null; warnings: string[] }) => void) | null = null;
+  const firstResult = new Promise<{ error: string | null; warnings: string[] }>((r) => (firstResolve = r));
+  const report = (error: string | null, warnings: string[], out: PineOutput | null, final: boolean) => {
+    def.onResult({ error, warnings, out });
+    if (final && firstResolve) {
+      firstResolve({ error, warnings });
+      firstResolve = null;
+    }
+  };
+
+  const runOn = async (dataList: KLineData[]): Promise<PineOutput | null> => {
     const c = def.getCtx();
+    const bars = dataList.map((d) => ({ t: d.timestamp, o: d.open, h: d.high, l: d.low, c: d.close, v: d.volume ?? 0 }));
     try {
-      const out = rt.run(
-        dataList.map((d) => ({ t: d.timestamp, o: d.open, h: d.high, l: d.low, c: d.close, v: d.volume ?? 0 })),
-        { symbol: c.symbol, tf: c.tf, mintick: 10 ** -c.digits, inputs: def.inputs }
-      );
-      head.inputs = out.inputs;
-      def.onResult({ error: null, warnings: out.warnings, out });
-      return out;
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const missing = new Set<string>();
+        const t0 = performance.now();
+        const out = rt.run(bars, { symbol: c.symbol, tf: c.tf, mintick: 10 ** -c.digits, inputs: def.inputs, secBars: (s, tf) => secGet(s + "|" + tf), missing });
+        lastRunMs = performance.now() - t0;
+        head.inputs = out.inputs;
+        if (!missing.size) {
+          report(null, out.warnings, out, bars.length > 0);
+          return out;
+        }
+        // faltan velas de otra temporalidad: se piden y se vuelve a calcular
+        report(null, [...out.warnings, "Cargando otras temporalidades…"], out, false);
+        await Promise.all([...missing].map(secLoad));
+      }
+      report("No se han podido cargar las velas de otra temporalidad.", [], null, true);
+      return null;
     } catch (e) {
-      def.onResult({ error: (e as Error).message, warnings: [], out: null });
+      report((e as Error).message, [], null, true);
       return null;
     }
   };
+  let lastRunMs = 0;
+  let lastCalcAt = 0;
+  let lastKey = "";
+  let lastResult: Record<string, number>[] = [];
 
   // Figuras: una por plot (para el rango del eje y el tooltip) + hlines
   const dry = (() => {
@@ -74,17 +158,26 @@ export function makePineTemplate(def: PineDef) {
 
   return {
     head,
+    firstResult,
     template: {
       name: def.name,
       shortName: head.title,
       series: head.overlay ? ("price" as const) : ("normal" as const),
       precision: dry?.precision ?? undefined,
       figures,
-      calc: (dataList: KLineData[]) => {
-        const out = runOn(dataList);
+      calc: async (dataList: KLineData[]) => {
+        // Con datos en vivo se recalcula como mucho cada pocos segundos si el
+        // indicador es pesado (solo cambia la última vela).
+        const c = def.getCtx();
+        const key = `${c.symbol}|${c.tf}|${dataList.length}|${dataList[0]?.timestamp ?? 0}`;
+        const minGap = Math.max(900, lastRunMs * 6);
+        if (key === lastKey && last && performance.now() - lastCalcAt < minGap) return lastResult;
+        lastKey = key;
+        lastCalcAt = performance.now();
+        const out = await runOn(dataList);
         last = out;
         lastTimes = dataList.map((d) => d.timestamp);
-        return dataList.map((_, i) => {
+        lastResult = dataList.map((_, i) => {
           const o: Record<string, number> = {};
           if (!out) return o;
           out.plots.forEach((p, k) => {
@@ -99,6 +192,7 @@ export function makePineTemplate(def: PineDef) {
           });
           return o;
         });
+        return lastResult;
       },
       draw: ({ ctx, chart, bounding, xAxis, yAxis }: any) => {
         if (last) drawPine(ctx, chart, bounding, xAxis, yAxis, last, lastTimes, head.overlay);
