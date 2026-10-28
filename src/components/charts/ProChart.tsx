@@ -77,6 +77,28 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const toK = (b: Bar): KLineData => ({ timestamp: b.t, open: b.o, high: b.h, low: b.l, close: b.c, volume: b.v });
 
 let rectRegistered = false;
+
+function niceStep(raw: number): number {
+  const p = Math.pow(10, Math.floor(Math.log10(raw)));
+  for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= raw) return m * p;
+  return 10 * p;
+}
+
+function densePriceTicks({ range, bounding, defaultTicks }: { range: any; bounding: any; defaultTicks: any[] }) {
+  const from = range.displayFrom;
+  const to = range.displayTo;
+  const h = bounding.height;
+  if (!(to > from) || !(h > 0)) return defaultTicks;
+  const step = niceStep((to - from) / Math.max(2, Math.floor(h / 36)));
+  const dec = Math.max(0, Math.min(8, -Math.floor(Math.log10(step) + 1e-9) + (step % Math.pow(10, Math.floor(Math.log10(step))) ? 1 : 0)));
+  const ticks: { coord: number; value: number; text: string }[] = [];
+  for (let v = Math.ceil(from / step) * step; v <= to + 1e-9; v += step) {
+    const coord = h - ((v - from) / (to - from)) * h;
+    if (coord < 8 || coord > h - 6) continue;
+    ticks.push({ coord, value: v, text: v.toLocaleString("en-US", { minimumFractionDigits: dec, maximumFractionDigits: dec }) });
+  }
+  return ticks.length >= 2 ? ticks : defaultTicks;
+}
 const TEST_ID = "__test";
 
 function unpack(packed: string, id: string): string {
@@ -491,6 +513,9 @@ export function ProChart({ isAdmin = false, onUnavailable }: { isAdmin?: boolean
       chartRef.current = chart;
       // se puede desplazar hacia la derecha de la última vela (como TradingView)
       chart.setMaxOffsetRightDistance(Math.max(800, (chartEl.current?.clientWidth ?? 1200) * 0.7));
+      // Escala de precios más densa (un precio cada ~36 px, como TradingView).
+      // Arrastrando la escala hacia arriba/abajo se estira o encoge el gráfico.
+      chart.overrideYAxis({ paneId: "candle_pane", scrollZoomEnabled: true, createTicks: densePriceTicks });
       layoutRef.current = { ...saved, ind: Array.isArray(saved.ind) ? saved.ind.filter((x) => x && typeof x.id === "string") : [] };
       setTableOffsets(saved.panels);
       setLayoutState(layoutRef.current);
@@ -527,7 +552,7 @@ export function ProChart({ isAdmin = false, onUnavailable }: { isAdmin?: boolean
     const onMove = (e: MouseEvent | TouchEvent) => {
       const p = pt(e);
       if (!drag) {
-        if (!("touches" in e) && el) el.style.cursor = hitTable(p.x, p.y) ? "move" : "";
+        if (!("touches" in e) && el) el.classList.toggle("pc-move", !!hitTable(p.x, p.y));
         return;
       }
       e.stopPropagation();
