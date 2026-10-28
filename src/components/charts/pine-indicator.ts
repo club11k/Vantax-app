@@ -292,14 +292,34 @@ export function makePineTemplate(def: PineDef) {
             autoFitted = true;
             const n = lastTimes.length;
             let maxX = n - 1;
+            let minX = Infinity;
+            const span = (d: any): [number, number] | null => {
+              if ((d.xloc ?? "xloc.bar_index") !== "xloc.bar_index") return null;
+              const xs = d.type === "box" ? [d.left, d.right] : d.type === "line" ? [d.x1, d.x2] : d.type === "label" ? [d.x, d.x] : [];
+              const v = xs.filter((x: any) => typeof x === "number" && Number.isFinite(x));
+              return v.length ? [Math.min(...v), Math.max(...v)] : null;
+            };
             for (const d of last.drawings) {
               if (d.deleted) continue;
-              const xs = d.type === "box" ? [d.right] : d.type === "line" ? [d.x1, d.x2] : d.type === "label" ? [d.x] : [];
-              for (const x of xs) if ((d.xloc ?? "xloc.bar_index") === "xloc.bar_index" && typeof x === "number" && x > maxX && x < n + 1000) maxX = x;
+              const sp = span(d);
+              // solo lo que llega a la zona de la derecha de la última vela
+              if (!sp || sp[1] <= n - 1 || sp[1] > n + 1000) continue;
+              maxX = Math.max(maxX, sp[1]);
+              minX = Math.min(minX, sp[0]);
             }
             if (maxX > n - 1) {
-              const need = (maxX - (n - 1) + 4) * chart.getBarSpace().bar + 60;
-              if (need > chart.getOffsetRightDistance()) setTimeout(() => chart.setOffsetRightDistance(Math.min(need, bounding.width * 0.5)), 0);
+              let space = chart.getBarSpace().bar;
+              // alejar el zoom para que quepa todo lo que dibuja el indicador
+              if (Number.isFinite(minX)) {
+                const fit = (bounding.width - 90) / (maxX - Math.max(0, minX) + 8);
+                if (fit < space) {
+                  space = Math.max(1.5, fit);
+                  const target = space;
+                  setTimeout(() => chart.setBarSpace(target), 0);
+                }
+              }
+              const need = (maxX - (n - 1) + 4) * space + 70;
+              setTimeout(() => chart.setOffsetRightDistance(Math.min(need, bounding.width * 0.6)), 0);
             }
           }
         }
