@@ -946,3 +946,7 @@ label.pa-label { font-family: inherit; font-size: 11px; letter-spacing: 0.08em; 
 /* Charts: sin pie de página ni efectos caros detrás del gráfico (28/10/2026) */
 body:has(.pc-page) footer { display: none; }
 .pc-pop, .pc-modal-box { backdrop-filter: none; }
+
+/* Fondo fijo (28/10/2026): sin animaciones ni capas de composición extra */
+.vx-static, .vx-static * { animation-play-state: paused !important; will-change: auto !important; }
+.vx-static { transform: none; }

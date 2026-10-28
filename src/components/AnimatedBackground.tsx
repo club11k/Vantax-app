@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 
 // Fondo animado de toda la web (rediseño visual pedido por Esther, 06/10/2026).
 // - En todas las páginas: cuadrícula lila con casillas que se iluminan y haces
@@ -286,32 +286,16 @@ function ArcadeScene({ lite }: { lite: boolean }) {
   );
 }
 
+// 28/10/2026: el fondo queda FIJO (sin animación y en versión ligera) porque
+// consumía mucho procesador y tarjeta gráfica (pedido por Esther).
 export function AnimatedBackground() {
   const pathname = usePathname() || "";
   const arcade = pathname.startsWith("/play");
-  // Ligero por defecto (también en el HTML del servidor); en ordenador se
-  // activa la versión completa en cuanto carga la página.
-  const [lite, setLite] = useState(true);
-  useEffect(() => {
-    const mq = window.matchMedia("(max-width: 820px), (pointer: coarse)");
-    const update = () => setLite(mq.matches);
-    update();
-    mq.addEventListener?.("change", update);
-    return () => mq.removeEventListener?.("change", update);
-  }, []);
-  // Pausa las animaciones cuando la pestaña no se ve (ahorra batería).
-  const [hidden, setHidden] = useState(false);
-  useEffect(() => {
-    const onVis = () => setHidden(document.hidden);
-    document.addEventListener("visibilitychange", onVis);
-    return () => document.removeEventListener("visibilitychange", onVis);
-  }, []);
-  // En Charts no se pinta: queda tapado por el gráfico y gastaba procesador
-  // y tarjeta gráfica sin que se viera (28/10/2026).
+  // En Charts no se pinta: queda tapado por el gráfico
   if (pathname.startsWith("/charts")) return null;
   return (
-    <div aria-hidden="true" className={`vx-bg${hidden ? " vx-paused" : ""}`}>
-      {arcade ? <ArcadeScene lite={lite} /> : <GridScene lite={lite} />}
+    <div aria-hidden="true" className="vx-bg vx-paused vx-static">
+      {arcade ? <ArcadeScene lite /> : <GridScene lite />}
     </div>
   );
 }
