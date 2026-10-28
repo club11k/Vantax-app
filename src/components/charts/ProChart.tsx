@@ -3,11 +3,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Chart, KLineData, Overlay, Period } from "klinecharts";
 import { CHART_BG, chartStyles, FONT } from "./chart-theme";
+import { makePineTemplate } from "./pine-indicator";
+import { PineAdmin, type AdminIndicator } from "./PineAdmin";
+import type { PineInput } from "@/lib/pine/runtime";
 
 // Gráfico propio de VANTAX CHARTS (28/10/2026), con KLineChart (Apache 2.0).
 // Precios del MT5 del bróker vía el feed de la VPS (ver
 // src/lib/charts/feed-store.ts y mt5-orchestrator/feed.py). Los dibujos,
 // indicadores, símbolo y temporalidad de cada usuario se guardan en su cuenta.
+// Indicadores: solo los que crea el admin pegando código Pine (ver
+// src/lib/pine y PineAdmin.tsx); ya no hay indicadores integrados.
 
 type Tf = "M1" | "M5" | "M15" | "M30" | "H1" | "H4" | "D1" | "W1" | "MN1";
 type ChartType = "candle_solid" | "candle_stroke" | "ohlc" | "area";
@@ -16,11 +21,12 @@ type Layout = {
   symbol: string;
   tf: Tf;
   chartType: ChartType;
-  main: string[];
-  sub: string[];
+  ind: ActiveInd[];
   magnet: boolean;
   drawings: Record<string, SavedOverlay[]>;
 };
+type ActiveInd = { id: string; inputs: Record<string, any> };
+type IndStatus = { error: string | null; warnings: string[]; inputs: PineInput[]; title: string };
 type Bar = { t: number; o: number; h: number; l: number; c: number; v: number };
 type SymbolRow = { name: string; description: string; path: string; digits: number };
 
@@ -34,25 +40,6 @@ const TFS: { id: Tf; label: string; period: Period }[] = [
   { id: "D1", label: "1D", period: { type: "day", span: 1 } },
   { id: "W1", label: "1S", period: { type: "week", span: 1 } },
   { id: "MN1", label: "1M", period: { type: "month", span: 1 } },
-];
-
-const MAIN_INDICATORS = [
-  { id: "MA", label: "Medias móviles (MA)" },
-  { id: "EMA", label: "Medias exponenciales (EMA)" },
-  { id: "BOLL", label: "Bandas de Bollinger" },
-  { id: "SAR", label: "Parabolic SAR" },
-  { id: "BBI", label: "BBI" },
-];
-const SUB_INDICATORS = [
-  { id: "VOL", label: "Volumen" },
-  { id: "MACD", label: "MACD" },
-  { id: "RSI", label: "RSI" },
-  { id: "KDJ", label: "Estocástico (KDJ)" },
-  { id: "CCI", label: "CCI" },
-  { id: "DMI", label: "DMI / ADX" },
-  { id: "WR", label: "Williams %R" },
-  { id: "OBV", label: "OBV" },
-  { id: "AO", label: "Awesome Oscillator" },
 ];
 
 type Tool = { id: string; label: string; icon: JSX.Element };
@@ -80,8 +67,7 @@ const DEFAULT_LAYOUT: Layout = {
   symbol: "XAUUSD",
   tf: "M15",
   chartType: "candle_solid",
-  main: ["EMA"],
-  sub: ["VOL"],
+  ind: [],
   magnet: true,
   drawings: {},
 };
@@ -90,8 +76,17 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const toK = (b: Bar): KLineData => ({ timestamp: b.t, open: b.o, high: b.h, low: b.l, close: b.c, volume: b.v });
 
 let rectRegistered = false;
+const TEST_ID = "__test";
 
-export function ProChart({ onUnavailable }: { onUnavailable?: () => void }) {
+function unpack(packed: string, id: string): string {
+  const bin = atob(packed);
+  const key = "vx" + id;
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i) ^ key.charCodeAt(i % key.length);
+  return new TextDecoder().decode(bytes);
+}
+
+export function ProChart({ isAdmin = false, onUnavailable }: { isAdmin?: boolean; onUnavailable?: () => void }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const chartEl = useRef<HTMLDivElement>(null);
   const chartRef = useRef<Chart | null>(null);
@@ -101,13 +96,19 @@ export function ProChart({ onUnavailable }: { onUnavailable?: () => void }) {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const loadToken = useRef(0);
   const selectedOverlay = useRef<string | null>(null);
+  const digitsRef = useRef(2);
+  const codesRef = useRef<Record<string, string>>({});
+  const statusRef = useRef<Record<string, IndStatus>>({});
 
   const [layout, setLayoutState] = useState<Layout>(DEFAULT_LAYOUT);
   const [ready, setReady] = useState(false);
   const [status, setStatus] = useState<"loading" | "ok" | "pending" | "offline" | "error">("loading");
   const [errorText, setErrorText] = useState<string | null>(null);
   const [tool, setTool] = useState("cursor");
-  const [panel, setPanel] = useState<null | "symbols" | "indicators">(null);
+  const [panel, setPanel] = useState<null | "symbols" | "indicators" | "admin">(null);
+  const [indList, setIndList] = useState<AdminIndicator[]>([]);
+  const [indStatus, setIndStatus] = useState<Record<string, IndStatus>>({});
+  const [openInputs, setOpenInputs] = useState<string | null>(null);
   const [last, setLast] = useState<{ price: number; change: number } | null>(null);
   const [digits, setDigits] = useState(2);
   const [saved, setSaved] = useState<"idle" | "saving" | "saved">("idle");
@@ -189,12 +190,85 @@ export function ProChart({ onUnavailable }: { onUnavailable?: () => void }) {
   );
 
   // ---------- indicadores ----------
-  const applyIndicators = useCallback((main: string[], sub: string[]) => {
-    const chart = chartRef.current;
-    if (!chart) return;
-    chart.removeIndicator();
-    for (const name of main) chart.createIndicator({ name, paneId: "candle_pane" } as any, true);
-    for (const name of sub) chart.createIndicator({ name } as any, false);
+  const setStatusFor = useCallback((id: string, st: IndStatus | null) => {
+    const prev = statusRef.current[id];
+    if (st && prev && prev.error === st.error && prev.warnings.join("|") === st.warnings.join("|") && prev.inputs.length === st.inputs.length && prev.title === st.title) return;
+    const next = { ...statusRef.current };
+    if (st) next[id] = st;
+    else delete next[id];
+    statusRef.current = next;
+    setIndStatus(next);
+  }, []);
+
+  // Añade (o vuelve a añadir) un indicador Pine al gráfico
+  const addPine = useCallback(
+    (id: string, code: string, inputs: Record<string, any>): { error: string | null; warnings: string[]; title?: string } => {
+      const chart = chartRef.current;
+      const kl = klRef.current;
+      if (!chart || !kl) return { error: "El gráfico aún no está listo.", warnings: [] };
+      const name = `vx_${id}`;
+      chart.removeIndicator({ name });
+      let result: { error: string | null; warnings: string[]; title?: string } = { error: null, warnings: [] };
+      try {
+        const { template, head } = makePineTemplate({
+          id,
+          name,
+          code,
+          inputs,
+          getCtx: () => ({ symbol: layoutRef.current.symbol, tf: layoutRef.current.tf, digits: digitsRef.current }),
+          onResult: ({ error, warnings, out }) => {
+            result = { error, warnings, title: head.title };
+            setStatusFor(id, { error, warnings, inputs: out?.inputs ?? head.inputs, title: head.title });
+          },
+        });
+        kl.registerIndicator(template as any);
+        if (head.overlay) chart.createIndicator({ name, paneId: "candle_pane" } as any, true);
+        else {
+          chart.createIndicator({ name, paneId: `pane_${id}` } as any, false);
+          chart.setPaneOptions({ id: `pane_${id}`, height: 150 });
+        }
+        setStatusFor(id, { error: statusRef.current[id]?.error ?? null, warnings: statusRef.current[id]?.warnings ?? [], inputs: head.inputs, title: head.title });
+        result = { error: statusRef.current[id]?.error ?? null, warnings: statusRef.current[id]?.warnings ?? [], title: head.title };
+      } catch (e) {
+        chart.removeIndicator({ name });
+        const msg = (e as Error).message;
+        setStatusFor(id, { error: msg, warnings: [], inputs: [], title: "" });
+        result = { error: msg, warnings: [] };
+      }
+      return result;
+    },
+    [setStatusFor]
+  );
+
+  const removePine = useCallback((id: string) => {
+    chartRef.current?.removeIndicator({ name: `vx_${id}` });
+  }, []);
+
+  // Pone en el gráfico los indicadores activos del usuario que siguen disponibles
+  const applyActive = useCallback(() => {
+    for (const a of layoutRef.current.ind) {
+      const code = codesRef.current[a.id];
+      if (code) addPine(a.id, code, a.inputs);
+    }
+  }, [addPine]);
+
+  const loadIndicators = useCallback(async () => {
+    const res = await fetch("/api/charts/indicators", { cache: "no-store" }).catch(() => null);
+    const json = res ? await res.json().catch(() => null) : null;
+    const list: any[] = json?.indicators ?? [];
+    const codes: Record<string, string> = {};
+    for (const r of list) {
+      try {
+        codes[r.id] = r.code ?? (r.packed ? unpack(r.packed, r.id) : "");
+      } catch {
+        /* ignorar */
+      }
+    }
+    const changed = Object.keys(codes).filter((id) => codes[id] !== codesRef.current[id]);
+    const removed = Object.keys(codesRef.current).filter((id) => !(id in codes));
+    codesRef.current = codes;
+    setIndList(list.map((r) => ({ id: r.id, name: r.name, description: r.description, code: r.code, visibility: r.visibility, accessCount: r.accessCount })));
+    return { changed, removed };
   }, []);
 
   // ---------- datos ----------
@@ -205,7 +279,10 @@ export function ProChart({ onUnavailable }: { onUnavailable?: () => void }) {
       const res = await fetch(url, { cache: "no-store" }).catch(() => null);
       const json = res ? await res.json().catch(() => null) : null;
       if (json) {
-        if (typeof json.digits === "number") setDigits(json.digits);
+        if (typeof json.digits === "number") {
+          setDigits(json.digits);
+          digitsRef.current = json.digits;
+        }
         if (json.status === "ok") return { ok: true as const, bars: json.bars as Bar[] };
         if (json.status === "error") return { ok: false as const, error: json.error as string };
         if (!json.online && i > 2) return { ok: false as const, error: "offline" };
@@ -334,6 +411,7 @@ export function ProChart({ onUnavailable }: { onUnavailable?: () => void }) {
         });
       }
 
+      const indicatorsReady = loadIndicators().catch(() => null);
       let saved: Layout = DEFAULT_LAYOUT;
       try {
         const res = await fetch("/api/charts/layout", { cache: "no-store" });
@@ -353,13 +431,19 @@ export function ProChart({ onUnavailable }: { onUnavailable?: () => void }) {
       });
       if (!chart) return;
       chartRef.current = chart;
-      applyIndicators(saved.main, saved.sub);
+      layoutRef.current = { ...saved, ind: Array.isArray(saved.ind) ? saved.ind.filter((x) => x && typeof x.id === "string") : [] };
+      setLayoutState(layoutRef.current);
+      await indicatorsReady;
+      if (disposed) return;
+      applyActive();
       setReady(true);
       loadSymbol(saved.symbol, saved.tf);
     })();
 
     const onResize = () => chartRef.current?.resize();
     window.addEventListener("resize", onResize);
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => chartRef.current?.resize()) : null;
+    if (ro && chartEl.current) ro.observe(chartEl.current);
     const onKey = (e: KeyboardEvent) => {
       if ((e.key === "Delete" || e.key === "Backspace") && selectedOverlay.current) {
         const target = e.target as HTMLElement | null;
@@ -373,6 +457,7 @@ export function ProChart({ onUnavailable }: { onUnavailable?: () => void }) {
     return () => {
       disposed = true;
       window.removeEventListener("resize", onResize);
+      ro?.disconnect();
       window.removeEventListener("keydown", onKey);
       if (liveTimer.current) clearInterval(liveTimer.current);
       if (chartEl.current && klRef.current) klRef.current.dispose(chartEl.current);
@@ -409,13 +494,53 @@ export function ProChart({ onUnavailable }: { onUnavailable?: () => void }) {
     persist({ ...layoutRef.current, chartType });
   }
 
-  function toggleIndicator(id: string, kind: "main" | "sub") {
+  function toggleIndicator(id: string) {
     const cur = layoutRef.current;
-    const list = cur[kind].includes(id) ? cur[kind].filter((x) => x !== id) : [...cur[kind], id];
-    const next = { ...cur, [kind]: list };
-    applyIndicators(next.main, next.sub);
+    const active = cur.ind.some((x) => x.id === id);
+    const next = { ...cur, ind: active ? cur.ind.filter((x) => x.id !== id) : [...cur.ind, { id, inputs: {} }] };
     persist(next);
+    if (active) {
+      removePine(id);
+      setStatusFor(id, null);
+      if (openInputs === id) setOpenInputs(null);
+    } else {
+      const code = codesRef.current[id];
+      if (code) addPine(id, code, {});
+    }
   }
+
+  function changeInput(id: string, key: string, value: any) {
+    const cur = layoutRef.current;
+    const ind = cur.ind.map((x) => (x.id === id ? { ...x, inputs: { ...x.inputs, [key]: value } } : x));
+    persist({ ...cur, ind });
+    const a = ind.find((x) => x.id === id);
+    const code = codesRef.current[id];
+    if (a && code) addPine(id, code, a.inputs);
+  }
+
+  function resetInputs(id: string) {
+    const cur = layoutRef.current;
+    const ind = cur.ind.map((x) => (x.id === id ? { ...x, inputs: {} } : x));
+    persist({ ...cur, ind });
+    const code = codesRef.current[id];
+    if (code) addPine(id, code, {});
+  }
+
+  // ---------- admin ----------
+  const testIndicator = useCallback((code: string) => addPine(TEST_ID, code, {}), [addPine]);
+  const clearTest = useCallback(() => {
+    removePine(TEST_ID);
+    setStatusFor(TEST_ID, null);
+  }, [removePine, setStatusFor]);
+  const reloadIndicators = useCallback(async () => {
+    const { changed, removed } = await loadIndicators();
+    const cur = layoutRef.current;
+    for (const id of removed) removePine(id);
+    for (const id of changed) {
+      const a = cur.ind.find((x) => x.id === id);
+      if (a) addPine(id, codesRef.current[id], a.inputs);
+    }
+  }, [loadIndicators, removePine, addPine]);
 
   function pickTool(id: string) {
     setTool(id);
@@ -505,6 +630,12 @@ export function ProChart({ onUnavailable }: { onUnavailable?: () => void }) {
             {I("M3 17l5-5 4 4 8-9")}
             <span>Indicadores</span>
           </button>
+          {isAdmin && (
+            <button type="button" className={`pc-btn pc-btn-admin${panel === "admin" ? " active" : ""}`} onClick={() => setPanel(panel === "admin" ? null : "admin")}>
+              {I("M12 5v14M5 12h14")}
+              <span>Crear indicador</span>
+            </button>
+          )}
           <button type="button" className="pc-icon" title="Captura" aria-label="Captura" onClick={screenshot}>
             {I("M4 7h3l2-3h6l2 3h3v12H4zM12 17a4 4 0 100-8 4 4 0 000 8z")}
           </button>
@@ -571,6 +702,9 @@ export function ProChart({ onUnavailable }: { onUnavailable?: () => void }) {
           )}
           <span className={`pc-saved ${saved}`}>{saved === "saving" ? "Guardando…" : saved === "saved" ? "Guardado ✓" : ""}</span>
         </div>
+        {panel === "admin" && isAdmin && (
+        <PineAdmin indicators={indList} onClose={() => setPanel(null)} onReload={reloadIndicators} onTest={testIndicator} onClearTest={clearTest} />
+        )}
       </div>
 
       {panel === "symbols" && <SymbolSearch onPick={changeSymbol} onClose={() => setPanel(null)} />}
@@ -582,24 +716,152 @@ export function ProChart({ onUnavailable }: { onUnavailable?: () => void }) {
               ×
             </button>
           </div>
-          <div className="pc-ind-group">Sobre el precio</div>
-          {MAIN_INDICATORS.map((ind) => (
-            <label key={ind.id} className="pc-check">
-              <input type="checkbox" checked={layout.main.includes(ind.id)} onChange={() => toggleIndicator(ind.id, "main")} />
-              <span>{ind.label}</span>
-            </label>
-          ))}
-          <div className="pc-ind-group">Panel inferior</div>
-          {SUB_INDICATORS.map((ind) => (
-            <label key={ind.id} className="pc-check">
-              <input type="checkbox" checked={layout.sub.includes(ind.id)} onChange={() => toggleIndicator(ind.id, "sub")} />
-              <span>{ind.label}</span>
-            </label>
-          ))}
+          {indList.length === 0 && (
+            <div className="pc-empty">
+              {isAdmin ? "Aún no hay indicadores. Créalos con el botón «Crear indicador»." : "Aún no hay indicadores disponibles."}
+            </div>
+          )}
+          {indList.map((ind) => {
+            const active = layout.ind.find((x) => x.id === ind.id);
+            const st = indStatus[ind.id];
+            return (
+              <div key={ind.id} className={`pc-ind${active ? " on" : ""}`}>
+                <div className="pc-ind-row">
+                  <label className="pc-check">
+                    <input type="checkbox" checked={!!active} onChange={() => toggleIndicator(ind.id)} />
+                    <span>{ind.name}</span>
+                  </label>
+                  {active && st && st.inputs.length > 0 && (
+                    <button
+                      type="button"
+                      className={`pc-gear${openInputs === ind.id ? " active" : ""}`}
+                      title="Ajustes"
+                      aria-label="Ajustes"
+                      onClick={() => setOpenInputs(openInputs === ind.id ? null : ind.id)}
+                    >
+                      {I("M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z")}
+                    </button>
+                  )}
+                </div>
+                {ind.description && !active && <div className="pc-ind-desc">{ind.description}</div>}
+                {active && st?.error && <div className="pc-ind-err">{st.error}</div>}
+                {active && openInputs === ind.id && st && (
+                  <InputsForm inputs={st.inputs} values={active.inputs} onChange={(k, v) => changeInput(ind.id, k, v)} onReset={() => resetInputs(ind.id)} />
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
   );
+}
+
+function InputsForm({
+  inputs,
+  values,
+  onChange,
+  onReset,
+}: {
+  inputs: PineInput[];
+  values: Record<string, any>;
+  onChange: (key: string, value: any) => void;
+  onReset: () => void;
+}) {
+  return (
+    <div className="pc-inputs">
+      {inputs.map((inp) => {
+        const v = values[inp.key] ?? inp.defval;
+        return (
+          <label key={inp.key} className="pc-inp">
+            <span>{inp.title}</span>
+            {inp.type === "bool" ? (
+              <input type="checkbox" checked={v === true} onChange={(e) => onChange(inp.key, e.target.checked)} />
+            ) : inp.type === "source" ? (
+              <select value={v} onChange={(e) => onChange(inp.key, e.target.value)}>
+                {["open", "high", "low", "close", "hl2", "hlc3", "ohlc4", "hlcc4", "volume"].map((o) => (
+                  <option key={o} value={o}>
+                    {o}
+                  </option>
+                ))}
+              </select>
+            ) : inp.options && inp.options.length ? (
+              <select value={v} onChange={(e) => onChange(inp.key, e.target.value)}>
+                {inp.options.map((o) => (
+                  <option key={String(o)} value={o}>
+                    {String(o)}
+                  </option>
+                ))}
+              </select>
+            ) : inp.type === "color" ? (
+              <input type="color" value={toHex(v)} onChange={(e) => onChange(inp.key, e.target.value)} />
+            ) : inp.type === "int" || inp.type === "float" ? (
+              <NumInput value={v} inp={inp} onCommit={(n) => onChange(inp.key, n)} />
+            ) : (
+              <TextInput value={String(v ?? "")} onCommit={(t) => onChange(inp.key, t)} />
+            )}
+          </label>
+        );
+      })}
+      <button type="button" className="pc-reset" onClick={onReset}>
+        Restablecer valores
+      </button>
+    </div>
+  );
+}
+
+function NumInput({ value, inp, onCommit }: { value: any; inp: PineInput; onCommit: (n: number) => void }) {
+  const [t, setT] = useState(String(value));
+  useEffect(() => setT(String(value)), [value]);
+  const commit = () => {
+    let n = parseFloat(t.replace(",", "."));
+    if (Number.isNaN(n)) return setT(String(value));
+    if (inp.type === "int") n = Math.round(n);
+    if (inp.min !== undefined) n = Math.max(inp.min, n);
+    if (inp.max !== undefined) n = Math.min(inp.max, n);
+    if (n !== value) onCommit(n);
+    setT(String(n));
+  };
+  return (
+    <input
+      type="number"
+      inputMode="decimal"
+      value={t}
+      step={inp.step ?? (inp.type === "int" ? 1 : "any")}
+      onChange={(e) => setT(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") commit();
+      }}
+    />
+  );
+}
+
+function TextInput({ value, onCommit }: { value: string; onCommit: (t: string) => void }) {
+  const [t, setT] = useState(value);
+  useEffect(() => setT(value), [value]);
+  return (
+    <input
+      type="text"
+      value={t}
+      onChange={(e) => setT(e.target.value)}
+      onBlur={() => t !== value && onCommit(t)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && t !== value) onCommit(t);
+      }}
+    />
+  );
+}
+
+function toHex(c: any): string {
+  if (typeof c !== "string") return "#9b30ff";
+  if (/^#[0-9a-f]{6}/i.test(c)) return c.slice(0, 7);
+  const m = /rgba?\(([^)]+)\)/.exec(c);
+  if (m) {
+    const [r, g, b] = m[1].split(",").map((x) => Math.round(parseFloat(x)));
+    return "#" + [r, g, b].map((x) => x.toString(16).padStart(2, "0")).join("");
+  }
+  return "#9b30ff";
 }
 
 function SymbolSearch({ onPick, onClose }: { onPick: (s: string) => void; onClose: () => void }) {

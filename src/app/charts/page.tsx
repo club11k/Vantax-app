@@ -1,30 +1,29 @@
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
+import Link from "next/link";
 import { authOptions } from "@/lib/auth";
 import { AppNav } from "@/components/AppNav";
-import { ChartsTabs } from "@/components/charts/ChartsTabs";
+import { ProChartLoader } from "@/components/charts/ProChartLoader";
 
-// CHARTS (28/10/2026): gráfico propio con precios del MT5 del bróker (y
-// TradingView como pestaña alternativa), para cualquier usuario registrado.
+// CHARTS (28/10/2026): gráfico propio a pantalla completa con los precios del
+// MT5 del bróker. Para cualquier usuario registrado; los indicadores los crea
+// el admin desde el propio gráfico.
 export default async function ChartsPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect("/login");
   const isAdmin = (session.user as any).role === "ADMIN";
 
   return (
-    <div className="container ch-page" style={{ paddingTop: 28 }}>
-      <div className="header-row" style={{ marginBottom: 14 }}>
-        <div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.14em", color: "var(--violet)", textTransform: "uppercase" }}>
-            VANTAX
-          </div>
-          <h1 style={{ fontSize: 28, margin: "4px 0 0" }}>Charts</h1>
-        </div>
+    <div className="pc-page">
+      <div className="pc-appbar">
+        <Link href="/dashboard" className="pc-brand">
+          VANTAX <span>Charts</span>
+        </Link>
         <div className="btn-row">
           <AppNav isAdmin={isAdmin} active="charts" />
         </div>
       </div>
-      <ChartsTabs />
+      <ProChartLoader isAdmin={isAdmin} />
     </div>
   );
 }

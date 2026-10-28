@@ -161,6 +161,7 @@ model User {
   trainingProgress  TrainingProgress[]
   trainingPurchases TrainingPurchase[]
   chartLayout       ChartLayout?
+  chartIndicatorAccess ChartIndicatorAccess[]
 
   journalAccounts   JournalAccount[]
 
@@ -807,4 +808,34 @@ model ChartLayout {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   data      Json
   updatedAt DateTime @updatedAt
+}
+
+// CHARTS: indicadores Pine que crea el admin (28/10/2026)
+enum ChartIndicatorVisibility {
+  ALL
+  ADMIN
+  SELECTED
+}
+
+model ChartIndicator {
+  id          String                   @id @default(cuid())
+  name        String
+  description String                   @default("")
+  code        String
+  visibility  ChartIndicatorVisibility @default(ADMIN)
+  sortOrder   Int                      @default(0)
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+  access      ChartIndicatorAccess[]
+}
+
+model ChartIndicatorAccess {
+  indicatorId String
+  userId      String
+  createdAt   DateTime       @default(now())
+  indicator   ChartIndicator @relation(fields: [indicatorId], references: [id], onDelete: Cascade)
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([indicatorId, userId])
+  @@index([userId])
 }
