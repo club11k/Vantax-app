@@ -93,6 +93,13 @@ export function ProChart({ isAdmin = false, onUnavailable }: { isAdmin?: boolean
   const klRef = useRef<typeof import("klinecharts") | null>(null);
   const layoutRef = useRef<Layout>(DEFAULT_LAYOUT);
   const liveTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const liveSource = useRef<EventSource | null>(null);
+  const stopLive = () => {
+    if (liveTimer.current) clearInterval(liveTimer.current);
+    liveTimer.current = null;
+    liveSource.current?.close();
+    liveSource.current = null;
+  };
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const loadToken = useRef(0);
   const selectedOverlay = useRef<string | null>(null);
@@ -331,21 +338,49 @@ export function ProChart({ isAdmin = false, onUnavailable }: { isAdmin?: boolean
           }
         },
         subscribeBar: ({ callback }) => {
-          if (liveTimer.current) clearInterval(liveTimer.current);
-          liveTimer.current = setInterval(async () => {
-            if (token !== loadToken.current || document.hidden) return;
-            const res = await fetch(`/api/charts/live?symbol=${encodeURIComponent(symbol)}&tf=${tf}`, { cache: "no-store" }).catch(() => null);
-            const json = res ? await res.json().catch(() => null) : null;
+          stopLive();
+          const onData = (json: any) => {
             if (!json || token !== loadToken.current) return;
             setStatus(json.online ? "ok" : "offline");
             for (const b of (json.bars as Bar[]) ?? []) callback(toK(b));
             updateLast();
-          }, 1000);
+          };
+          // Respaldo: preguntar cada segundo si la conexión en vivo no funciona
+          const startPolling = () => {
+            if (liveTimer.current) return;
+            liveTimer.current = setInterval(async () => {
+              if (token !== loadToken.current || document.hidden) return;
+              const res = await fetch(`/api/charts/live?symbol=${encodeURIComponent(symbol)}&tf=${tf}`, { cache: "no-store" }).catch(() => null);
+              onData(res ? await res.json().catch(() => null) : null);
+            }, 1000);
+          };
+          if (typeof EventSource === "undefined") return startPolling();
+          let gotData = false;
+          let fails = 0;
+          const es = new EventSource(`/api/charts/stream?symbol=${encodeURIComponent(symbol)}&tf=${tf}`);
+          liveSource.current = es;
+          es.onmessage = (ev) => {
+            gotData = true;
+            fails = 0;
+            if (liveTimer.current) {
+              clearInterval(liveTimer.current);
+              liveTimer.current = null;
+            }
+            try {
+              onData(JSON.parse(ev.data));
+            } catch {
+              /* ignorar */
+            }
+          };
+          es.onerror = () => {
+            fails++;
+            if (fails >= 3 || !gotData) startPolling();
+          };
+          setTimeout(() => {
+            if (!gotData && token === loadToken.current) startPolling();
+          }, 5000);
         },
-        unsubscribeBar: () => {
-          if (liveTimer.current) clearInterval(liveTimer.current);
-          liveTimer.current = null;
-        },
+        unsubscribeBar: () => stopLive(),
       });
       chart.setSymbol({ ticker: symbol, pricePrecision: digits, volumePrecision: 0 });
       chart.setPeriod(period);
@@ -463,7 +498,7 @@ export function ProChart({ isAdmin = false, onUnavailable }: { isAdmin?: boolean
       window.removeEventListener("resize", onResize);
       ro?.disconnect();
       window.removeEventListener("keydown", onKey);
-      if (liveTimer.current) clearInterval(liveTimer.current);
+      stopLive();
       if (chartEl.current && klRef.current) klRef.current.dispose(chartEl.current);
       chartRef.current = null;
     };
