@@ -489,6 +489,8 @@ export function ProChart({ isAdmin = false, onUnavailable }: { isAdmin?: boolean
       });
       if (!chart) return;
       chartRef.current = chart;
+      // se puede desplazar hacia la derecha de la última vela (como TradingView)
+      chart.setMaxOffsetRightDistance(Math.max(800, (chartEl.current?.clientWidth ?? 1200) * 0.7));
       layoutRef.current = { ...saved, ind: Array.isArray(saved.ind) ? saved.ind.filter((x) => x && typeof x.id === "string") : [] };
       setTableOffsets(saved.panels);
       setLayoutState(layoutRef.current);

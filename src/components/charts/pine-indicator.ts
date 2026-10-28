@@ -207,6 +207,7 @@ export function makePineTemplate(def: PineDef) {
     }
   };
   const secKeys = new Set<string>();
+  let autoFitted = false;
   let lastRunMs = 0;
   let lastCalcAt = 0;
   let lastKey = "";
@@ -283,7 +284,25 @@ export function makePineTemplate(def: PineDef) {
         return lastResult;
       },
       draw: ({ ctx, chart, bounding, xAxis, yAxis }: any) => {
-        if (last) drawPine(ctx, chart, bounding, xAxis, yAxis, last, lastTimes, head.overlay, def.name);
+        if (last) {
+          drawPine(ctx, chart, bounding, xAxis, yAxis, last, lastTimes, head.overlay, def.name);
+          // Si el indicador dibuja a la derecha de la última vela (perfiles,
+          // etiquetas…), se abre hueco una vez para que se vea entero.
+          if (!autoFitted && lastTimes.length) {
+            autoFitted = true;
+            const n = lastTimes.length;
+            let maxX = n - 1;
+            for (const d of last.drawings) {
+              if (d.deleted) continue;
+              const xs = d.type === "box" ? [d.right] : d.type === "line" ? [d.x1, d.x2] : d.type === "label" ? [d.x] : [];
+              for (const x of xs) if ((d.xloc ?? "xloc.bar_index") === "xloc.bar_index" && typeof x === "number" && x > maxX && x < n + 1000) maxX = x;
+            }
+            if (maxX > n - 1) {
+              const need = (maxX - (n - 1) + 4) * chart.getBarSpace().bar + 60;
+              if (need > chart.getOffsetRightDistance()) setTimeout(() => chart.setOffsetRightDistance(Math.min(need, bounding.width * 0.5)), 0);
+            }
+          }
+        }
         return true;
       },
       createTooltipDataSource: ({ indicator, crosshair }: any) => {
@@ -598,6 +617,7 @@ function drawPine(
     if (d.type === "box") drawBox(ctx, d, xOf, Y, W);
     else if (d.type === "linefill") drawLinefill(ctx, d, xOf, Y);
     else if (d.type === "line") drawLine(ctx, d, xOf, Y, W);
+    else if (d.type === "polyline") drawPolyline(ctx, d, xOf, Y);
   }
   for (const d of ordered) if (d.type === "label") drawLabel(ctx, d, xOf, Y, dataList, timeToIndex);
   let ti = 0;
@@ -760,7 +780,7 @@ function drawTable(ctx: CanvasRenderingContext2D, t: any, W: number, H: number, 
 }
 
 function order(d: any) {
-  return d.type === "box" ? 0 : d.type === "linefill" ? 1 : d.type === "line" ? 2 : 3;
+  return d.type === "box" ? 0 : d.type === "linefill" ? 1 : d.type === "line" || d.type === "polyline" ? 2 : 3;
 }
 
 function drawShape(ctx: CanvasRenderingContext2D, style: string, x: number, y: number, sz: number, c: string) {
@@ -966,6 +986,31 @@ function drawLine(ctx: CanvasRenderingContext2D, d: any, xOf: (x: number, l: str
   };
   if (d.style === "line.style_arrow_right" || d.style === "line.style_arrow_both") arrow(e.ax, e.ay, e.bx, e.by);
   if (d.style === "line.style_arrow_left" || d.style === "line.style_arrow_both") arrow(e.bx, e.by, e.ax, e.ay);
+}
+
+function drawPolyline(ctx: CanvasRenderingContext2D, d: any, xOf: (x: number, l: string) => number, Y: (v: number) => number) {
+  const pts = (d.points as any[]).filter((p) => okNum(d.xloc === "xloc.bar_time" ? p.time : p.index) && okNum(p.price));
+  if (pts.length < 2) return;
+  ctx.beginPath();
+  pts.forEach((p, i) => {
+    const x = xOf(d.xloc === "xloc.bar_time" ? p.time : p.index, d.xloc);
+    const y = Y(p.price);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  if (d.closed) ctx.closePath();
+  if (typeof d.fill_color === "string") {
+    ctx.fillStyle = d.fill_color;
+    ctx.fill();
+  }
+  if (typeof d.line_color === "string") {
+    const w = d.line_width || 1;
+    ctx.strokeStyle = d.line_color;
+    ctx.lineWidth = w;
+    dash(ctx, d.line_style, w);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
 }
 
 function drawLinefill(ctx: CanvasRenderingContext2D, d: any, xOf: (x: number, l: string) => number, Y: (v: number) => number) {

@@ -46,7 +46,7 @@ export type ShapeOut = {
   texts: (string | null)[];
   textcolors: (string | null)[];
 };
-export type Drawing = Record<string, any> & { type: "line" | "box" | "label" | "linefill" | "table"; deleted: boolean; seq: number };
+export type Drawing = Record<string, any> & { type: "line" | "box" | "label" | "linefill" | "table" | "polyline"; deleted: boolean; seq: number };
 
 export type PineOutput = {
   title: string;
@@ -193,6 +193,13 @@ const SIG: Record<string, string[]> = {
   "input.enum": ["defval", "title", "options", "tooltip", "inline", "group", "confirm", "display"],
   "line.new": ["x1", "y1", "x2", "y2", "xloc", "extend", "color", "style", "width", "force_overlay"],
   "box.new": ["left", "top", "right", "bottom", "border_color", "border_width", "border_style", "extend", "xloc", "bgcolor", "text", "text_size", "text_color", "text_halign", "text_valign", "text_wrap", "text_font_family", "force_overlay", "text_formatting"],
+  "polyline.new": ["points", "curved", "closed", "xloc", "line_color", "fill_color", "line_style", "line_width", "force_overlay"],
+  "chart.point.from_index": ["index", "price"],
+  "chart.point.from_time": ["time", "price"],
+  "chart.point.new": ["time", "index", "price"],
+  "line.new#pt": ["first_point", "second_point", "xloc", "extend", "color", "style", "width", "force_overlay"],
+  "box.new#pt": ["top_left", "bottom_right", "border_color", "border_width", "border_style", "extend", "xloc", "bgcolor", "text", "text_size", "text_color", "text_halign", "text_valign", "text_wrap", "text_font_family", "force_overlay", "text_formatting"],
+  "label.new#pt": ["point", "text", "xloc", "yloc", "color", "style", "textcolor", "size", "textalign", "tooltip", "text_font_family", "force_overlay", "text_formatting"],
   "label.new": ["x", "y", "text", "xloc", "yloc", "color", "style", "textcolor", "size", "textalign", "tooltip", "text_font_family", "force_overlay", "text_formatting"],
   "linefill.new": ["line1", "line2", "color"],
   "request.security": ["symbol", "timeframe", "expression", "gaps", "lookahead", "ignore_invalid_symbol", "currency", "calc_bars_count"],
@@ -250,7 +257,7 @@ export class PineRuntime {
   private fillIdx = new Map<string, number>();
   private shapeIdx = new Map<string, number>();
   private inputIdx = new Map<string, PineInput>();
-  private maxCount = { line: 50, box: 50, label: 50, linefill: 50 };
+  private maxCount = { line: 50, box: 50, label: 50, linefill: 50, polyline: 100 };
   private drawSeq = 0;
   private tzCache = new Map<string, Intl.DateTimeFormat>();
   private partsCache = new Map<string, any>();
@@ -1016,12 +1023,14 @@ export class PineRuntime {
     if ((c0 === 108 || c0 === 98 || c0 === 97) && (name.startsWith("line.") || name.startsWith("box.") || name.startsWith("label.") || name.startsWith("linefill.") || name.startsWith("array."))) {
       const a = this.posArgs(node, frame, self);
       const named = node.named as Record<string, Node>;
-      const sig = SIG[name];
+      const isPt = name.endsWith(".new") && (a[0] instanceof PineObj || (named.first_point || named.top_left || named.point) !== undefined);
+      const sig = SIG[isPt ? name + "#pt" : name];
       for (const k in named) {
         const i = sig ? sig.indexOf(k) : -1;
         if (i >= 0) a[i] = this.eval(named[k], frame);
         else if (!sig) a.push(this.eval(named[k], frame));
       }
+      if (isPt) return this.drawFn(name, this.fromPoints(name, a), line);
       return name.startsWith("array.") ? this.arrayFn(name, a, line) : this.drawFn(name, a, line);
     }
     const key = frame.path + "|" + node.id;
@@ -1455,7 +1464,42 @@ export class PineRuntime {
     if (name.startsWith("array.")) return this.arrayFn(name, a, line);
     if (name.startsWith("line.") || name.startsWith("box.") || name.startsWith("label.") || name.startsWith("linefill.")) return this.drawFn(name, a, line);
 
-    if (name.startsWith("map.") || name.startsWith("matrix.") || name.startsWith("polyline.") || name.startsWith("chart.point")) {
+    if (name.startsWith("chart.point.")) {
+      const m = name.slice(12);
+      const bar0 = this.bars[bar];
+      switch (m) {
+        case "from_index":
+          return new PineObj("chart.point", { index: a[0], time: this.bars[Math.round(a[0])]?.t ?? NaN, price: a[1] });
+        case "from_time": {
+          const idx = lowerBound(this.bars, a[0]);
+          return new PineObj("chart.point", { index: this.bars[idx]?.t === a[0] ? idx : NaN, time: a[0], price: a[1] });
+        }
+        case "new":
+          return new PineObj("chart.point", { time: a[0], index: a[1], price: a[2] });
+        case "now":
+          return new PineObj("chart.point", { index: bar, time: bar0.t, price: a[0] === undefined ? bar0.c : a[0] });
+        case "copy":
+          return a[0] instanceof PineObj ? new PineObj("chart.point", { ...a[0].f }) : NaN;
+      }
+    }
+    if (name.startsWith("polyline.")) {
+      const m = name.slice(9);
+      if (m === "new") {
+        const pts = a[0] instanceof PineArray ? a[0].a.filter((x: any) => x instanceof PineObj).map((x: PineObj) => ({ ...x.f })) : [];
+        const d: Drawing = {
+          type: "polyline", deleted: false, seq: this.drawSeq++, points: pts, curved: a[1] === true, closed: a[2] === true,
+          xloc: a[3] ?? "xloc.bar_index", line_color: a[4] === undefined ? "#2962FF" : a[4], fill_color: a[5], line_style: a[6] ?? "line.style_solid", line_width: a[7] ?? 1,
+        };
+        this.addDrawing(d);
+        return d;
+      }
+      if (m === "delete") {
+        if (a[0] && typeof a[0] === "object" && a[0].type === "polyline") a[0].deleted = true;
+        return NaN;
+      }
+      if (m === "all") return new PineArray(this.out.drawings.filter((d) => d.type === "polyline" && !d.deleted));
+    }
+    if (name.startsWith("map.") || name.startsWith("matrix.")) {
       throw new PineError(`«${name}» no está soportado en VANTAX CHARTS`, line);
     }
     throw new PineError(`La función «${name}» no existe o no está soportada`, line);
@@ -1851,6 +1895,22 @@ export class PineRuntime {
     }
     if (q.length > this.maxCount[t] * 4 + 50) this.queues[t] = q.filter((x) => !x.deleted);
     if (this.out.drawings.length > 6000) this.out.drawings = this.out.drawings.filter((x) => !x.deleted);
+  }
+
+  // line.new(p1, p2, ...) / box.new(p1, p2, ...) / label.new(p, ...) -> forma clásica
+  private fromPoints(name: string, a: any[]): any[] {
+    const px = (p: any, xloc: any) => (p instanceof PineObj ? (xloc === "xloc.bar_time" ? p.f.time : p.f.index) : NaN);
+    const py = (p: any) => (p instanceof PineObj ? p.f.price : NaN);
+    if (name === "line.new") {
+      const x = a[2];
+      return [px(a[0], x), py(a[0]), px(a[1], x), py(a[1]), a[2], a[3], a[4], a[5], a[6]];
+    }
+    if (name === "box.new") {
+      const x = a[6];
+      return [px(a[0], x), py(a[0]), px(a[1], x), py(a[1]), a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10], a[11], a[12]];
+    }
+    const x = a[2];
+    return [px(a[0], x), py(a[0]), a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8]];
   }
 
   private drawFn(name: string, a: any[], line: number): any {
