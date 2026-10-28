@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { fetchGoldNewsHeadlines } from "@/lib/telegram-news";
 import { fetchUsdCalendar } from "@/lib/econ-calendar";
+import { Suspense } from "react";
 import { AppNav } from "@/components/AppNav";
 import { NewsCard } from "@/components/market/NewsCard";
 import { EconCalendar } from "@/components/market/EconCalendar";
@@ -12,6 +13,13 @@ import { EconCalendar } from "@/components/market/EconCalendar";
 // Centro de Mercado; Esther pidió sacarlas a su propia página, accesible
 // desde un único botón del menú. Mismo acceso que el Centro de Mercado.
 export const revalidate = 300;
+
+// El calendario se carga aparte (streaming): las noticias se ven al momento
+// y el calendario aparece en cuanto llega, sin bloquear la página.
+async function CalendarSection() {
+  const econ = await fetchUsdCalendar();
+  return <EconCalendar events={econ.events} nextWeekAvailable={econ.nextWeekAvailable} />;
+}
 
 export default async function NoticiasPage() {
   const session = await getServerSession(authOptions);
@@ -43,7 +51,7 @@ export default async function NoticiasPage() {
     }
   }
 
-  const [news, econ] = await Promise.all([fetchGoldNewsHeadlines(20), fetchUsdCalendar()]);
+  const news = await fetchGoldNewsHeadlines(20);
   const [first, ...rest] = news;
 
   return (
@@ -95,7 +103,15 @@ export default async function NoticiasPage() {
 
       <section id="calendario" style={{ scrollMarginTop: 20, marginBottom: 32 }}>
         <div className="panel-title" style={{ margin: "4px 0 12px 2px" }}>Calendario económico (Estados Unidos)</div>
-        <EconCalendar events={econ.events} nextWeekAvailable={econ.nextWeekAvailable} />
+        <Suspense
+          fallback={
+            <div className="panel" style={{ padding: 20, color: "var(--text-dim)", fontSize: 13.5 }}>
+              Cargando el calendario económico…
+            </div>
+          }
+        >
+          <CalendarSection />
+        </Suspense>
       </section>
     </div>
   );

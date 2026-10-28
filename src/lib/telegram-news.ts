@@ -71,14 +71,56 @@ function decodeHtmlEntities(s: string): string {
     .trim();
 }
 
-export async function fetchGoldNewsHeadlines(limit = 8): Promise<GoldNewsHeadline[]> {
+// Caché en memoria (28/10/2026, "Noticias tarda muchísimo en abrir"): el
+// HTML del canal se guarda 10 min. Pasado ese tiempo se sigue sirviendo el
+// último bueno AL MOMENTO y se refresca por detrás, así nadie espera a
+// Telegram. Solo la primera visita tras arrancar el servidor espera (con un
+// máximo de 8 s).
+const NEWS_TTL_MS = 10 * 60 * 1000;
+const newsCache: { html: string | null; at: number; inflight: Promise<string | null> | null } = {
+  html: null,
+  at: 0,
+  inflight: null,
+};
+
+async function downloadPreview(): Promise<string | null> {
   try {
     const res = await fetch(PREVIEW_URL, {
-      next: { revalidate: 600 }, // 10 min -- el bot publica varias veces al día, no hace falta más frecuencia
+      cache: "no-store",
       headers: { "User-Agent": "Mozilla/5.0 (compatible; VantaxBot/1.0)" },
+      signal: AbortSignal.timeout(8000),
     });
-    if (!res.ok) return [];
+    if (!res.ok) return null;
     const html = await res.text();
+    newsCache.html = html;
+    newsCache.at = Date.now();
+    return html;
+  } catch {
+    return null;
+  }
+}
+
+function refreshPreview(): Promise<string | null> {
+  if (!newsCache.inflight) {
+    newsCache.inflight = downloadPreview().finally(() => {
+      newsCache.inflight = null;
+    });
+  }
+  return newsCache.inflight;
+}
+
+async function getPreviewHtml(): Promise<string | null> {
+  if (newsCache.html) {
+    if (Date.now() - newsCache.at > NEWS_TTL_MS) void refreshPreview();
+    return newsCache.html;
+  }
+  return refreshPreview();
+}
+
+export async function fetchGoldNewsHeadlines(limit = 8): Promise<GoldNewsHeadline[]> {
+  try {
+    const html = await getPreviewHtml();
+    if (!html) return [];
 
     // Cada mensaje vive en un bloque con data-post="canal/ID" -- lo usamos
     // como delimitador para trocear el HTML en un bloque por mensaje.

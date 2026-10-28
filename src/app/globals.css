@@ -713,3 +713,10 @@ td { color: var(--text-primary); }
 .fm-sec-count.done { color: #0E0A18; background: var(--violet); border-color: var(--violet); }
 details.fm-sec > summary.fm-sec-head::after { content: "▾"; grid-area: count; justify-self: end; align-self: start; font-size: 10px; color: var(--text-dim); margin-top: -2px; display: none; }
 .fm-sec .fm-mod { padding-left: 14px; }
+
+/* Centro de Mercado (28/10/2026): al abrir "Ver los indicadores subyacentes"
+   el bloque del Bias crece; la tarjeta de última hora ya no se estira con él,
+   mantiene su altura y se queda fija arriba mientras se baja. */
+.mk-summary { align-items: flex-start; }
+.mk-summary > .mk-news-card, .mk-summary > .panel { align-self: flex-start; position: sticky; top: 16px; }
+@media (max-width: 960px) { .mk-summary > .mk-news-card, .mk-summary > .panel { position: static; } }

@@ -25,11 +25,13 @@ export type Mt5JournalSyncReport = {
   // guarda como saldo inicial. En syncs siguientes, con el saldo ya puesto,
   // se ignora.
   balance?: number;
+  noTrades?: boolean;
 };
 
 export type Mt5JournalSyncOutcome =
   | { ok: true; action: "created" | "updated"; entryId: string }
   | { ok: true; action: "skipped_manual_entry_exists" }
+  | { ok: true; action: "deleted" | "skipped_no_trades" }
   | { ok: false; reason: string };
 
 function todayUtcDateOnly(): Date {
@@ -94,6 +96,19 @@ export async function applyJournalMt5Result(report: Mt5JournalSyncReport): Promi
 
   // Ya hay una entrada de ese día puesta por el usuario (a mano o por foto):
   // no se toca, el sync automático cede el paso.
+  // Día sin operaciones (solo depósitos, retiradas o comisiones de IB): no
+  // cuenta como resultado de operar. Si el sync había creado ese día
+  // (versiones anteriores sumaban esos ingresos), se borra; los días
+  // metidos a mano o por foto no se tocan.
+  if (report.noTrades) {
+    if (existing && existing.source === "MT5_SYNC") {
+      await prisma.journalEntry.delete({ where: { id: existing.id } }).catch(() => {});
+      return { ok: true, action: "deleted" };
+    }
+    await captureInitialBalance(account.id, account.initialBalance, report.balance);
+    return { ok: true, action: "skipped_no_trades" };
+  }
+
   if (existing && existing.source !== "MT5_SYNC") {
     await captureInitialBalance(account.id, account.initialBalance, report.balance);
     return { ok: true, action: "skipped_manual_entry_exists" };

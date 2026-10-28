@@ -38,12 +38,15 @@ const reportSchema = z.discriminatedUnion("kind", [
     kind: z.literal("journal"),
     accountId: z.string().min(1),
     resultAmount: z.number(),
-    date: z.string().optional(),
+    date: z.string().nullable().optional(),
     // Saldo actual de la cuenta — opcional para no romper con un
     // orquestador viejo que todavía no lo mande; se usa como saldo inicial
     // solo la primera vez que se sincroniza esta cuenta (ver
     // src/lib/journal/mt5-sync.ts).
     balance: z.number().optional(),
+    // true = ese día no hubo operaciones (solo depósitos/comisiones de IB):
+    // si el sync había creado el día, se borra (28/10/2026).
+    noTrades: z.boolean().optional(),
   }),
 ]);
 
@@ -68,8 +71,8 @@ export async function POST(req: Request) {
       return NextResponse.json(outcome);
     }
 
-    const { kind, ...report } = parsed.data;
-    const outcome = await applyJournalMt5Result(report);
+    const { kind, date, ...rest } = parsed.data;
+    const outcome = await applyJournalMt5Result({ ...rest, date: date ?? undefined });
     if (!outcome.ok) {
       return NextResponse.json({ error: outcome.reason }, { status: 404 });
     }

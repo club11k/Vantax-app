@@ -121,6 +121,7 @@ async function getDirect(url: string): Promise<{ status: number; body: string }>
   const res = await fetch(url, {
     cache: "no-store",
     headers: { "User-Agent": "Mozilla/5.0 (compatible; VANTAX/1.0)", Accept: "application/json" },
+    signal: AbortSignal.timeout(8000),
   });
   return { status: res.status, body: await res.text() };
 }
@@ -135,7 +136,7 @@ function getViaProxy(url: string): Promise<{ status: number; body: string }> {
         method: "GET",
         agent: new HttpsProxyAgent(proxyUrl),
         headers: { "User-Agent": "Mozilla/5.0 (compatible; VANTAX/1.0)", Accept: "application/json", "Accept-Encoding": "identity" },
-        timeout: 20000,
+        timeout: 10000,
       },
       (res) => {
         let raw = "";
@@ -193,19 +194,44 @@ async function fetchWeekFresh(week: "this" | "next"): Promise<EconEvent[] | null
   return null;
 }
 
+// 28/10/2026 ("Noticias tarda muchísimo en abrir"): si ya hay datos, se
+// devuelven AL MOMENTO aunque estén caducados y se refrescan por detrás.
+// Solo se espera cuando no hay nada todavía (primera visita tras arrancar),
+// y aun así como mucho FIRST_LOAD_MAX_MS: si ForexFactory va lento, la
+// página se pinta igual y el calendario aparece en la siguiente visita.
+const FIRST_LOAD_MAX_MS = 9000;
+const inflight: Record<"this" | "next", Promise<void> | null> = { this: null, next: null };
+
+function refreshWeek(week: "this" | "next"): Promise<void> {
+  const c = cache[week];
+  if (inflight[week]) return inflight[week]!;
+  c.lastTryAt = Date.now();
+  inflight[week] = fetchWeekFresh(week)
+    .then((events) => {
+      if (events) {
+        c.events = events;
+        c.fetchedAt = Date.now();
+      }
+    })
+    .catch(() => {})
+    .finally(() => {
+      inflight[week] = null;
+    });
+  return inflight[week]!;
+}
+
 async function getWeek(week: "this" | "next"): Promise<EconEvent[]> {
   const c = cache[week];
   const now = Date.now();
   const fresh = c.fetchedAt > 0 && now - c.fetchedAt < TTL_MS;
-  const recentlyTried = now - c.lastTryAt < RETRY_MS;
-  if (fresh || (recentlyTried && c.lastTryAt > 0)) return c.events;
-  c.lastTryAt = now;
-  const events = await fetchWeekFresh(week);
-  if (events) {
-    c.events = events;
-    c.fetchedAt = now;
+  const recentlyTried = c.lastTryAt > 0 && now - c.lastTryAt < RETRY_MS;
+  if (fresh || recentlyTried) return c.events;
+  if (c.fetchedAt > 0) {
+    void refreshWeek(week); // dato viejo al momento, refresco por detrás
+    return c.events;
   }
-  return c.events; // si falla, se queda el último dato bueno
+  await Promise.race([refreshWeek(week), new Promise((r) => setTimeout(r, FIRST_LOAD_MAX_MS))]);
+  return c.events;
 }
 
 export async function fetchUsdCalendar(): Promise<{ events: EconEvent[]; nextWeekAvailable: boolean }> {

@@ -1,6 +1,32 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+
+// 28/10/2026: la calculadora recuerda lo último que se escribió (capital,
+// lotaje, pips…) en este navegador, para no tener que meterlo cada vez.
+function usePersistentState<T>(key: string, initial: T): [T, (v: T | ((prev: T) => T)) => void] {
+  const storageKey = `vantax.riesgo.${key}`;
+  const [value, setValue] = useState<T>(initial);
+  const loaded = useRef(false);
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(storageKey);
+      if (raw !== null) setValue(JSON.parse(raw) as T);
+    } catch {
+      /* sin almacenamiento disponible: se usan los valores por defecto */
+    }
+    loaded.current = true;
+  }, [storageKey]);
+  useEffect(() => {
+    if (!loaded.current) return;
+    try {
+      window.localStorage.setItem(storageKey, JSON.stringify(value));
+    } catch {
+      /* ignorar */
+    }
+  }, [storageKey, value]);
+  return [value, setValue];
+}
 
 // Calculadora de riesgo — rediseño visual fase 2 (Esther, 06/10/2026).
 // Los cálculos son EXACTAMENTE los mismos que antes (mismas fórmulas, mismo
@@ -97,7 +123,7 @@ function LineChart({ values, labelStart, labelEnd }: { values: number[]; labelSt
 }
 
 export function RiskCalculator() {
-  const [topTab, setTopTab] = useState<TopTab>("promedios");
+  const [topTab, setTopTab] = usePersistentState<TopTab>("RiskCalculator.topTab", "promedios");
   const tabs: { key: TopTab; label: string }[] = [
     { key: "promedios", label: "Rangos con promedios" },
     { key: "diaria", label: "Calculadora diaria" },
@@ -143,10 +169,10 @@ export function RiskCalculator() {
 type DiaRow = { dia: number; pips: number; ganancia: number; acumulada: number; balance: number };
 
 function DiariaCalculator() {
-  const [balance, setBalance] = useState("10000");
-  const [pipsDiarios, setPipsDiarios] = useState("500");
-  const [lotaje, setLotaje] = useState("0.03");
-  const [diasOperados, setDiasOperados] = useState("22");
+  const [balance, setBalance] = usePersistentState("DiariaCalculator.balance", "10000");
+  const [pipsDiarios, setPipsDiarios] = usePersistentState("DiariaCalculator.pipsDiarios", "500");
+  const [lotaje, setLotaje] = usePersistentState("DiariaCalculator.lotaje", "0.03");
+  const [diasOperados, setDiasOperados] = usePersistentState("DiariaCalculator.diasOperados", "22");
 
   const balanceNum = parseNum(balance);
   const pipsNum = parseNum(pipsDiarios);
@@ -249,10 +275,10 @@ function DiariaCalculator() {
 type MesRow = { mes: number; capitalInicial: number; ganAcumuladas: number; capitalTotal: number };
 
 function MensualCalculator() {
-  const [balance, setBalance] = useState("10000");
-  const [pipsDiarios, setPipsDiarios] = useState("500");
-  const [lotaje, setLotaje] = useState("0.01");
-  const [diasOperadosMes, setDiasOperadosMes] = useState("22");
+  const [balance, setBalance] = usePersistentState("MensualCalculator.balance", "10000");
+  const [pipsDiarios, setPipsDiarios] = usePersistentState("MensualCalculator.pipsDiarios", "500");
+  const [lotaje, setLotaje] = usePersistentState("MensualCalculator.lotaje", "0.01");
+  const [diasOperadosMes, setDiasOperadosMes] = usePersistentState("MensualCalculator.diasOperadosMes", "22");
 
   const balanceNum = parseNum(balance);
   const pipsNum = parseNum(pipsDiarios);
@@ -353,10 +379,10 @@ function riskLevel(dd: number) {
 }
 
 function PromediosCalculator() {
-  const [balance, setBalance] = useState("300");
-  const [lotaje, setLotaje] = useState("0.01");
-  const [distancia, setDistancia] = useState("100");
-  const [totalPipsSL, setTotalPipsSL] = useState("600");
+  const [balance, setBalance] = usePersistentState("PromediosCalculator.balance", "300");
+  const [lotaje, setLotaje] = usePersistentState("PromediosCalculator.lotaje", "0.01");
+  const [distancia, setDistancia] = usePersistentState("PromediosCalculator.distancia", "100");
+  const [totalPipsSL, setTotalPipsSL] = usePersistentState("PromediosCalculator.totalPipsSL", "600");
 
   const balanceNum = parseNum(balance);
   const lotajeNum = parseNum(lotaje);
@@ -494,17 +520,17 @@ function PromediosCalculator() {
 /* ------------------------------------------------------------------ */
 
 function RatiosCalculator() {
-  const [mode, setMode] = useState<Mode>("lote");
+  const [mode, setMode] = usePersistentState<Mode>("RatiosCalculator.mode", "lote");
 
-  const [balance, setBalance] = useState("1000");
-  const [riskType, setRiskType] = useState<RiskType>("pct");
-  const [riskValue, setRiskValue] = useState("1");
+  const [balance, setBalance] = usePersistentState("RatiosCalculator.balance", "1000");
+  const [riskType, setRiskType] = usePersistentState<RiskType>("RatiosCalculator.riskType", "pct");
+  const [riskValue, setRiskValue] = usePersistentState("RatiosCalculator.riskValue", "1");
 
-  const [ratio, setRatio] = useState(2);
-  const [ratioCustom, setRatioCustom] = useState("");
+  const [ratio, setRatio] = usePersistentState("RatiosCalculator.ratio", 2);
+  const [ratioCustom, setRatioCustom] = usePersistentState("RatiosCalculator.ratioCustom", "");
 
-  const [lote, setLote] = useState("0.01");
-  const [slPipsInput, setSlPipsInput] = useState("300");
+  const [lote, setLote] = usePersistentState("RatiosCalculator.lote", "0.01");
+  const [slPipsInput, setSlPipsInput] = usePersistentState("RatiosCalculator.slPipsInput", "300");
 
   const effectiveRatio = ratioCustom.trim() !== "" ? parseNum(ratioCustom) : ratio;
 
