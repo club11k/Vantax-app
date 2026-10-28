@@ -1176,7 +1176,11 @@ export class PineRuntime {
         }
         const chartMs = this.tfInfo().secs * 1000;
         const otherMs = tfInfoOf(tf).secs * 1000;
-        if (lower && otherMs > chartMs) throw new PineError("request.security_lower_tf necesita una temporalidad menor que la del gráfico", line);
+        if (lower && otherMs > chartMs) {
+          // Igual que TradingView con ignore_invalid_timeframe: sin velas internas
+          this.warn("Parte del indicador usa velas internas más pequeñas que las del gráfico: pon el gráfico en una temporalidad mayor para verla completa.");
+          return new PineArray([]);
+        }
         const ser = this.secSeries(sym, tf, line);
         const naRes = () => (lower ? new PineArray([]) : Array.isArray(expr) ? tuple(expr.map(() => NaN)) : NaN);
         if (!ser) return naRes();
