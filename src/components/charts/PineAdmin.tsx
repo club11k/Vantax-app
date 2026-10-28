@@ -198,11 +198,11 @@ export function PineAdmin({
             <summary>¿Qué partes de Pine funcionan?</summary>
             <p>
               <b>Sí:</b> ta.* (sma, ema, rma, wma, hma, rsi, macd, bb, atr, stoch, cci, dmi, supertrend, sar, pivothigh/low, highest/lowest, crossover…), math.*, inputs (se pueden cambiar
-              desde el gráfico), plot, plotshape, plotchar, plotarrow, hline, fill, bgcolor, box, line, label, linefill, arrays, if/for/while/switch, funciones propias, var, time() con sesiones,
+              desde el gráfico), plot, plotshape, plotchar, plotarrow, hline, fill, bgcolor, box, line, label, linefill, arrays, if/for/while/switch, funciones propias, tipos propios (type), method, enum, var, time() con sesiones,
               Pine v4, v5 y v6.
             </p>
             <p>
-              <b>No:</b> request.security con otra temporalidad u otro símbolo, strategy, library/import, type/method, map y matrix. Las tablas y barcolor se ignoran.
+              <b>No:</b> request.security con otra temporalidad u otro símbolo, strategy, library/import, map y matrix. Las tablas y barcolor se ignoran.
             </p>
             <p>La hora de las funciones de tiempo (hour, time con sesión…) es UTC salvo que el script indique la zona horaria, por ejemplo «Europe/Madrid».</p>
           </details>

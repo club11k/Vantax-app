@@ -119,6 +119,16 @@ export class PineArray {
   }
 }
 
+// Objetos de tipos propios (type)
+export class PineObj {
+  t: string;
+  f: Record<string, any>;
+  constructor(t: string, f: Record<string, any>) {
+    this.t = t;
+    this.f = f;
+  }
+}
+
 // ---------------------------------------------------------------- intérprete
 
 class Var {
@@ -215,6 +225,9 @@ export class PineRuntime {
   private nodeHist = new Map<string, any[]>();
   private states = new Map<string, St>();
   private funcs = new Map<string, Node>();
+  private methods = new Map<string, Node[]>();
+  private types = new Map<string, { name: string; def: Node | null }[]>();
+  private enums = new Map<string, { name: string; title: string }[]>();
   private global!: Frame;
   private ops = 0;
   private depth = 0;
@@ -233,11 +246,23 @@ export class PineRuntime {
 
   constructor(src: string) {
     this.ast = parsePine(src);
-    for (const st of this.ast.body as Node[]) if (st.k === "FuncDef") this.funcs.set(st.name, st);
+    for (const st of this.ast.body as Node[]) this.registerDef(st);
     if (!(this.ast.body as Node[]).some((s) => s.k === "ExprStmt" && s.expr.k === "Call" && ["indicator", "study"].includes(s.expr.callee?.name))) {
       const strat = (this.ast.body as Node[]).find((s) => s.k === "ExprStmt" && s.expr.k === "Call" && ["strategy", "library"].includes(s.expr.callee?.name));
       if (strat) throw new PineError("Solo se pueden usar indicadores (indicator). Las estrategias y librerías no están soportadas.", strat.line);
     }
+  }
+
+  private registerDef(st: Node) {
+    if (st.k === "FuncDef") {
+      if (st.isMethod) {
+        const list = this.methods.get(st.name) ?? [];
+        if (!list.includes(st)) list.push(st);
+        this.methods.set(st.name, list);
+        if (!this.funcs.has(st.name)) this.funcs.set(st.name, st);
+      } else this.funcs.set(st.name, st);
+    } else if (st.k === "TypeDef") this.types.set(st.name, st.fields);
+    else if (st.k === "EnumDef") this.enums.set(st.name, st.members);
   }
 
   run(bars: PineBar[], opts: PineOptions): PineOutput {
@@ -364,8 +389,33 @@ export class PineRuntime {
         return NaN;
       }
       case "FuncDef":
-        this.funcs.set(node.name, node);
+      case "TypeDef":
+      case "EnumDef":
+        this.registerDef(node);
         return NaN;
+      case "FieldAssign": {
+        const t = node.target as Node;
+        let obj: any;
+        let field: string;
+        if (t.k === "Member") {
+          obj = this.eval(t.obj, frame);
+          field = t.prop;
+        } else {
+          const parts = (t.name as string).split(".");
+          const v = this.lookup(frame, parts[0]);
+          if (!v) throw new PineError(`La variable «${parts[0]}» no está declarada`, node.line);
+          obj = v.cur;
+          for (const part of parts.slice(1, -1)) obj = this.field(obj, part, node);
+          field = parts[parts.length - 1];
+        }
+        if (!(obj instanceof PineObj)) {
+          if (isNa(obj)) throw new PineError(`No se puede asignar «${field}»: el objeto es na`, node.line);
+          throw new PineError(`No se puede asignar «${field}»`, node.line);
+        }
+        const val = this.eval(node.expr, frame);
+        obj.f[field] = node.op === ":=" ? val : this.binop(node.op[0], obj.f[field], val);
+        return obj.f[field];
+      }
       case "ExprStmt":
         return this.eval(node.expr, frame);
       case "Break":
@@ -544,7 +594,9 @@ export class PineRuntime {
       case "Call":
         return this.call(node, frame);
       case "Member":
-        throw new PineError(`No se puede leer «.${node.prop}» aquí`, node.line);
+        return this.field(this.eval(node.obj, frame), node.prop, node);
+      case "__val":
+        return node.v;
       case "VarDecl":
       case "Assign":
       case "TupleDecl":
@@ -563,12 +615,53 @@ export class PineRuntime {
       const v = this.lookup(frame, name);
       if (v) return v.cur;
     } else {
-      const root = name.slice(0, dot);
-      if (this.lookup(frame, root)) throw new PineError(`No se puede leer «${name}»`, node.line);
+      const parts = name.split(".");
+      const v = this.lookup(frame, parts[0]);
+      if (v) {
+        let obj = v.cur;
+        for (const part of parts.slice(1)) obj = this.field(obj, part, node);
+        return obj;
+      }
+      const en = this.enums.get(parts[0]);
+      if (en && parts.length === 2) {
+        const m = en.find((x) => x.name === parts[1]);
+        if (m) return m.title;
+      }
     }
     const val = this.builtinValue(name, frame, node);
     if (val === undefined) throw new PineError(`«${name}» no existe o no está soportado`, node.line);
     return val;
+  }
+
+  private field(obj: any, part: string, node: Node): any {
+    if (obj instanceof PineObj) {
+      if (!(part in obj.f)) throw new PineError(`El tipo «${obj.t}» no tiene el campo «${part}»`, node.line);
+      return obj.f[part];
+    }
+    if (isNa(obj)) return NaN;
+    throw new PineError(`No se puede leer «.${part}»`, node.line);
+  }
+
+  private newObj(typeName: string, node: Node, frame: Frame): PineObj {
+    const fields = this.types.get(typeName)!;
+    const pos = node.args as Node[];
+    const named = node.named as Record<string, Node>;
+    const f: Record<string, any> = {};
+    fields.forEach((fd, i) => {
+      if (i < pos.length) f[fd.name] = this.evalArg(pos[i], frame);
+      else if (named[fd.name]) f[fd.name] = this.eval(named[fd.name], frame);
+      else if (fd.def) f[fd.name] = this.eval(fd.def, frame);
+      else f[fd.name] = NaN;
+    });
+    return new PineObj(typeName, f);
+  }
+
+  private findMethod(obj: any, meth: string): Node | null {
+    const list = this.methods.get(meth);
+    if (!list || !list.length) return null;
+    const t = obj instanceof PineObj ? obj.t : obj instanceof PineArray ? "array" : obj && typeof obj === "object" && obj.type ? obj.type : typeof obj === "number" ? "float" : typeof obj === "string" ? "string" : typeof obj === "boolean" ? "bool" : null;
+    const exact = list.find((fn) => fn.params[0]?.type === t || (t === "float" && fn.params[0]?.type === "int"));
+    return exact ?? (list.length === 1 ? list[0] : list.find((fn) => !fn.params[0]?.type) ?? list[0]);
   }
 
   // ------------------------------------------------------------ series y constantes
@@ -795,15 +888,36 @@ export class PineRuntime {
     const dot = name.indexOf(".");
     if (dot < 0 && this.funcs.has(name)) return this.callUser(this.funcs.get(name)!, node, frame);
     if (dot > 0) {
-      const root = name.slice(0, dot);
-      const v = this.lookup(frame, root);
-      if (v) return this.method(v.cur, name.slice(dot + 1), node, frame, 0);
+      const parts = name.split(".");
+      const v = this.lookup(frame, parts[0]);
+      if (v) {
+        let obj = v.cur;
+        for (const part of parts.slice(1, -1)) obj = this.field(obj, part, node);
+        return this.method(obj, parts[parts.length - 1], node, frame, 0);
+      }
+      if (this.types.has(parts[0]) && parts.length === 2) {
+        if (parts[1] === "new") return this.newObj(parts[0], node, frame);
+        if (parts[1] === "copy") {
+          const o = this.evalArg((node.args as Node[])[0], frame);
+          return o instanceof PineObj ? new PineObj(o.t, { ...o.f }) : NaN;
+        }
+      }
+      // método propio llamado sobre algo que no es variable: «miFunc(x).metodo()» ya va por Member
     }
     if (V4_ALIASES[name]) name = V4_ALIASES[name];
     return this.builtin(name, node, frame);
   }
 
   private method(obj: any, meth: string, node: Node, frame: Frame, _d: number): any {
+    const um = this.findMethod(obj, meth);
+    if (um) {
+      const fake: Node = { ...node, args: [{ k: "__val", id: -1, line: node.line, v: obj } as Node, ...(node.args as Node[])] };
+      return this.callUser(um, fake, frame);
+    }
+    if (obj instanceof PineObj) {
+      if (meth === "copy") return new PineObj(obj.t, { ...obj.f });
+      throw new PineError(`El tipo «${obj.t}» no tiene el método «${meth}»`, node.line);
+    }
     let ns: string;
     if (obj instanceof PineArray) ns = "array";
     else if (obj && typeof obj === "object" && obj.type) ns = obj.type;
@@ -1260,6 +1374,11 @@ export class PineRuntime {
         const opts = a[2];
         if (opts instanceof PineArray) info.options = opts.a;
         else if (Array.isArray(opts)) info.options = opts.slice();
+      }
+      if (name === "input.enum") {
+        for (const members of this.enums.values()) {
+          if (members.some((m) => m.title === a[0])) info.options = members.map((m) => m.title);
+        }
       }
       // títulos repetidos: clave única
       let k = info.key;

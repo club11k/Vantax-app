@@ -169,6 +169,8 @@ export class Parser {
   private toks: Token[];
   private p = 0;
   private nextId = 1;
+  private userTypes = new Set<string>();
+  private lastType: string | null = null;
 
   constructor(src: string) {
     this.toks = tokenize(src);
@@ -253,7 +255,14 @@ export class Parser {
   private tryType(): boolean {
     const save = this.p;
     while (this.is("ident") && QUALIFIERS.has(this.peek().v) && this.is("ident", undefined, 1)) this.p++;
-    if (!this.is("ident") || !TYPE_NAMES.has(this.peek().v)) {
+    if (!this.is("ident")) {
+      this.p = save;
+      return false;
+    }
+    // tipo conocido o tipo propio (type): «Zona z = ...», «Zona[] zs», «array<Zona> zs»
+    const known = TYPE_NAMES.has(this.peek().v) || this.userTypes.has(this.peek().v);
+    const looksType = this.is("ident", undefined, 1) || (this.isOp("[", 1) && this.isOp("]", 2)) || this.isOp("<", 1);
+    if (!known && !looksType) {
       this.p = save;
       return false;
     }
@@ -272,7 +281,17 @@ export class Parser {
     }
     if (this.isOp("[") && this.isOp("]", 1)) this.p += 2;
     // tras el tipo tiene que venir el nombre de la variable
-    if (this.is("ident") && (this.isOp("=", 1) || this.isOp(",", 1) || this.isOp(")", 1))) return true;
+    if (this.is("ident") && (this.isOp("=", 1) || this.isOp(",", 1) || this.isOp(")", 1) || this.is("nl", undefined, 1))) {
+      let base: string | null = null;
+      let isArr = false;
+      for (let k = save; k < this.p; k++) {
+        const tk = this.toks[k];
+        if (!base && tk.t === "ident" && !QUALIFIERS.has(tk.v)) base = tk.v;
+        if (tk.t === "op" && tk.v === "[") isArr = true;
+      }
+      this.lastType = isArr ? "array" : base;
+      return true;
+    }
     this.p = save;
     return false;
   }
@@ -308,12 +327,21 @@ export class Parser {
         case "continue":
           this.p++;
           return this.node("Continue", line);
-        case "import":
         case "export":
-        case "method":
+          this.p++;
+          return this.statement();
+        case "method": {
+          this.p++;
+          const fn = this.funcDef();
+          fn.isMethod = true;
+          return fn;
+        }
         case "type":
+          return this.typeDef();
         case "enum":
-          throw new PineError(`«${tk.v}» no está soportado en VANTAX CHARTS`, line);
+          return this.enumDef();
+        case "import":
+          throw new PineError("«import» (librerías) no está soportado en VANTAX CHARTS", line);
       }
     }
     if (tk.t === "op" && tk.v === "[") {
@@ -351,16 +379,74 @@ export class Parser {
       }
     }
     const expr = this.expression();
+    if (this.peek().t === "op" && [":=", "+=", "-=", "*=", "/=", "%="].includes(this.peek().v) && (expr.k === "Member" || (expr.k === "Ident" && expr.name.includes(".")))) {
+      const op = this.next().v;
+      return this.node("FieldAssign", line, { target: expr, op, expr: this.expression() });
+    }
     return this.node("ExprStmt", line, { expr });
+  }
+
+  private typeDef(): Node {
+    const line = this.next().line; // type
+    const name = this.next();
+    if (name.t !== "ident") throw new PineError("Falta el nombre del tipo", line);
+    this.userTypes.add(name.v);
+    this.skipNl();
+    const fields: { name: string; def: Node | null }[] = [];
+    if (this.is("indent")) {
+      this.p++;
+      this.skipNl();
+      while (!this.is("dedent") && !this.is("eof")) {
+        if (this.is("kw", "varip")) this.p++;
+        this.tryType();
+        const f = this.next();
+        if (f.t !== "ident") throw new PineError("Campo no válido en el tipo", f.line);
+        let def: Node | null = null;
+        if (this.isOp("=")) {
+          this.p++;
+          def = this.expression();
+        }
+        fields.push({ name: f.v, def });
+        this.skipNl();
+      }
+      if (this.is("dedent")) this.p++;
+    }
+    return this.node("TypeDef", line, { name: name.v, fields });
+  }
+
+  private enumDef(): Node {
+    const line = this.next().line; // enum
+    const name = this.next();
+    if (name.t !== "ident") throw new PineError("Falta el nombre del enum", line);
+    this.skipNl();
+    const members: { name: string; title: string }[] = [];
+    if (this.is("indent")) {
+      this.p++;
+      this.skipNl();
+      while (!this.is("dedent") && !this.is("eof")) {
+        const f = this.next();
+        let title = f.v;
+        if (this.isOp("=")) {
+          this.p++;
+          const t = this.next();
+          title = t.v;
+        }
+        members.push({ name: f.v, title });
+        this.skipNl();
+      }
+      if (this.is("dedent")) this.p++;
+    }
+    return this.node("EnumDef", line, { name: name.v, members });
   }
 
   private funcDef(): Node {
     const line = this.peek().line;
     const name = this.next().v;
     this.expectOp("(");
-    const params: { name: string; def: Node | null }[] = [];
+    const params: { name: string; def: Node | null; type: string | null }[] = [];
     while (!this.isOp(")")) {
-      this.tryType();
+      const typed = this.tryType();
+      const ptype = typed ? this.lastType : null;
       const pn = this.next();
       if (pn.t !== "ident") throw new PineError("Parámetro no válido", pn.line);
       let def: Node | null = null;
@@ -368,7 +454,7 @@ export class Parser {
         this.p++;
         def = this.expression();
       }
-      params.push({ name: pn.v, def });
+      params.push({ name: pn.v, def, type: ptype });
       if (this.isOp(",")) this.p++;
     }
     this.expectOp(")");
