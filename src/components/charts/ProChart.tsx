@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Chart, KLineData, Overlay, Period } from "klinecharts";
 import { CHART_BG, chartStyles, FONT } from "./chart-theme";
-import { makePineTemplate } from "./pine-indicator";
+import { makePineTemplate, setTableOffsets, getTableOffsets, moveTable, hitTable } from "./pine-indicator";
 import { PineAdmin, type AdminIndicator } from "./PineAdmin";
 import type { PineInput } from "@/lib/pine/runtime";
 
@@ -24,6 +24,7 @@ type Layout = {
   ind: ActiveInd[];
   magnet: boolean;
   drawings: Record<string, SavedOverlay[]>;
+  panels?: Record<string, { dx: number; dy: number }>;
 };
 type ActiveInd = { id: string; inputs: Record<string, any> };
 type IndStatus = { error: string | null; warnings: string[]; inputs: PineInput[]; title: string };
@@ -489,6 +490,7 @@ export function ProChart({ isAdmin = false, onUnavailable }: { isAdmin?: boolean
       if (!chart) return;
       chartRef.current = chart;
       layoutRef.current = { ...saved, ind: Array.isArray(saved.ind) ? saved.ind.filter((x) => x && typeof x.id === "string") : [] };
+      setTableOffsets(saved.panels);
       setLayoutState(layoutRef.current);
       await indicatorsReady;
       if (disposed) return;
@@ -501,6 +503,55 @@ export function ProChart({ isAdmin = false, onUnavailable }: { isAdmin?: boolean
     window.addEventListener("resize", onResize);
     const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => chartRef.current?.resize()) : null;
     if (ro && chartEl.current) ro.observe(chartEl.current);
+
+    // Paneles de los indicadores (tablas): se pueden arrastrar
+    const el = chartEl.current;
+    let drag: { key: string; x: number; y: number } | null = null;
+    let raf = 0;
+    const pt = (e: MouseEvent | TouchEvent) => {
+      const r = el!.getBoundingClientRect();
+      const p = "touches" in e ? e.touches[0] ?? e.changedTouches[0] : e;
+      return { x: p.clientX - r.left, y: p.clientY - r.top };
+    };
+    const onDown = (e: MouseEvent | TouchEvent) => {
+      if ("button" in e && e.button !== 0) return;
+      const p = pt(e);
+      const key = hitTable(p.x, p.y);
+      if (!key) return;
+      drag = { key, x: p.x, y: p.y };
+      e.stopPropagation();
+      e.preventDefault();
+    };
+    const onMove = (e: MouseEvent | TouchEvent) => {
+      const p = pt(e);
+      if (!drag) {
+        if (!("touches" in e) && el) el.style.cursor = hitTable(p.x, p.y) ? "move" : "";
+        return;
+      }
+      e.stopPropagation();
+      e.preventDefault();
+      moveTable(drag.key, p.x - drag.x, p.y - drag.y);
+      drag.x = p.x;
+      drag.y = p.y;
+      if (!raf)
+        raf = requestAnimationFrame(() => {
+          raf = 0;
+          chartRef.current?.resize();
+        });
+    };
+    const onUp = (e: MouseEvent | TouchEvent) => {
+      if (!drag) return;
+      drag = null;
+      e.stopPropagation();
+      persist({ ...layoutRef.current, panels: getTableOffsets() });
+    };
+    const opts = { capture: true, passive: false } as AddEventListenerOptions;
+    el?.addEventListener("mousedown", onDown, opts);
+    el?.addEventListener("touchstart", onDown, opts);
+    el?.addEventListener("mousemove", onMove, opts);
+    el?.addEventListener("touchmove", onMove, opts);
+    window.addEventListener("mouseup", onUp, true);
+    window.addEventListener("touchend", onUp, true);
     const onKey = (e: KeyboardEvent) => {
       if ((e.key === "Delete" || e.key === "Backspace") && selectedOverlay.current) {
         const target = e.target as HTMLElement | null;
@@ -515,6 +566,12 @@ export function ProChart({ isAdmin = false, onUnavailable }: { isAdmin?: boolean
       disposed = true;
       window.removeEventListener("resize", onResize);
       ro?.disconnect();
+      el?.removeEventListener("mousedown", onDown, opts);
+      el?.removeEventListener("touchstart", onDown, opts);
+      el?.removeEventListener("mousemove", onMove, opts);
+      el?.removeEventListener("touchmove", onMove, opts);
+      window.removeEventListener("mouseup", onUp, true);
+      window.removeEventListener("touchend", onUp, true);
       window.removeEventListener("keydown", onKey);
       stopLive();
       if (chartEl.current && klRef.current) klRef.current.dispose(chartEl.current);

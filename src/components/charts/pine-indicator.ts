@@ -283,7 +283,7 @@ export function makePineTemplate(def: PineDef) {
         return lastResult;
       },
       draw: ({ ctx, chart, bounding, xAxis, yAxis }: any) => {
-        if (last) drawPine(ctx, chart, bounding, xAxis, yAxis, last, lastTimes, head.overlay);
+        if (last) drawPine(ctx, chart, bounding, xAxis, yAxis, last, lastTimes, head.overlay, def.name);
         return true;
       },
       createTooltipDataSource: ({ indicator, crosshair }: any) => {
@@ -330,12 +330,13 @@ function dash(ctx: CanvasRenderingContext2D, style: string | undefined, w: numbe
 function drawPine(
   ctx: CanvasRenderingContext2D,
   chart: any,
-  bounding: { width: number; height: number },
+  bounding: { width: number; height: number; left?: number; top?: number },
   xAxis: any,
   yAxis: any,
   out: PineOutput,
   times: number[],
-  overlay: boolean
+  overlay: boolean,
+  indName = ""
 ) {
   const n = times.length;
   if (!n) return;
@@ -599,13 +600,45 @@ function drawPine(
     else if (d.type === "line") drawLine(ctx, d, xOf, Y, W);
   }
   for (const d of ordered) if (d.type === "label") drawLabel(ctx, d, xOf, Y, dataList, timeToIndex);
-  for (const d of ordered) if (d.type === "table") drawTable(ctx, d, W, H);
+  let ti = 0;
+  for (const d of ordered) if (d.type === "table") drawTable(ctx, d, W, H, `${indName}#${ti++}`, bounding.left ?? 0, bounding.top ?? 0);
 
   ctx.restore();
 }
 
 // Tablas (panel con datos) en la esquina que indique el script
-function drawTable(ctx: CanvasRenderingContext2D, t: any, W: number, H: number) {
+// ---------------------------------------------------------------- paneles movibles
+// Cada tabla se puede arrastrar; su desplazamiento se guarda en el diseño del
+// usuario. Si dos paneles caen en la misma esquina se apilan.
+const tableOffsets = new Map<string, { dx: number; dy: number }>();
+const tableRects = new Map<string, { x: number; y: number; w: number; h: number; at: number }>();
+const stacks = new Map<string, Map<string, number>>(); // posición -> (clave -> alto)
+
+export function setTableOffsets(o: Record<string, { dx: number; dy: number }> | undefined) {
+  tableOffsets.clear();
+  if (o) for (const k of Object.keys(o)) if (o[k] && typeof o[k].dx === "number" && typeof o[k].dy === "number") tableOffsets.set(k, o[k]);
+}
+export function getTableOffsets(): Record<string, { dx: number; dy: number }> {
+  return Object.fromEntries(tableOffsets);
+}
+const lastStackY = new Map<string, number>();
+export function moveTable(key: string, dx: number, dy: number) {
+  // al moverlo por primera vez deja de apilarse: se conserva dónde estaba
+  const cur = tableOffsets.get(key) ?? { dx: 0, dy: lastStackY.get(key) ?? 0 };
+  tableOffsets.set(key, { dx: cur.dx + dx, dy: cur.dy + dy });
+}
+// ¿Hay un panel en este punto (coordenadas del gráfico)?
+export function hitTable(x: number, y: number): string | null {
+  const now = performance.now();
+  let hit: string | null = null;
+  for (const [k, r] of tableRects) {
+    if (now - r.at > 5000) continue;
+    if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) hit = k;
+  }
+  return hit;
+}
+
+function drawTable(ctx: CanvasRenderingContext2D, t: any, W: number, H: number, key = "", paneLeft = 0, paneTop = 0) {
   const cols: number = t.cols;
   const rows: number = t.rows;
   const cells: Record<string, any> = t.cells ?? {};
@@ -653,8 +686,27 @@ function drawTable(ctx: CanvasRenderingContext2D, t: any, W: number, H: number) 
   if (!tw || !th) return;
   const pos: string = t.position ?? "position.top_right";
   const m = 12;
-  const x0 = pos.endsWith("left") ? m : pos.endsWith("center") ? (W - tw) / 2 : W - tw - m - 60;
-  const y0 = pos.includes("top") ? m + 30 : pos.includes("middle") ? (H - th) / 2 : H - th - m;
+  // apilar paneles que comparten esquina (por orden de clave)
+  let st = stacks.get(pos);
+  if (!st) stacks.set(pos, (st = new Map()));
+  const moved = tableOffsets.get(key);
+  let stackY = 0;
+  if (moved) st.delete(key);
+  else {
+    st.set(key, th + 8);
+    for (const k of [...st.keys()].sort()) {
+      if (k === key) break;
+      stackY += st.get(k)!;
+    }
+  }
+  const signY = pos.includes("bottom") ? -1 : 1;
+  lastStackY.set(key, stackY * signY);
+  const off = moved ?? { dx: 0, dy: 0 };
+  let x0 = (pos.endsWith("left") ? m : pos.endsWith("center") ? (W - tw) / 2 : W - tw - m - 60) + off.dx;
+  let y0 = (pos.includes("top") ? m + 30 : pos.includes("middle") ? (H - th) / 2 : H - th - m) + stackY * signY + off.dy;
+  x0 = Math.max(0, Math.min(W - tw, x0));
+  y0 = Math.max(0, Math.min(H - th, y0));
+  tableRects.set(key, { x: x0 + paneLeft, y: y0 + paneTop, w: tw, h: th, at: performance.now() });
   if (typeof t.bgcolor === "string") {
     ctx.fillStyle = t.bgcolor;
     ctx.fillRect(x0, y0, tw, th);
